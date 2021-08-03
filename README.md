@@ -99,4 +99,10 @@ Following functions are available.
 
 Fonts are implemented using the glyph group of drawing functions, because each letter is just a bitmap, with some extra drawing hints. 
 
+To use font you need to load it (unless already part of your C code). Each font starts with the `font_t` structure where you can find some basic font information such as average width, height, number of characters, etc.
+
+You then simply call `gpx_draw_string()` to draw a sting. 
+
+ > Don't forget that fonts also use the *blit mode*, and if it is not `BM_COPY`, background may not be deleted.
+
 (...to be continued...)
