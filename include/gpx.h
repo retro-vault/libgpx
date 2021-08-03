@@ -16,9 +16,11 @@
 #include <stdint.h>
 
 
+
 /* extra gpx type(s) */
 typedef int16_t coord;
 typedef int16_t color;                  /* if more then 16 colors, then it's a pointer */
+
 
 
 /* ----- basic graphics structures (rect_t, graphics_t, etc.) -------------- */
@@ -30,8 +32,9 @@ typedef struct rect_s {                 /* the rectangle */
 } rect_t;
 
 /* drawing mode */
-#define BM_COPY             0
-#define BM_XOR              2
+#define BM_COPY             0           /* standard operation */
+#define BM_XOR              1           /* XOR operations */
+#define BM_NONE             2           /* no drawing, pen up */
 
 /* official list styles (will work fast!) */
 #define LS_SOLID            0xff
@@ -53,6 +56,7 @@ typedef struct gpx_s {
 } gpx_t;
 
 
+
 /* ----- initialization ---------------------------------------------------- */
 
 /* initialize the graphics system */
@@ -60,6 +64,7 @@ extern gpx_t* gpx_init();
 
 /* exit graphics mode */
 extern void gpx_exit(gpx_t* g);
+
 
 
 /* ----- query lib capabilities -------------------------------------------- */
@@ -166,27 +171,32 @@ extern void gpx_draw_string(gpx_t *g, font_t *f, coord x, coord y, char* text);
 extern rect_t* gpx_measure_string(gpx_t *g, font_t *f, char* text);
 
 
+
 /* ----- rectangle functions  ---------------------------------------------- */
 
-/* Does rectangle contains point? */
+/* does rectangle contains point? */
 extern bool rect_contains(rect_t *r, coord x, coord y);
 
-/* Do rectangles overlap? */
+/* do rectangles overlap? */
 extern bool rect_overlap(rect_t *a, rect_t *b);
 
-/* Inflate coordinates by dx and dy */
+/* inflate coordinates by dx and dy */
 extern rect_t* rect_inflate(rect_t* rect, coord dx, coord dy);
 
-/* Get intersect rectangle. */
+/* get intersect rectangle */
 extern rect_t* rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
 
-/* Convert relative to absolute coordinates for parent and child rectangle. */
+/* convert relative to absolute coordinates for parent and child rectangle*/
 extern rect_t* rect_rel2abs(rect_t* abs, rect_t* rel, rect_t* out);
 
-/* Subtract rectangles and return what's left. */
-extern void rect_subtract(rect_t *outer, rect_t *inner, rect_t *result,	uint8_t *num);
+/* subtract rectangles and return what's left */
+extern void rect_subtract(
+    rect_t *outer, 
+    rect_t *inner, 
+    rect_t *result,	
+    uint8_t *num);
 
-/* Offset rectangle. */
+/* offset rectangle */
 extern void rect_delta_offset(rect_t *rect, 
     coord oldx, coord newx, coord oldy, coord newy, coord size_only);
 
