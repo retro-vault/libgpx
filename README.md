@@ -12,6 +12,8 @@ ZX Spectrum, Iskra Delta Partner.
 
 ## Tiny coding convention
 
+(...to be continued...)
+
 ## Initializing
 
 To initialize the library, call `gpx_init()` function. This function returns a pointer to the `gpx_t` structure, which you pass to all other functions of the *libgpx*.
@@ -93,4 +95,8 @@ Following functions are available.
  > All functions are optimized. For example - when drawing a line,
  > horizontal line is detected and drawn using super- speeed function.
 
- 
+## Fonts
+
+Fonts are implemented using the glyph group of drawing functions, because each letter is just a bitmap, with some extra drawing hints. 
+
+(...to be continued...)
