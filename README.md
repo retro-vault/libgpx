@@ -87,7 +87,7 @@ Following functions are available.
  * `gpx_draw_rect()` ... draws a rectangle
  * `gpx_fill_rect()` ... draws a filled rectangle
  * `gpx_draw_glyph()` ... draws a bitmap
- * `gpx_draw_mglyph()` ... draws a mappind bitmap
+ * `gpx_draw_mglyph()` ... draws a masked bitmap
  * `gpx_read_glyph()` ... read a bitmap from screen
 
  > All functions are optimized. For example - when drawing a line,
