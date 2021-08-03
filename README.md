@@ -114,3 +114,9 @@ You then simply call `gpx_draw_string()` to draw a sting.
 Use `gpx_measure_string()` to measure string. 
 
 (...to be continued...)
+
+# Internals
+
+Platform specific implementation info is available here
+ * [ZX Spectrum 48K](ZXSP48.md)
+ * [Iskra Delta Partner](IDPART.md)
