@@ -13,10 +13,10 @@
         .equ    EF9367_HIRES_HEIGHT,    512
         .equ    EF9367_MAX_DELTA,       255
 
-        ;; --- drawing modes --------------------------------------------------
-        .equ    EF9367_DWM_CLR,         0
-        .equ    EF9367_DWM_SET,         1
-        .equ    EF9367_DWM_XOR,         2
+        ;; --- blit modes -----------------------------------------------------
+        .equ    EF9367_BM_NONE,         0
+        .equ    EF9367_BM_COPY,         1
+        .equ    EF9367_BM_XOR,          2
 
 
         ;; --- 0x20 - W: command, R:the status register -----------------------

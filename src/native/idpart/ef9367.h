@@ -25,15 +25,12 @@
 #define EF9367_HIRES_HEIGHT     512
 
 /* initializes gdp, enter hires (1024x512) mode */
-extern void ef9367_init();
+extern void _ef9367_init();
 
 /* clear screen and goto 0,0 */
-extern void ef9367_cls();
-
-/* goto x,y */
-extern void ef9367_xy(uint16_t x, uint16_t y);
+extern void _ef9367_cls();
 
 /* put pixel at x,y using drawing mode */
-extern void ef9367_put_pixel(uint16_t x, uint16_t y, uint8_t mode);
+extern void _ef9367_put_pixel();
 
 #endif /* __EF9367_H__ */

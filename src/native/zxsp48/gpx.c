@@ -1,5 +1,5 @@
 /*
- * gpx.zxspec48.c
+ * gpx.c
  *
  * Graphics init and exit functions for ZX Spectrum 48K.
  * 
@@ -32,10 +32,6 @@ gpx_t* gpx_init() {
     /* allocate memory */
     g=malloc(sizeof(gpx_t));
 
-    /* default colors are black on white*/
-    g->back_color = 7;                  /* white */
-    g->fore_color = 0;                  /* black */
-
     /* blit mode */
     g->blit_mode = BM_COPY;
     g->line_style = LS_SOLID;
@@ -46,19 +42,22 @@ gpx_t* gpx_init() {
     g->display_page = 0;
     g->write_page = 0;
 
-    /* set pen and eraser */
-    g->fore_color = 0;                  /* ink: black */
-    g->back_color = 7;                  /* paper: white */
+    /* set ink and paper */
+    g->fore_color = 0;    
+    g->back_color = 7;
 
     /* resolutions for the only page is 0 (256x192) */
     current_resolution=0;
     g->resolutions=&current_resolution;
 
     /* finally, clipping rect. */
-    g->clip_area = { 0, 0, MAX_X, MAX_Y };
+    g->clip_area.x0=g->clip_area.y0=0;
+    g->clip_area.x1=MAX_X;
+    g->clip_area.y1=MAX_Y;
 }
 
 
 void gpx_exit(gpx_t* g) {
-
+    /* deallocate memory */
+    free(g);
 }

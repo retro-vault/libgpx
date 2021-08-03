@@ -12,129 +12,172 @@
 		;; 04.04.2021    tstih
 		.module ef9367
 
-		.globl	_ef9367_init
-		.globl 	_ef9367_cls
-        .globl	_ef9367_xy
-        .globl  _ef9367_put_pixel
-        .globl  _ef9367_put_raster
+		.globl	__ef9367_init
+        .globl 	__ef9367_cls
+        .globl  __ef9367_set_blit_mode
+        .globl  __ef9367_put_pixel
+        
         .globl  _ef9367_draw_line
-        .globl  _test
 	    
 		.include "ef9367.inc"
 
         .area	_CODE
 
+
         
-        ;; TODO: proxy function for tests
-_test::
-        ret
-
-
-        ;; ------------------
-		;; void ef9367_init()
-        ;; ------------------
-        ;; initializes the ef9367, sets the 1024x512 graphics mode
-        ;; affect:  a, b, flags
-_ef9367_init::
-        xor a
-        out (#EF9367_CR1),a             ;; control reg 1 to default
-        out (#EF9367_CR2),a             ;; control reg 2 to default
-        out (#EF9367_CH_SIZE),a         ;; scaling to none
-        ld a,#PIO_GR_CMN_1024x512       ;; resolution to 1024x512
-		out (#PIO_GR_CMN),a
-        ld b,#EF9367_DWM_SET            ;; default drawing mode to SET 
-        call ef9367_set_dmode
-        ret
-
-
-        ;; ------------------------------------
-		;; void ef9367_xy(int16_t x, int16_t y)
-        ;; ------------------------------------
-        ;; move the cursor to x,y
-        ;; notes:   y is transformed from bottom to top to top to bottom coord.
-		;;          using the EF9367_HIRES_HEIGHT const.
-        ;; affect:  af, de, hl
-_ef9367_xy::
-        ;; store ix to stack, we'll use it to access args.
-        push ix
-        ld ix,#4                        ; first arg.
-        add ix,sp
-        call xy_internal                ; call internal implementation of ix
-        ;; restore regs
-        pop ix
-		ret
-xy_internal:
+        ;; wait for the GDP to finish previous operation
+        ;; don't touch interrupts!
+        ;; affects: a
+wait_for_gdp:
         ;; make sure GDP is free
-        in a,(#EF9367_STS_NI)           ; read the status register
-        and #EF9367_STS_READY           ; get ready flag
-        jr z,xy_internal
-        ;; there is additional call on stack hence
-        ;; first argument is at 2(ix)
-        ld a,(ix)
-        out (#EF9367_XPOS_LO),a
-        ld a,1(ix)
-        out (#EF9367_XPOS_HI),a
-        ld hl,#EF9367_HIRES_HEIGHT
-        dec hl                          ; hl=max y
-        ld e,2(ix)                      ; de=y
-        ld d,3(ix)      
-        sbc hl,de                       ; hl=max y-y
+        in      a,(#EF9367_STS_NI)      ; read the status register
+        and     #EF9367_STS_READY       ; get ready flag, it's the same bit
+        jr      z,wait_for_gdp
+        ret
+
+
+
+        ;; executes ef9367 command (wait for status first!)
+        ;; input:	a=command
+ef9367_cmd:
+        push    af
+        call    wait_for_gdp            ; wait gdp
+        pop     af
+        out     (#EF9367_CMD), a        ; exec. command
+        ret
+
+
+
+        ;; move the cursor to x,y
+        ;; notes:   y is transformed bottom to top!
+        ;; inputs:  hl=x, de=y
+        ;; affect:  af, de, hl
+ef9367_xy::
+        ;; wait for gdp
+        call    wait_for_gdp
         ld a,l
-        out (#EF9367_YPOS_LO),a
+        out (#EF9367_XPOS_LO),a
         ld a,h
+        out (#EF9367_XPOS_HI),a
+        ld a,e
+        out (#EF9367_YPOS_LO),a
+        ld a,d
         out (#EF9367_YPOS_HI),a
         ret
 
 
-        ;; ------------------------------------------------------
-		;; void ef9367_put_pixel(int16_t x, int16_t y, byte mode)
-        ;; ------------------------------------------------------
-        ;; draw pixel at x,y
-        ;; affect:  af, de, hl
-_ef9367_put_pixel::
-        ;; store ix to stack, we'll use it to access args.
-        push ix
-        ld ix,#4                        ; first arg.
-        add ix,sp
-        ;; internal set xy
-        call xy_internal
-        ;; set mode
-        ld b,4(ix)
-        call ef9367_set_dmode   
-        ;; draw pixel!
-        ld a,#0b10000000
-        call ef9367_cmd
-        ;; restore ix!
-        pop ix
-		ret
+
+        ;; -------------------
+		;; void _ef9367_init()
+        ;; -------------------
+        ;; initializes the ef9367, sets the 1024x512 graphics mode
+        ;; no waiting for gdp bcs no command should be executing!
+        ;; affect:  a, b, flags
+__ef9367_init::
+        xor     a
+        out     (#EF9367_CR1),a         ; control reg 1 to default
+        out     (#EF9367_CR2),a         ; control reg 2 to default
+        out     (#EF9367_CH_SIZE),a     ; scaling to none
+        ;; this sets default resolution AND mode to copy
+        ld      a,#PIO_GR_CMN_1024x512  
+		out     (#PIO_GR_CMN),a   
+        ret
 
 
-        ;; -----------------
-		;; void ef9367_cls()
-        ;; -----------------
+
+        ;; ------------------
+		;; void _ef9367_cls()
+        ;; ------------------
 		;; clear graphic screen
         ;; affect:  af
-_ef9367_cls::
+__ef9367_cls::
 		ld a,#EF9367_CMD_CLS
 		call ef9367_cmd
         ret
 
 
 
-        ;; -----------------------
-		;; void ef9367_put_raster(
-        ;;     uint8_t *raster,
-        ;;     uint8_t stride,
-        ;;     uint16_t x, 
-        ;;     uint16_t y, 
-        ;;     uint8_t width,
-        ;;     uint8_t height,
-        ;;     uint8_t mode);  
-        ;; -----------------------
-		;; puts raster on screen fast
-        ;; affect:  -
-_ef9367_put_raster::
+        ;; set blit mode, use cached mode if necessary
+        ;; input:   b = blit mode, one of BL_ codes!
+        ;; affects: af, hl, bc, byte@sdm_cache
+__ef9367_set_blit_mode:
+        ;; are we already in this mode?
+        ld      a,(blit_mode)           ; get cached value
+        cp      b                       ; compare to current mode
+        ret     z                       ; all done!
+        ;; write to cache and into a
+        ld      a,b                     ; store new mode
+        ld      (blit_mode),a           ; to cache
+        ;; if none then pen up!
+        and     #EF9367_BM_NONE         ; none?
+        jr      z, blm_pen_down         ; not none, check xor
+        ;; if we are here: PEN UP!
+        ld      a,(pen_down)            ; get cached pen status
+        or      a                       ; set zero flag
+        ret     z                       ; pen is already up!
+        ;; set cached pen down to false
+        xor     a
+        ld      (pen_down),a
+        ;; and call pen up
+        ld      a,#EF9367_CMD_PEN_UP    ; pen up command
+        call    ef9367_cmd              ; execute command.
         ret
+        ;; whatever it is, it will require pen down
+        ;; if not already down
+blm_pen_down:
+        ld      a,(pen_down)            ; get cached value
+        or      a                       ; compare
+        jr      nz,blm_pen_already_down
+        ld      a,#1                    ; cached value to 1
+        ld      (pen_down),a
+        ld      a,#EF9367_CMD_PEN_DOWN  ; pen up command
+        call    ef9367_cmd              ; execute command.
+blm_pen_already_down:
+        ;; first get current common register to a
+        call    wait_for_gdp            ; wait for gdp
+        in      a,(#PIO_GR_CMN)         ; get current reg. to a
+        ld      c,a                     ; store to c
+        ;; now toggle the xor flag. 
+        ld      a,b                     ; blit mode back to a
+        and     #EF9367_BM_XOR          ; is it xor?
+        jr      z,blm_copy              ; default = copy!
+        ;; it is XOR
+        ld      a,c                     ; get back a
+        or      #PIO_GR_CMN_XOR_MODE    ; set xor bit
+        jr      blm_write               ; write xor value
+        ;; it is COPY
+blm_copy:
+        ld      a,c                     ; get back a
+        and     #~PIO_GR_CMN_XOR_MODE   ; clr xor bit
+        ;; finally, write back to register.
+blm_write:
+        push    af
+        call    wait_for_gdp            ; wait
+        pop     af
+        out     (#PIO_GR_CMN),a         ; write it back
+        ret
+        ;; cached mode and pen status
+        .area   _DATA
+blit_mode:
+        .db     1                       ; default mode is 1 (BL_COPY)
+pen_down:
+        .db     1                       ; default is pen down
+
+
+
+        .area   _CODE
+        ;; ------------------------
+		;; void _ef9367_put_pixel()
+        ;; ------------------------
+        ;; draw single pixel and move right
+        ;; affect:  af, de, hl
+__ef9367_put_pixel::
+        ;; draw pixel command!
+        ld      a,#0b10000000
+        call    ef9367_cmd
+        ;; restore ix!
+		ret
+
 
 
         ;; ----------------------
@@ -307,78 +350,4 @@ dli_wait_gdp2:
         pop af
         ;; command is in a
         call ef9367_cmd
-        ret
-
-
-        ;; executes ef9367 command & wait for status
-        ;; input:	a=command
-ef9367_cmd:
-        push af
-cmd_wait_sts:
-        in a,(#EF9367_STS_NI)           ; read the status register
-        and #EF9367_STS_READY           ; get ready flag
-        jr z,cmd_wait_sts
-        pop af
-        out (#EF9367_CMD), a            ; exec. command
-        ret
-
-
-        ;; set drawing mode, uses bits:
-        ;;  bit 0: 1=set, 0=clr
-        ;;  bit 1: 1=xor, 0=normal
-        ;;  0   ... clr
-        ;;  1   ... set
-        ;;  2   ... xor (or with clr or set)
-        ;; input:   b = mode
-        ;; affects: af, hl, bc, byte@sdm_cache
-ef9367_set_dmode:
-        ;; wait for GDP
-        call wait_for_gdp
-        ;; ready!
-        ld a,(#sdm_cache)               ; get cached value
-        cp b                            ; compare to current mode
-        ret z                           ; all done!
-        ld a,b                          ; store new mode
-        ld (#sdm_cache),a               ; to cache
-        and #EF9367_DWM_XOR             ; xor?
-        jr z,sdm_not_xor
-        ;; set xor
-        in a,(#PIO_GR_CMN)              ; get current reg. to a
-        or #PIO_GR_CMN_XOR_MODE         ; set xor bit
-        out (#PIO_GR_CMN),a             ; write it back
-        jr sdm_test_set
-sdm_not_xor:
-        ;; reset xor
-        in a,(#PIO_GR_CMN)              ; get current reg. to a
-        and #~PIO_GR_CMN_XOR_MODE       ; clr xor bit
-        out (#PIO_GR_CMN),a             ; write it back
-        ;; proceed with test
-        ;; remember: xor can be ORed!
-sdm_test_set:
-        ld a,b                          ; get parameter once again!
-        and #EF9367_DWM_SET
-        jr z,sdm_is_clr
-        ld a,#EF9367_CMD_DMOD_SET       ; mode to SET     
-        call ef9367_cmd
-        jr sdm_done
-sdm_is_clr:
-        ld a,#EF9367_CMD_DMOD_CLR       ; mode to CLR     
-        call ef9367_cmd
-sdm_done:
-        ;; now put pen down (default!)
-        ld a,#EF9367_CMD_PEN_DOWN
-        call ef9367_cmd
-        ret
-sdm_cache:
-        .db 0xff                        ; default mode is undefined (0xff)
-
-
-        ;; wait for the GDP to finish 
-        ;; previous operation
-        ;; affects: a
-wait_for_gdp:
-        ;; make sure GDP is free
-        in a,(#EF9367_STS_NI)           ; read the status register
-        and #EF9367_STS_READY           ; get ready flag
-        jr z,wait_for_gdp
         ret

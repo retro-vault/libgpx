@@ -32,9 +32,10 @@ typedef struct rect_s {                 /* the rectangle */
 } rect_t;
 
 /* drawing mode */
-#define BM_COPY             0           /* standard operation */
-#define BM_XOR              1           /* XOR operations */
-#define BM_NONE             2           /* no drawing, pen up */
+#define BM_NONE             0           /* no drawing, pen up */
+#define BM_COPY             1           /* standard operation */
+#define BM_XOR              2           /* XOR operations */
+
 
 /* official list styles (will work fast!) */
 #define LS_SOLID            0xff
@@ -70,19 +71,19 @@ extern void gpx_exit(gpx_t* g);
 /* ----- query lib capabilities -------------------------------------------- */
 
 /* page resolution */
-typedef gpx_resolution_s {
+typedef struct gpx_resolution_s {
     coord width;                        /* width in pixels */
     coord height;                       /* height in pixels */
 } gpx_resolution_t;
 
 /* the page  */
-typedef gpx_page_s {
+typedef struct gpx_page_s {
     int num_resolutions;                /* number of resolutions */
     gpx_resolution_t *resolutions;      /* array of resolutions */
 } gpx_page_t;
 
 /* gpx capabilities struct. */
-typedef gpx_cap_s {
+typedef struct gpx_cap_s {
     /* pages info */
     int num_pages;                      /* number of pages */
     gpx_page_t *pages;                  /* array of pages */
@@ -91,6 +92,9 @@ typedef gpx_cap_s {
     color fore_color;                   /* system fore color */
     color back_color;                   /* system back color */
 } gpx_cap_t;
+
+/* get gpx capabilities */
+extern gpx_cap_t* gpx_cap();
 
 
 
@@ -109,16 +113,16 @@ extern void gpx_set_resolution(gpx_t *g, uint8_t resolution);
 extern void gpx_set_color(gpx_t *g, color c, uint8_t ct);
 
 /* set clippig rectangle, if NULL then default page resolution is used */
-extern void gpx_set_clip(gpx_t *, rect_t *clip);
+extern void gpx_set_clip(gpx_t *g, rect_t *clip);
 
 /* set blit mode */
-extern void gpx_set_blit(gpx_t *, uint8_t blit);
+extern void gpx_set_blit(gpx_t *g, uint8_t blit);
 
 /* set line style  */
-extern void gpx_line_style(gpx_t *, uint8_t line_style);
+extern void gpx_line_style(gpx_t *g, uint8_t line_style);
 
 /* set fill brush */
-extern void gpx_fill_brush(gpx_t *, uint8_t fill_brush_size, uint8_t *fill_brush);
+extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
 
 
 
@@ -175,29 +179,12 @@ extern rect_t* gpx_measure_string(gpx_t *g, font_t *f, char* text);
 /* ----- rectangle functions  ---------------------------------------------- */
 
 /* does rectangle contains point? */
-extern bool rect_contains(rect_t *r, coord x, coord y);
+extern bool gpx_rect_contains(rect_t *r, coord x, coord y);
 
 /* do rectangles overlap? */
-extern bool rect_overlap(rect_t *a, rect_t *b);
+extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
 
-/* inflate coordinates by dx and dy */
-extern rect_t* rect_inflate(rect_t* rect, coord dx, coord dy);
-
-/* get intersect rectangle */
-extern rect_t* rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
-
-/* convert relative to absolute coordinates for parent and child rectangle*/
-extern rect_t* rect_rel2abs(rect_t* abs, rect_t* rel, rect_t* out);
-
-/* subtract rectangles and return what's left */
-extern void rect_subtract(
-    rect_t *outer, 
-    rect_t *inner, 
-    rect_t *result,	
-    uint8_t *num);
-
-/* offset rectangle */
-extern void rect_delta_offset(rect_t *rect, 
-    coord oldx, coord newx, coord oldy, coord newy, coord size_only);
+/* intersection of rectangles */
+extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
 
 #endif /* __GPX_H__ */
