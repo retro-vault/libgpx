@@ -80,6 +80,10 @@ By convention the resolutions are ordered from lowest to highest.
 
 Resolution is also set per page, so make sure you set it for all pages you are using.
 
+## Clearing the screen
+
+Use `gpx_cls()` to clear screen.
+
 ## Drawing!
 
 All drawing functions start with `gpx_draw_` and all fill functions start with `gpx_fill_`. They only accept coordinate arguments, because all other aspects of drawing (color, blit mode, clipping) is set by a separate function and stored in the `gpx_t` structure.
@@ -104,5 +108,9 @@ To use font you need to load it (unless already part of your C code). Each font 
 You then simply call `gpx_draw_string()` to draw a sting. 
 
  > Don't forget that fonts also use the *blit mode*, and if it is not `BM_COPY`, background may not be deleted.
+
+### Measuring text
+
+Use `gpx_measure_string()` to measure string. 
 
 (...to be continued...)
