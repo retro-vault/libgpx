@@ -1,5 +1,5 @@
 /*
- * gpx.c
+ * gpxcore.c
  *
  * Graphics init and exit functions for ZX Spectrum 48K.
  * 
@@ -10,7 +10,7 @@
  *
  */
 #include <std.h>
-#include <gpxdef.h>
+#include <gpxcore.h>
 
 #include <zxspec48/video.h>
 

@@ -13,7 +13,7 @@
 #define __RECT_H__
 
 /* due to interdependency structure rect_t is defined in gpxdef.h */
-#include <gpxdef.h>
+#include <gpxcore.h>
 
 /* does rectangle contains point? */
 extern bool gpx_rect_contains(rect_t *r, coord x, coord y);

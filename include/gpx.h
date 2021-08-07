@@ -94,7 +94,7 @@ typedef struct gpx_cap_s {
 } gpx_cap_t;
 
 /* get gpx capabilities */
-extern gpx_cap_t* gpx_cap();
+extern gpx_cap_t* gpx_cap(gpx_t *g);
 
 
 
@@ -151,7 +151,7 @@ extern void gpx_draw_rect(gpx_t *g, rect_t *rect);
 /* ----- glyphs ------------------------------------------------------------ */
 
 typedef struct glyph_s {
-
+    int dummy;
 } glyph_t;
 
 /* draw glyph */
@@ -165,7 +165,7 @@ extern glyph_t* gpx_snatch_glyph(gpx_t *g, coord x, coord y, coord width, coord 
 /* ----- fonts and text related -------------------------------------------- */
 
 typedef struct font_s {
-
+    int dummy;
 } font_t;
 
 /* draw string at x,y */

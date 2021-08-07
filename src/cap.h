@@ -13,7 +13,7 @@
 #define __CAP_H__
 
 #include <std.h>
-#include <gpxdef.h>
+#include <gpxcore.h>
 
 /* page resolution */
 typedef struct gpx_resolution_s {

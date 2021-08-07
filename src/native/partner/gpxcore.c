@@ -1,5 +1,5 @@
 /*
- * gpx.c
+ * gpxcore.c
  *
  * Graphics init and exit functions for Iskra Delta Partner.
  * 

@@ -1,7 +1,7 @@
 /*
- * gpxdef.h
+ * gpxcore.h
  *
- * libgpx definitions 
+ * libgpx core definitions 
  * 
  * MIT License (see: LICENSE)
  * copyright (c) 2021 tomaz stih
