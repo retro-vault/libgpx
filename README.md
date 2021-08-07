@@ -157,4 +157,4 @@ Use `gpx_measure_string()` to measure string.
 | Colors                    | 15        |
 | Page(s)                   | 1         |
 | *libgpx* size in bytes    | N/A       |
-| Implementation internals  | [Available](PARTNER.md) |
+| Implementation internals  | [Available](ZXSPEC48.md) |
