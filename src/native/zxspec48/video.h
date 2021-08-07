@@ -12,7 +12,7 @@
 #ifndef __VIDEO_H__
 #define __VIDEO_H__
 
-#include <stdint.h>
+#include <std.h>
 
 #define SCREEN_WIDTH    256
 #define SCREEN_HEIGHT   192

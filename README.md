@@ -4,15 +4,27 @@ Welcome to **libgpx**, a multiplatform graphics library for 8bit micros.
 
 # Compiling libgpx
 
-# Supported platforms
+Run the `make` command with platform name as target in the root directory.
 
-ZX Spectrum, Iskra Delta Partner.
+ > Supported platforms are `zxspec48` and `partner` and are 
+ > case sensitive!
+
+~~~
+make PLATFORM=partner
+~~~
+
+After the compilation object and debug files are available in the `build` directory, and the `libgpx.lib` is copied to the `bin` directory. 
 
 # Using libgpx
 
 ## Tiny coding convention
 
 (...to be continued...)
+
+## Dependencies
+
+*libgpx* has been designed as an independent library. It incudes 
+`stdbool.h`, and `stdint.h`, but uses its' own implementations.
 
 ## Initializing
 
@@ -115,8 +127,34 @@ Use `gpx_measure_string()` to measure string.
 
 (...to be continued...)
 
-# Internals
+# Supported platforms
 
-Platform specific implementation info is available here
- * [ZX Spectrum 48K](ZXSP48.md)
- * [Iskra Delta Partner](IDPART.md)
+## Iskra Delta Partner
+
+![Iskra Delta Partner](docs/img/partner.jpg) 
+
+| Trait                     | Value     |
+|---------------------------|----------:|
+| Processor                 | Z80, 4Mhz |
+| Graphics type             | Vector    |
+| Native resolution         | 1024x512  |
+| Colors                    | 2         |
+| Page(s)                   | 2         |
+| *libgpx* size in bytes    | N/A       |
+| Implementation internals  | [Available](PARTNER.md) |
+
+---
+
+## ZX Spectrum 48K
+
+![ZX Spectrum 48K](docs/img/zxspec48.jpg)
+
+| Trait                     | Value     |
+|---------------------------|----------:|
+| Processor                 | Z80, 4Mhz |
+| Graphics type             | Raster    |
+| Native resolution         | 256x192   |
+| Colors                    | 15        |
+| Page(s)                   | 1         |
+| *libgpx* size in bytes    | N/A       |
+| Implementation internals  | [Available](PARTNER.md) |

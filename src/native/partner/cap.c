@@ -9,11 +9,9 @@
  * 03.08.2021   tstih
  *
  */
-#include <stdlib.h>
-#include <stdlib.h>
-#include <gpx.h>
+#include <std.h>
 
-#include "ef9367.h"
+#include <partner/ef9367.h>
 
 /* cached, always the same */
 static gpx_cap_t cap;

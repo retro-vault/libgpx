@@ -18,7 +18,7 @@
 #ifndef __EF9367_H__
 #define __EF9367_H__
 
-#include <stdint.h>
+#include <std.h>
 
 /* hires mode screen size */
 #define EF9367_HIRES_WIDTH      1024

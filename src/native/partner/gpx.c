@@ -9,61 +9,62 @@
  * 03.08.2021   tstih
  *
  */
-#include <stdlib.h>
-#include <stdlib.h>
-#include <gpx.h>
+#include <std.h>
 
-#include "ef9367.h"
+#include "partner/ef9367.h"
 
 /* there can be only one gpx! */
-static gpx_t* g = NULL;
+static gpx_t _g;
+static bool _ginitialized = false;
 
 /* default brush is solid, 1 byte, 0xff */
-static signed char solid_brush = 0xff;
+static signed char _solid_brush = 0xff;
 
 /* partner page resolutions */
-static uint8_t current_resolutions[2];
+static uint8_t _current_resolutions[2];
 
 gpx_t* gpx_init() {
 
     /* not the first time? */
-    if (g!=NULL) return g;
+    if (_ginitialized) return &_g;
     
-    /* allocate memory */
-    g=malloc(sizeof(gpx_t));
+    /* initialize it */
+    _ginitialized=true;
 
     /* default colors are black on white*/
-    g->back_color = 1;                  /* pen */
-    g->fore_color = 0;                  /* eraser */
+    _g.back_color = 1;                 /* pen */
+    _g.fore_color = 0;                 /* eraser */
 
     /* blit mode */
-    g->blit_mode = BM_COPY;
-    g->line_style = LS_SOLID;
-    g->fill_brush_size = 1;             /* 1 byte */
-    g->fill_brush=&solid_brush;
+    _g.blit_mode = BM_COPY;
+    _g.line_style = LS_SOLID;
+    _g.fill_brush_size = 1;             /* 1 byte */
+    _g.fill_brush=&_solid_brush;
 
     /* display and write page is 0 */
-    g->display_page = 0;
-    g->write_page = 0;
+    _g.display_page = 0;
+    _g.write_page = 0;
 
     /* resolutions for both pages to 1024x512 */
-    current_resolutions[0]=0;
-    current_resolutions[1]=0;
-    g->resolutions=current_resolutions;
+    _current_resolutions[0]=0;
+    _current_resolutions[1]=0;
+    _g.resolutions=_current_resolutions;
 
     /* finally, clipping rect. */
-    g->clip_area.x0=g->clip_area.y0=0;
-    g->clip_area.x1=EF9367_HIRES_WIDTH-1;
-    g->clip_area.y1=EF9367_HIRES_HEIGHT-1;
+    _g.clip_area.x0=g->clip_area.y0=0;
+    _g.clip_area.x1=EF9367_HIRES_WIDTH-1;
+    _g.clip_area.y1=EF9367_HIRES_HEIGHT-1;
 
     /* now that we prepared everything ... configure the hardware 
        to match our settings */
+
+    /* and return it */
+    return &_g;
 }
 
 
 void gpx_exit(gpx_t* g) {
-    /* deallocate memory */
-    free(g);
+    /* nothing, for now */
 }
 
 
