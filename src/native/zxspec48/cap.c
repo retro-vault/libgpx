@@ -22,6 +22,8 @@ static gpx_resolution_t _native_resolution;
 
 /* get the capabilities */
 gpx_cap_t* gpx_cap(gpx_t *g) {
+    g;
+
     /* not the first time? */
     if (_capinitialized) return &_cap;
     /* signal initialized */
@@ -39,4 +41,7 @@ gpx_cap_t* gpx_cap(gpx_t *g) {
     _cap.num_colors=15;
     _cap.fore_color=4;                  /* green on... */
     _cap.back_color=0;                  /* ...black */
+
+    /* and return */
+    return &_cap;
 }

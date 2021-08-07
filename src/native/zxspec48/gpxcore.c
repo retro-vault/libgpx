@@ -19,7 +19,7 @@ static gpx_t _g;
 static bool _ginitialized = false;
 
 /* default brush is solid, 1 byte, 0xff */
-static signed char _solid_brush = 0xff;
+static unsigned char _solid_brush = 0xff;
 
 /* zx spectrum page resolution */
 static uint8_t _current_resolution;
