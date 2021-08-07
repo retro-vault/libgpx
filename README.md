@@ -36,7 +36,7 @@ After you're done with using the library, you should call the `gpx_exit()`. On s
 #include <gpx.h>
 
 void main() {
-    gpt_x* g=gpx_init();
+    gpt_t* g=gpx_init();
     /* your drawing code here */
     gpx_exit(g);
 }
@@ -44,7 +44,41 @@ void main() {
 
 ## Querying platform graphics capabilities
 
-If you would like to know what the gpx library can do on your platform, you can call `gpx_query_cap().` This function will query platform graphics capabilities (resolution, no. of pages, black and white color, etc.). This function will return pointer to `gpx_cap_t`.
+If you would like to know what the gpx library can do on your platform, you can call `gpx_cap().` This function will query platform graphics capabilities (resolution, no. of pages, black and white color, etc.). This function will return pointer to `gpx_cap_t`.
+
+~~~cpp
+#include <gpx.h>
+#include <stdio.h>
+
+void main() {
+    /* enter gpx mode */
+    gpx_t *g=gpx_init();
+
+    /* query graphics capabilities */
+    gpx_cap_t *cap=gpx_cap(g);
+    printf("GRAPHICS PROPERTIES\n\n");
+    printf("No. colors %d\nBack color %d\nFore color %d\n",
+        cap->num_colors,
+        cap->back_color,
+        cap->fore_color);
+    printf("Sup. pages %d\n", cap->num_pages);
+    /* enum. pages */
+    for(int p=0; p<cap->num_pages; p++)
+        /* enum resolutions (for page) */
+        for (int r=0; r<cap->pages[p].num_resolutions; r++)
+            printf(" P%d Resol. %dx%d\n",
+                p,
+                cap->pages[p].resolutions[r].width,
+                cap->pages[p].resolutions[r].height);
+    
+    /* leave gpx mode */
+    gpx_exit(NULL);
+}
+~~~
+
+And the result on ZX Spectrum 48K.
+
+![ZX Spectrum 48K gpx_cap()](docs/img/zxspec48-gpx_cap.png)
 
 ## Page switching
 
