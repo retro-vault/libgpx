@@ -33,21 +33,21 @@ typedef struct rect_s {                 /* the rectangle */
 } rect_t;
 
 /* drawing mode */
-#define BM_NONE             0           /* no drawing, pen up */
-#define BM_COPY             1           /* standard operation */
-#define BM_XOR              2           /* XOR operations */
+#define BLT_NONE            0           /* no drawing, pen up */
+#define BLT_COPY            1           /* standard operation */
+#define BLT_XOR             2           /* XOR operations */
 
 /* official list styles (will work fast!) */
 #define LS_SOLID            0xff
 #define LS_DOTTED           0xaa
-#define LS_DASHED           0xee
-#define LS_DOT_DASH         0xe4
+#define LS_DASHED           0xcc
+
 
 typedef struct gpx_s {
-    uint8_t blit_mode;                  /* one of BM_ mmodes */
+    uint8_t blit;                       /* one of BM_ mmodes */
     uint8_t line_style;                 /* one of LS_ styles */
     uint8_t fill_brush_size;            /* bytes in brush */
-    uint8_t fill_brush[8];                /* array of byes (max 8) */
+    uint8_t fill_brush[8];              /* array of byes (max 8) */
     rect_t clip_area;                   /* absolute clipping rectangle */
     uint8_t display_page;               /* currently displaying ... */
     uint8_t write_page;                 /* all drawing goes to page... */
@@ -55,5 +55,10 @@ typedef struct gpx_s {
     color fore_color;                   /* current fore color */
     color back_color;                   /* current back color */
 } gpx_t;
+
+
+/* set color consts. */
+#define CO_BACK             1
+#define CO_FORE             2
 
 #endif /* __GPXDEF_H__ */

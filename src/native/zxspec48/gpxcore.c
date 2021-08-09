@@ -18,9 +18,6 @@
 static gpx_t _g;
 static bool _ginitialized = false;
 
-/* default brush is solid, 1 byte, 0xff */
-static unsigned char _solid_brush = 0xff;
-
 /* zx spectrum page resolution */
 static uint8_t _current_resolution;
 
@@ -35,10 +32,10 @@ gpx_t* gpx_init() {
     /* initialize it */
     _ginitialized=true;
 
-    _g.blit_mode = BM_COPY;
+    _g.blit = BLT_COPY;
     _g.line_style = LS_SOLID;
     _g.fill_brush_size = 1;             /* 1 byte */
-    _g.fill_brush=&_solid_brush;
+    _g.fill_brush[0]=0xff;              /* solid brush */
 
     /* display and write page is 0 */
     _g.display_page = 0;
@@ -87,8 +84,26 @@ void gpx_line_style(gpx_t *g, uint8_t line_style) {
     g->line_style=line_style;
 }
 
-/* TODO: brush lifetime? */
 void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
+    
+    /* copy brush */
+    _memcpy(&(g->fill_brush),fill_brush,fill_brush_size);
+
+    /* and store size. */
     g->fill_brush_size=fill_brush_size;
-    g->fill_brush=fill_brush;
+}
+
+void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
+    _memcpy(&(g->clip_area),clip_area,sizeof(rect_t));
+}
+
+void gpx_set_blit(gpx_t *g, uint8_t blit) {
+    g->blit=blit;
+}
+
+void gpx_set_color(gpx_t *g, color c, uint8_t ct) {
+    if (ct==CO_BACK)
+        g->back_color=c;
+    else
+        g->fore_color=c;
 }

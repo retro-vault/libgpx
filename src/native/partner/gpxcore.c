@@ -36,7 +36,7 @@ gpx_t* gpx_init() {
     _g.fore_color = 0;                 /* eraser */
 
     /* blit mode */
-    _g.blit_mode = BM_COPY;
+    _g.blit = BLT_COPY;
     _g.line_style = LS_SOLID;
     _g.fill_brush_size = 1;             /* 1 byte */
     _g.fill_brush=&_solid_brush;

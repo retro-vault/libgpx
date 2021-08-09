@@ -52,5 +52,3 @@ vid_nextrow::
         ld      h,a
 vnr_done:
         ret
-
-

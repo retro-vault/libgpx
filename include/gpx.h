@@ -32,19 +32,19 @@ typedef struct rect_s {                 /* the rectangle */
 } rect_t;
 
 /* drawing mode */
-#define BM_NONE             0           /* no drawing, pen up */
-#define BM_COPY             1           /* standard operation */
-#define BM_XOR              2           /* XOR operations */
+#define BLT_NONE            0           /* no drawing, pen up */
+#define BLT_COPY            1           /* standard operation */
+#define BLT_XOR             2           /* XOR operations */
 
 
 /* official list styles (will work fast!) */
 #define LS_SOLID            0xff
 #define LS_DOTTED           0xaa
-#define LS_DASHED           0xee
-#define LS_DOT_DASH         0xe4
+#define LS_DASHED           0xcc
+
 
 typedef struct gpx_s {
-    uint8_t blit_mode;                  /* one of BM_ mmodes */
+    uint8_t blit;                       /* one of BM_ mmodes */
     uint8_t line_style;                 /* one of LS_ styles */
     uint8_t fill_brush_size;            /* bytes in brush */
     uint8_t fill_brush[8];              /* array of byes (max 8) */
@@ -57,6 +57,9 @@ typedef struct gpx_s {
 } gpx_t;
 
 
+/* set color consts. */
+#define CO_BACK             1
+#define CO_FORE             2
 
 /* ----- initialization ---------------------------------------------------- */
 
@@ -112,19 +115,19 @@ extern uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop);
 /* set resolution (of current write page) */
 extern void gpx_set_resolution(gpx_t *g, uint8_t resolution);
 
-/* -set current color */
+/* set current color */
 extern void gpx_set_color(gpx_t *g, color c, uint8_t ct);
 
-/* -set clippig rectangle, if NULL then default page resolution is used */
-extern void gpx_set_clip(gpx_t *g, rect_t *clip);
+/* set clippig rectangle, if NULL then default page resolution is used */
+extern void gpx_set_clip_area(gpx_t *g, rect_t *clip_area);
 
-/* -set blit mode */
+/* set blit mode */
 extern void gpx_set_blit(gpx_t *g, uint8_t blit);
 
 /* set line style  */
 extern void gpx_line_style(gpx_t *g, uint8_t line_style);
 
-/* +set fill brush */
+/* set fill brush */
 extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
 
 
@@ -134,8 +137,11 @@ extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brus
 /* clear screen */
 extern void gpx_cls(gpx_t *g);
 
-/* -draw pixel */
+/* draw pixel */
 extern void gpx_draw_pixel(gpx_t *g, coord x, coord y);
+
+/* draw circle */
+extern void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius);
 
 /* -draw line */
 extern void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1);
@@ -186,5 +192,6 @@ extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
 
 /* intersection of rectangles */
 extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
+
 
 #endif /* __GPX_H__ */

@@ -163,6 +163,7 @@ All drawing functions start with `gpx_draw_` and all fill functions start with `
 
 Following functions are available.
  * `gpx_draw_line()` ... draws a line
+ * `gpx_draw_circle()` ... draws a circle 
  * `gpx_draw_rect()` ... draws a rectangle
  * `gpx_fill_rect()` ... draws a filled rectangle
  * `gpx_draw_glyph()` ... draws a bitmap
@@ -171,6 +172,42 @@ Following functions are available.
 
  > All functions are optimized. For example - when drawing a line,
  > horizontal line is detected and drawn using super- speeed function.
+
+~~~cpp
+#include <gpx.h>
+
+void main() {
+
+    /* enter graphics */
+    gpx_t *g=gpx_init();
+
+    /* clear screen */
+    gpx_cls(g);
+
+    /* query graphics capabilities
+       NOTE: this is only possible because initial page
+             and initial resolution are both 0. */
+    gpx_cap_t *cap=gpx_cap(g);
+    coord centerx = cap->pages[0].resolutions[0].width/2;
+    coord centery = cap->pages[0].resolutions[0].height/2;
+
+    printf("Center is at %d,%d\n",centerx, centery);
+
+    /* draw line */
+    for (coord x=centerx-20; x<centerx+20;x++)
+        gpx_draw_pixel(g,x,centery);
+
+    /* draw circle */
+    gpx_draw_circle(g,centerx,centery,20);
+
+    /* leave graphics */
+    gpx_exit(NULL);
+}
+~~~
+
+And the result on ZX Spectrum 48K.
+
+![ZX Spectrum 48K drawing](docs/img/zxspec48-gpx_draw1.png)
 
 ## Fonts
 

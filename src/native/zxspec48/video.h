@@ -20,4 +20,6 @@
 #define MAX_X           SCREEN_WIDTH-1
 #define MAX_Y           SCREEN_HEIGHT-1
 
+extern void vid_plotxy(uint8_t x, uint8_t y);
+
 #endif /* __VIDEO_H__ */
