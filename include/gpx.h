@@ -100,6 +100,9 @@ extern gpx_cap_t* gpx_cap(gpx_t *g);
 
 /* ----- drawing modes, styles, patterns, colors --------------------------- */
 
+#define PG_WRITE    1
+#define PG_DISPLAY  2
+
 /* set curent page */
 extern void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop);
 

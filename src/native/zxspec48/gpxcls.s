@@ -27,11 +27,27 @@
         ;;          b=foreground color
         ;; affects: af, hl, de, bc
 _gpx_cls::
+        pop     de                      ; return address
+        pop     hl                      ; g
+        ;; restore stack
+        push    hl
+        push    de
+        ;; get correct address
+        ld      de,#17                  ; offset
+        add     hl,de                   ; add to hl
+        ;; get fore color
+        ld      b,(hl)
+        inc     hl
+        inc     hl
+        ;; get back color
+        ld      a,(hl)
+        ;;ld      b,18(ix)                ; fore color
         out     (#BDRPORT),a            ; set border
         ;; prepare attr
         rlca                            ; bits 3-5
         rlca
         rlca
+        and     #0xf8
         or      b                       ; ink color to bits 0-2
         ;; first vmem
         ld      hl,#VMEMBEG             ; vmem
@@ -39,7 +55,8 @@ _gpx_cls::
         ld      (hl),l                  ; l=0
         ld      d,h
         ld      e,#1
-        ldir                            ; cls
+        ldir         
+        ;; now attr
         ld      (hl),a                  ; attr
         ld      bc,#ATTRSZE             ; size of attr
         ldir

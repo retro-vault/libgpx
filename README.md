@@ -126,9 +126,36 @@ By convention the resolutions are ordered from lowest to highest.
 
 Resolution is also set per page, so make sure you set it for all pages you are using.
 
+~~~cpp
+#include <gpx.h>
+
+void main() {
+    /* enter gpx mode */
+    gpx_t *g=gpx_init();
+    /* set screen resolution */
+    gpx_set_resolution(g,0);
+    /* exit gpx mode */
+    gpx_exit(g);
+}
+~~~
+
 ## Clearing the screen
 
-Use `gpx_cls()` to clear screen.
+Use `gpx_cls()` to clear screen. Clear screen will respect 
+current back color, fore color and page setting.
+
+~~~cpp
+#include <gpx.h>
+
+void main() {
+    /* enter gpx mode */
+    gpx_t *g=gpx_init();
+    /* clear screen */
+    gpx_cls();
+    /* exit gpx mode */
+    gpx_exit(g);
+}
+~~~
 
 ## Drawing!
 
