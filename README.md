@@ -166,9 +166,6 @@ Following functions are available.
  * `gpx_draw_circle()` ... draws a circle 
  * `gpx_draw_rect()` ... draws a rectangle
  * `gpx_fill_rect()` ... draws a filled rectangle
- * `gpx_draw_glyph()` ... draws a bitmap
- * `gpx_draw_mglyph()` ... draws a masked bitmap
- * `gpx_read_glyph()` ... read a bitmap from screen
 
  > All functions are optimized. For example - when drawing a line,
  > horizontal line is detected and drawn using super- speeed function.
@@ -208,6 +205,40 @@ void main() {
 And the result on ZX Spectrum 48K.
 
 ![ZX Spectrum 48K drawing](docs/img/zxspec48-gpx_draw1.png)
+
+## Glyphs
+
+The glyph is a basic building block of bitmapped graphics. Several formats 
+of glyph are supported, each having a minimal header, just enough to draw 
+the glyph. Each glyph type has its own optimal drawing function. 
+
+### The envelope approach
+
+Glyphs can be combined into more complex bitmapped structures, such as 
+fonts, animations, bitmaps, icons, or mouse mouse cursors. All of these 
+structures are arrays (or envelopes) containing basic glyphs. By using 
+the envelope approach one can create an animation or a font, made out 
+of any glyph types.
+
+![Various envelopes](docs/img/envelopes.png)
+
+### Supported glyph formats
+
+At time of writing, following glyph formats are supported.
+
+| Format      | Description                                  |
+|-------------|----------------------------------------------|
+| Raster      | Encoded as standard 1bpp raster              |
+| RLE         | Encoded as RLE lines.                        |
+| Tiny        | Encoded as Partners' relative movements      |
+
+### Glyph drawing functions
+
+Here are four main glyph drawing functions.
+
+ * `gpx_draw_glyph()` ... draws a glyph
+ * `gpx_draw_mglyph()` ... draws a masked glyph
+ * `gpx_read_glyph()` ... read a bitmap from screen
 
 ## Fonts
 
