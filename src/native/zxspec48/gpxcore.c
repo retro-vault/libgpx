@@ -24,6 +24,9 @@ static unsigned char _solid_brush = 0xff;
 /* zx spectrum page resolution */
 static uint8_t _current_resolution;
 
+
+/* ----- initialization and exit ------------------------------------------- */
+
 gpx_t* gpx_init() {
 
     /* not the first time? */
@@ -61,4 +64,31 @@ gpx_t* gpx_init() {
 void gpx_exit(gpx_t* g) {
     g;
     /* nothing, for now */
+}
+
+
+/* ----- dummy functions that do not work on zx spectrum ------------------- */
+
+void gpx_set_resolution(gpx_t *g, uint8_t resolution) {
+    g; resolution;
+}
+
+void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
+    g; page; pgop;
+}
+
+uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
+    g; page; pgop;
+    /* always the same page on speccy */
+    return 0;
+}
+
+void gpx_line_style(gpx_t *g, uint8_t line_style) {
+    g->line_style=line_style;
+}
+
+/* TODO: brush lifetime? */
+void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
+    g->fill_brush_size=fill_brush_size;
+    g->fill_brush=fill_brush;
 }
