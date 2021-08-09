@@ -33,7 +33,7 @@ _gpx_cls::
         push    hl
         push    de
         ;; get correct address
-        ld      de,#17                  ; offset
+        ld      de,#23                  ; offset
         add     hl,de                   ; add to hl
         ;; get fore color
         ld      b,(hl)
