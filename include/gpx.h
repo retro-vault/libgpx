@@ -47,7 +47,7 @@ typedef struct gpx_s {
     uint8_t blit_mode;                  /* one of BM_ mmodes */
     uint8_t line_style;                 /* one of LS_ styles */
     uint8_t fill_brush_size;            /* bytes in brush */
-    uint8_t *fill_brush;                /* array of byes (max 8) */
+    uint8_t fill_brush[8];              /* array of byes (max 8) */
     rect_t clip_area;                   /* absolute clipping rectangle */
     uint8_t display_page;               /* currently displaying ... */
     uint8_t write_page;                 /* all drawing goes to page... */
@@ -109,19 +109,19 @@ extern uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop);
 /* set resolution (of current write page) */
 extern void gpx_set_resolution(gpx_t *g, uint8_t resolution);
 
-/* set current color */
+/* -set current color */
 extern void gpx_set_color(gpx_t *g, color c, uint8_t ct);
 
-/* set clippig rectangle, if NULL then default page resolution is used */
+/* -set clippig rectangle, if NULL then default page resolution is used */
 extern void gpx_set_clip(gpx_t *g, rect_t *clip);
 
-/* set blit mode */
+/* -set blit mode */
 extern void gpx_set_blit(gpx_t *g, uint8_t blit);
 
 /* set line style  */
 extern void gpx_line_style(gpx_t *g, uint8_t line_style);
 
-/* set fill brush */
+/* +set fill brush */
 extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
 
 
@@ -131,20 +131,17 @@ extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brus
 /* clear screen */
 extern void gpx_cls(gpx_t *g);
 
-/* draw pixel */
+/* -draw pixel */
 extern void gpx_draw_pixel(gpx_t *g, coord x, coord y);
 
-/* draw line */
+/* -draw line */
 extern void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1);
 
-/* draw rectangle */
+/* -draw rectangle */
 extern void gpx_draw_rect(gpx_t *g, rect_t *rect);
 
-/* fill rectangle */
+/* -fill rectangle */
 extern void gpx_fill_rect(gpx_t *g, rect_t *rect);
-
-/* draw glyph */
-extern void gpx_draw_rect(gpx_t *g, rect_t *rect);
 
 
 
@@ -154,10 +151,10 @@ typedef struct glyph_s {
     int dummy;
 } glyph_t;
 
-/* draw glyph */
+/* -draw glyph */
 extern void gpx_draw_glyph(gpx_t *g, coord x, coord y, glyph_t *glyph);
 
-/* get glyph from screen */
+/* -get glyph from screen */
 extern glyph_t* gpx_snatch_glyph(gpx_t *g, coord x, coord y, coord width, coord height);
 
 
@@ -168,10 +165,10 @@ typedef struct font_s {
     int dummy;
 } font_t;
 
-/* draw string at x,y */
+/* -draw string at x,y */
 extern void gpx_draw_string(gpx_t *g, font_t *f, coord x, coord y, char* text);
 
-/* measure string (but don't draw it)! */
+/* -measure string (but don't draw it)! */
 extern rect_t* gpx_measure_string(gpx_t *g, font_t *f, char* text);
 
 

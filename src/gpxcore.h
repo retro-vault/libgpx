@@ -47,7 +47,7 @@ typedef struct gpx_s {
     uint8_t blit_mode;                  /* one of BM_ mmodes */
     uint8_t line_style;                 /* one of LS_ styles */
     uint8_t fill_brush_size;            /* bytes in brush */
-    uint8_t *fill_brush;                /* array of byes (max 8) */
+    uint8_t fill_brush[8];                /* array of byes (max 8) */
     rect_t clip_area;                   /* absolute clipping rectangle */
     uint8_t display_page;               /* currently displaying ... */
     uint8_t write_page;                 /* all drawing goes to page... */
