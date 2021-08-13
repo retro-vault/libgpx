@@ -16,15 +16,24 @@
         .globl 	__ef9367_cls
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_put_pixel
-        
+        .globl  __ef9367_move_right
+        .globl  __ef9367_stride
         .globl  _ef9367_draw_line
 	    
 		.include "ef9367.inc"
 
-        .area	_CODE
 
+        ;; cached data
+        .area   _DATA
+blit_mode:
+        .db     1                       ; default mode is 1 (BL_COPY)
+pen_down:
+        .db     1                       ; default is pen down
+yrev:
+        .dw     1                       ; y reverse axis size
 
         
+        .area	_CODE
         ;; wait for the GDP to finish previous operation
         ;; don't touch interrupts!
         ;; affects: a
@@ -53,6 +62,13 @@ ef9367_cmd:
         ;; inputs:  hl=x, de=y
         ;; affect:  af, de, hl
 ef9367_xy::
+        ;; reverse y coordinate
+        push    hl                      ; store x
+        ld      hl,(yrev)               ; hl=max y
+        or      a                       ; clear carry
+        sbc     hl,de                   ; hl=maxy-y
+        pop     de                      ; de=x
+        ex      de,hl                   ; switch
         ;; wait for gdp
         call    wait_for_gdp
         ld a,l
@@ -66,21 +82,37 @@ ef9367_xy::
         ret
 
 
+        ;; set deltas to dx, dy
+        ;; inputs:  b=dy, c=dx
+        ;; affect:  a, bc
+ef9367_dxdy::
+        call    wait_for_gdp
+        ld      a,b
+        out     (#EF9367_DY),a
+        ld      a,C
+        out     (#EF9367_DX),a
+        ret
+
 
         ;; -------------------
 		;; void _ef9367_init()
         ;; -------------------
         ;; initializes the ef9367, sets the 1024x512 graphics mode
         ;; no waiting for gdp bcs no command should be executing!
-        ;; affect:  a, b, flags
+        ;; affect:  a, bc, flags
 __ef9367_init::
-        xor     a
+        ld      a,#0b00000011           ; pen down, default pen
         out     (#EF9367_CR1),a         ; control reg 1 to default
+        xor     a                       ; a=0
         out     (#EF9367_CR2),a         ; control reg 2 to default
-        out     (#EF9367_CH_SIZE),a     ; scaling to none
-        ;; this sets default resolution AND mode to copy
+        out     (#EF9367_CH_SIZE),a     ; no scaling!
+        ;; this sets default (MAX) resolution
+        ;; and default page to 0
         ld      a,#PIO_GR_CMN_1024x512  
-		out     (#PIO_GR_CMN),a   
+		out     (#PIO_GR_CMN),a
+        ;; cache resolution as yrev(erse)
+        ld      hl, #EF9367_HIRES_HEIGHT
+        ld      (yrev),hl
         ret
 
 
@@ -156,28 +188,99 @@ blm_write:
         pop     af
         out     (#PIO_GR_CMN),a         ; write it back
         ret
-        ;; cached mode and pen status
-        .area   _DATA
-blit_mode:
-        .db     1                       ; default mode is 1 (BL_COPY)
-pen_down:
-        .db     1                       ; default is pen down
 
 
-
-        .area   _CODE
         ;; ------------------------
 		;; void _ef9367_put_pixel()
         ;; ------------------------
-        ;; draw single pixel and move right
-        ;; affect:  af, de, hl
+        ;; draw single pixel 
+        ;; affect:  af
 __ef9367_put_pixel::
-        ;; draw pixel command!
-        ld      a,#0b10000000
+        ld      a,#0x80
         call    ef9367_cmd
-        ;; restore ix!
 		ret
 
+
+        ;; -------------------------
+		;; void _ef9367_move_right()
+        ;; -------------------------
+        ;; move x to the right
+__ef9367_move_right::
+        call    wait_for_gdp
+        ld      a,#0b00000010           ; pen up
+        out     (#EF9367_CR1),a
+        ld      a,#0b10100000           ; move right
+        call    ef9367_cmd
+        call    wait_for_gdp
+        ld      a,#0b00000011           ; pen down (again!)
+        out     (#EF9367_CR1),a
+        ret
+
+
+        ;; ---------------------
+		;; void _ef9367_stride()
+        ;; ---------------------
+        ;; draw fast stride at (preset) x,y
+        ;; inputs: 
+        ;;  hl = data
+        ;;  e=start bit
+        ;;  d=end bit
+        ;; affect:  af, de, hl
+__ef9367_stride::
+        ;; calculate difference in pixels
+        ld      a,d
+        sub     e                       ; a=end-start
+        ld      c,a                     ; store to c
+        ;; start is in bits, how many bytes to skip?
+        xor     a                       ; a=0
+        srl     e                       ; e=e/2
+        rla                             ; into a
+        srl     e                       ; e=e/4
+        rla                             ; into a
+        srl     e                       ; e=e/8
+        rla                             
+        ;; e=bytes to skip, a=remainder
+        ld      d,#0                    ; de=bytes to skip
+        add     hl,de                   ; we are at right byte!
+        ;; a=current bit (from the left), c=total bits, hl=address
+        ld      d,(hl)                  ; first byte to default
+        ;; do we need initial shift?
+        or      a                       ; rotate is 0 bits?
+        jr      z,strd_start            ; we are ready
+        ;; let's do initial shift
+        ld      b,a                     ; counter to a
+strd_shift:
+        sla     d                       ; shift data
+        djnz    strd_shift              ; and loop
+strd_start:
+        ;; at this point - 
+        ;;  a is current shift 
+        ;;  d is shifted data 
+        ;;  hl=address
+        ;;  c total number of bits
+        ld      b,c                     ; b will be our counter
+strd_loop:
+        ;; get the bit into carry
+        push    af
+        sla     d   
+        jr      nc,strd_skip_draw       ; no bit?
+        ;; draw it
+        call    __ef9367_put_pixel   
+strd_skip_draw:
+        call    __ef9367_move_right
+        pop     af
+        inc     a                       ; next bit
+        cp      #8                      ; across byte boundary?
+        jr      nz,strd_get_nxt         ; nope...
+        ;; we are across byte boundary
+        xor     a                       ; bit is 0 from the left
+        inc     hl                      ; next byte
+        ld      d,(hl)                  ; into d
+strd_get_nxt:
+        ;; and next bit
+        djnz    strd_loop
+        ;; we're done
+        ret
 
 
         ;; ----------------------
@@ -197,7 +300,7 @@ _ef9367_draw_line::
         ld ix,#4                        ; first arg.
         add ix,sp
         ;; goto xy
-        call xy_internal
+        ;; TODO: call xy_internal
         ;; y0 to de
         ld e,2(ix)                      ; de=y0
         ld d,3(ix)
@@ -262,7 +365,7 @@ dli_draw_lines:
         ;; set mode
         push af                         ; store draw command
         ld b,8(ix)                      ; mode to b
-        call ef9367_set_dmode
+        ;; TODO: call ef9367_set_dmode
         pop af                          ; restore draw command
         ;; start the recursion. there are four parameters
         ;; on stack (in the pop order): longest coordinate, 

@@ -10,15 +10,13 @@
  *
  */
 #include <std.h>
+#include <gpxcore.h>
 
 #include "partner/ef9367.h"
 
 /* there can be only one gpx! */
 static gpx_t _g;
 static bool _ginitialized = false;
-
-/* default brush is solid, 1 byte, 0xff */
-static signed char _solid_brush = 0xff;
 
 /* partner page resolutions */
 static uint8_t _current_resolutions[2];
@@ -39,7 +37,7 @@ gpx_t* gpx_init() {
     _g.blit = BLT_COPY;
     _g.line_style = LS_SOLID;
     _g.fill_brush_size = 1;             /* 1 byte */
-    _g.fill_brush=&_solid_brush;
+     _g.fill_brush[0]=0xff;              /* solid brush */
 
     /* display and write page is 0 */
     _g.display_page = 0;
@@ -51,12 +49,16 @@ gpx_t* gpx_init() {
     _g.resolutions=_current_resolutions;
 
     /* finally, clipping rect. */
-    _g.clip_area.x0=g->clip_area.y0=0;
+    _g.clip_area.x0=_g.clip_area.y0=0;
     _g.clip_area.x1=EF9367_HIRES_WIDTH-1;
     _g.clip_area.y1=EF9367_HIRES_HEIGHT-1;
 
     /* now that we prepared everything ... configure the hardware 
        to match our settings */
+    _ef9367_init();
+
+    /* Initial cls. */
+    _ef9367_cls();
 
     /* and return it */
     return &_g;
@@ -64,16 +66,19 @@ gpx_t* gpx_init() {
 
 
 void gpx_exit(gpx_t* g) {
+    g;
     /* nothing, for now */
 }
 
 
 void gpx_cls(gpx_t *g) {
+    g;
     _ef9367_cls();
 }
 
 
 void gpx_set_blit(gpx_t *g, uint8_t blit) {
+    g; blit;
     __asm
         push    ix                      ; store index 
         ld      ix, #0                  ; index to 0
@@ -84,26 +89,5 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
         ld      (hl), b                 ; update gpx_t
         call    __ef9367_set_blit_mode  ; set blit mode!
         pop     ix                      ; restore ix
-    __endasm;
-}
-
-
-void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
-    __asm
-        push    ix                      ; store index reg.
-        ld      ix, #0                  ; index to 0
-        add     ix, sp                  ; ix = sp
-        ;; hl=x
-        ld      l, 4(ix)                
-        ld      h, 5(ix)
-        ;; de=y
-        ld      e, 6(ix)                
-        ld      d, 7(ix)
-        ;; goto x,y
-        call    ef9367_xy
-        ;; and draw pixel
-        call    _ef9367_put_pixel
-        ;; restore ix
-        pop     ix
     __endasm;
 }

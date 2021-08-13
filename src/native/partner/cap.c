@@ -9,46 +9,52 @@
  * 03.08.2021   tstih
  *
  */
-#include <std.h>
+#include <cap.h>
 
 #include <partner/ef9367.h>
 
-/* cached, always the same */
-static gpx_cap_t cap;
+/* there can be only one gpx! */
+static gpx_cap_t _cap;
+static bool _capinitialized = false;
 
 /* two pages, cached */
-static gpx_page_t pages[2];
+static gpx_page_t _pages[2];
 
 /* three resolutions */
-static gpx_resolution_t resolutions[3];
+static gpx_resolution_t _resolutions[3];
 
-gpx_cap_t* gpx_cap() {
+/* get the capabilities */
+gpx_cap_t* gpx_cap(gpx_t *g) {
+    g;
 
-    /* colors */
-    cap.num_colors=2;
-    cap.fore_color=1;
-    cap.back_color=0;
-
-    /* two pages */
-    cap.num_pages=2;
-    cap.pages = pages;
-
-    /* emulated resolution (does not exist on idp)  */
-    resolutions[0].width=512;
-    resolutions[0].height=256;
-    /* native idp resolution 0 */
-    resolutions[1].width=1024;
-    resolutions[1].height=256;
+    /* not the first time? */
+    if (_capinitialized) return &_cap;
+    /* signal initialized */
+    _capinitialized=true;
+    
+    /* always start with highest resolution */
+    _resolutions[0].width=1024;
+    _resolutions[0].height=512;
     /* native idp resolution 1 */
-    resolutions[2].width=1024;
-    resolutions[2].height=512;
-
+    _resolutions[1].width=1024;
+    _resolutions[1].height=256;
+    /* emulated resolution (does not exist on idp) 2 */
+    _resolutions[2].width=512;
+    _resolutions[2].height=256;
+    
     /* populate pages */
-    pages[0].num_resolutions=3;
-    pages[0].resolutions=resolutions;
-    pages[1].num_resolutions=3;
-    pages[1].resolutions=resolutions;
+    _cap.num_pages=2;
+    _cap.pages=_pages;
+    _pages[0].num_resolutions=3;
+    _pages[0].resolutions=_resolutions;
+    _pages[1].num_resolutions=3;
+    _pages[1].resolutions=_resolutions;
 
-    /* and return initialized capabilities */
-    return &cap;
+    /* configure colors */
+    _cap.num_colors=2;
+    _cap.fore_color=1;
+    _cap.back_color=0;
+
+    /* and return */
+    return &_cap;
 }

@@ -16,12 +16,20 @@
 #include <gpxcore.h>
 
 /* pixel at x,y */
-void _plotxy(coord x, coord y);
+extern void _plotxy(coord x, coord y);
 
 /* vertical line */
-void _vline(coord x, coord y0, coord y1);
+extern void _vline(coord x, coord y0, coord y1);
 
 /* horizontal line */
-void _hline(coord x0, coord x1, coord y);
+extern void _hline(coord x0, coord x1, coord y);
+
+/* stride */
+extern void _stridexy(
+    coord x, 
+    coord y, 
+    void *data, 
+    uint8_t start, 
+    uint8_t end);
 
 #endif /* __NATIVE_H__ */
