@@ -208,11 +208,44 @@ And the result on ZX Spectrum 48K.
 
 ## Glyphs
 
-The glyph is a basic building block of bitmapped graphics. Several formats 
+The glyph is a basic building block of bitmapped graphics. Several classes 
 of glyph are supported, each having a minimal header, just enough to draw 
 the glyph. Each glyph type has its own optimal drawing function. 
 
-### The envelope approach
+### Glyph classes
+
+Each glyph has a 4 byte glyph header. First nibble tells the glyph class.
+At present lower 2 bits are used for the class with upper two bits 
+reserved for future use.
+
+Following glyph classes are supported.
+
+| Name      | Class | Description                                |
+|-----------|-------|--------------------------------------------|
+| Raster    | XX00  | Encoded as standard 1bpp raster            |
+| Tiny      | XX01  | Encoded as Partners' relative movements    |
+| Lines     | XX10  | Encoded as lines (scanlines or outline)    |
+| RLE       | XX11  | Encoded as RLE compressed graphics         |
+
+The rest of the 4 byte structure depends on glyph class.
+
+![glyph_t structure](docs/img/glyph_t.png)
+
+#### Glyph format limits
+
+The `*glyph_t` structure immposes some reasonable limits for a glyph. 
+All glyhps except the *RLE* are limited to 256x256. *RLE* has
+two extra bits for width and height, limiting its size to
+1024x1024. *RLE* also does not need size information, because the number
+of rows equals to height, and each individual row has information about 
+its size. *Tiny* glyph can have max. 256 moves, and *line* glyph can 
+have max. of 4096 lines.
+
+ > For obvious reasons, glyph type *Tiny*, which contains direct 
+ > commands for *Iskra Delta Partner GDP* is not supported on other
+ > platforms.
+
+### Array of glyphs: the envelope approach
 
 Glyphs can be combined into more complex bitmapped structures, such as 
 fonts, animations, bitmaps, icons, or mouse mouse cursors. All of these 
@@ -220,17 +253,12 @@ structures are arrays (or envelopes) containing basic glyphs. By using
 the envelope approach one can create an animation or a font, made out 
 of any glyph types.
 
+ > The tradeoff of this approach is that each glyph array (such as
+ > a font) is a bit larger, because collective properties, such as
+ > font height are stored with each glyph. But it also results in 
+ > smaller and faster code, required to manage graphics.
+
 ![Various envelopes](docs/img/envelopes.png)
-
-### Supported glyph formats
-
-At time of writing, following glyph formats are supported.
-
-| Format      | Description                                  |
-|-------------|----------------------------------------------|
-| Raster      | Encoded as standard 1bpp raster              |
-| RLE         | Encoded as RLE lines.                        |
-| Tiny        | Encoded as Partners' relative movements      |
 
 ### Glyph drawing functions
 
@@ -242,13 +270,24 @@ Here are four main glyph drawing functions.
 
 ## Fonts
 
-Fonts are implemented using the glyph group of drawing functions, because each letter is just a bitmap, with some extra drawing hints. 
+Fonts are implemented using the glyph group of drawing functions, because each letter is just a glyph, with some extra drawing hints. 
 
 To use font you need to load it (unless already part of your C code). Each font starts with the `font_t` structure where you can find some basic font information such as average width, height, number of characters, etc.
 
 You then simply call `gpx_draw_string()` to draw a sting. 
 
  > Don't forget that fonts also use the *blit mode*, and if it is not `BM_COPY`, background may not be deleted.
+
+### Font header
+
+The font header structure contains basic information about the font and a table of pointers to each
+glyph. This way glyphs can have different sizes (i.e. in proportional fonts, the letter i takes much
+less memory space than the letter w) and we avoid expensive calculations to find each glyph.
+
+Because each glyph contains its width, it also makes it easy for us to measure strings by simply
+iterating through all the glyphs in the string, and maxing the height and summing the width.
+
+
 
 ### Measuring text
 
