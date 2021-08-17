@@ -156,9 +156,27 @@ extern void gpx_fill_rect(gpx_t *g, rect_t *rect);
 
 /* ----- glyphs ------------------------------------------------------------ */
 
+/* Known glyph classes */
+#define GYCLS_RASTER    0
+#define GYCLS_TINY      1
+#define GYCLS_LINES     2
+#define GYCLS_RLE       3
+
 typedef struct glyph_s {
-    int dummy;
+    uint8_t reserved1:5;                /* low nibble */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t reserved2[3];
+    uint8_t data[0];                    /* start of data */
 } glyph_t;
+
+typedef struct raster_glyph_s {
+    uint8_t stride:5;                   /* stride-1 (1-16) */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t width;                      /* width-1 (1-256) */
+    uint8_t height;                     /* height-1 (1-256) */
+    uint8_t reserved;                   /* not used */
+    uint8_t data[0];                    /* start of data */
+} raster_glyph_t;
 
 /* -draw glyph */
 extern void gpx_draw_glyph(gpx_t *g, coord x, coord y, glyph_t *glyph);

@@ -13,6 +13,7 @@
 #include <rect.h>
 #include <native.h>
 #include <clip.h>
+#include <glyph.h>
 
 void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
     /* are we inside clip area? */
@@ -88,4 +89,44 @@ void gpx_draw_rect(gpx_t *g, rect_t *rect) {
     gpx_draw_line(g,rect->x0, rect->y0, rect->x0, rect->y1);
     /* right */
     gpx_draw_line(g,rect->x1, rect->y0, rect->x1, rect->y1);
+}
+
+void gpx_draw_glyph(
+    gpx_t *g, 
+    coord x, 
+    coord y, 
+    glyph_t *glyph) {
+
+    /* If no intersect between glyph and clip area,
+       just return. */
+    rect_t grect={ x, y, 0, 0 };
+    rect_t intersect;
+
+    /* Use different logic for each glyph class. */
+    if (glyph->class == GYCLS_RASTER) {
+        /* Convert to raster glyph. */
+        raster_glyph_t* raster=(raster_glyph_t *)glyph;
+        grect.x1=x+raster->width;
+        grect.y1=y+raster->height;
+        /* If no intersection with the clip then do nothing */
+        if (gpx_rect_intersect(&grect,&(g->clip_area),&intersect)==NULL)
+            return;
+        /* Get the pointer to start of data. */
+        uint8_t *dptr=raster->data;   
+        /* Skip over clipped lines. */
+        uint16_t skip=( (intersect.y0 - y) * (raster->stride + 1) );
+        dptr += skip;
+        /* How many lines of glyph to draw? */
+        uint8_t nlines=intersect.y1 - intersect.y0 + 1;
+        y=intersect.y0;
+        while (nlines--) {
+            _stridexy(
+                intersect.x0, 
+                y++, 
+                dptr,
+                intersect.x0-x, 
+                intersect.x1 - x + 1);
+            dptr = dptr + raster->stride + 1; /* Next row. */
+        }
+    }
 }

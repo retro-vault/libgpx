@@ -91,3 +91,7 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
         pop     ix                      ; restore ix
     __endasm;
 }
+
+void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
+    _memcpy(&(g->clip_area),clip_area,sizeof(rect_t));
+}

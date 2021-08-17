@@ -214,18 +214,18 @@ the glyph. Each glyph type has its own optimal drawing function.
 
 ### Glyph classes
 
-Each glyph has a 4 byte glyph header. First nibble tells the glyph class.
-At present lower 2 bits are used for the class with upper two bits 
-reserved for future use.
+Each glyph has a 4 byte glyph header. First three bits tell the glyph class.
+At present only 2 bits are used for the class, and bit 0 is reserved for
+possible future extensions.
 
 Following glyph classes are supported.
 
 | Name      | Class | Description                                |
 |-----------|-------|--------------------------------------------|
-| Raster    | XX00  | Encoded as standard 1bpp raster            |
-| Tiny      | XX01  | Encoded as Partners' relative movements    |
-| Lines     | XX10  | Encoded as lines (scanlines or outline)    |
-| RLE       | XX11  | Encoded as RLE compressed graphics         |
+| Raster    |  X00  | Encoded as standard 1bpp raster            |
+| Tiny      |  X01  | Encoded as Partners' relative movements    |
+| Lines     |  X10  | Encoded as lines (scanlines or outline)    |
+| RLE       |  X11  | Encoded as RLE compressed graphics         |
 
 The rest of the 4 byte structure depends on glyph class.
 
