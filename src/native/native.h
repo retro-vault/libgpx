@@ -32,4 +32,11 @@ extern void _stridexy(
     uint8_t start, 
     uint8_t end);
 
+/* tiny */
+extern int _tinyxy(
+    coord x, 
+    coord y, 
+    uint8_t *moves,
+    uint8_t num);
+
 #endif /* __NATIVE_H__ */

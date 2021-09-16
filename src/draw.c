@@ -14,6 +14,7 @@
 #include <native.h>
 #include <clip.h>
 #include <glyph.h>
+#include <font.h>
 
 void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
     /* are we inside clip area? */
@@ -128,5 +129,26 @@ void gpx_draw_glyph(
                 intersect.x1 - x + 1);
             dptr = dptr + raster->stride + 1; /* Next row. */
         }
+    }
+}
+
+void gpx_draw_string(
+    gpx_t *g, 
+    font_t *f, 
+    coord x, 
+    coord y, 
+    char* text) {
+
+    uint8_t *start=(uint8_t *)f;
+
+    /* first get spacing hint */
+    while (*text) {
+        uint8_t chi=*text-f->first_ascii;
+        uint16_t *offsets=f->glyph_offsets;
+        uint16_t offs=f->glyph_offsets[*text-f->first_ascii];
+        raster_glyph_t *glyph=(raster_glyph_t *)(start+offs);
+        gpx_draw_glyph(g,x,y,(glyph_t*)glyph);
+        x=x+glyph->width + f->hor_spacing_hint;
+        text++;
     }
 }

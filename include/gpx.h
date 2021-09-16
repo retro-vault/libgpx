@@ -58,8 +58,8 @@ typedef struct gpx_s {
 
 
 /* set color consts. */
-#define CO_BACK             1
-#define CO_FORE             2
+#define CO_FORE             1
+#define CO_BACK             2
 
 /* ----- initialization ---------------------------------------------------- */
 
@@ -178,7 +178,17 @@ typedef struct raster_glyph_s {
     uint8_t data[0];                    /* start of data */
 } raster_glyph_t;
 
-/* -draw glyph */
+/* Tiny glyph header. */
+typedef struct tiny_glyph_s {
+    uint8_t reserved:5;                 /* stride-1 (1-16) */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t width;                      /* width-1 (1-256) */
+    uint8_t height;                     /* height-1 (1-256) */
+    uint8_t moves;                      /* number of moves */
+    uint8_t data[0];                    /* start of data */
+} tiny_glyph_t;
+
+/* draw glyph */
 extern void gpx_draw_glyph(gpx_t *g, coord x, coord y, glyph_t *glyph);
 
 /* -get glyph from screen */
@@ -189,10 +199,17 @@ extern glyph_t* gpx_snatch_glyph(gpx_t *g, coord x, coord y, coord width, coord 
 /* ----- fonts and text related -------------------------------------------- */
 
 typedef struct font_s {
-    int dummy;
+    uint8_t hor_spacing_hint:4;         /* 0-3: hor. spacing for proport.fnt */
+    uint8_t reserved:3;                 /* 4-6: unused for now */
+    uint8_t proportional:1;             /* 7: proportional flag */
+    uint8_t width;                      /* max width for proportional font */
+    uint8_t height;                     /* font height */
+    uint8_t first_ascii;                /* first ascii of font */
+    uint8_t last_ascii;                 /* last ascii of font */
+    uint16_t glyph_offsets[0];          /* table of offsets */
 } font_t;
 
-/* -draw string at x,y */
+/* draw string at x,y */
 extern void gpx_draw_string(gpx_t *g, font_t *f, coord x, coord y, char* text);
 
 /* -measure string (but don't draw it)! */

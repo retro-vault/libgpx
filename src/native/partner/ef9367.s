@@ -18,6 +18,7 @@
         .globl  __ef9367_put_pixel
         .globl  __ef9367_move_right
         .globl  __ef9367_stride
+        .globl  __ef9367_tiny
         .globl  _ef9367_draw_line
 	    
 		.include "ef9367.inc"
@@ -214,6 +215,68 @@ __ef9367_move_right::
         call    wait_for_gdp
         ld      a,#0b00000011           ; pen down (again!)
         out     (#EF9367_CR1),a
+        ret
+
+
+        ;; -------------------
+		;; void _ef9367_tiny()
+        ;; -------------------
+        ;; draw fast tiny at (preset) x,y
+        ;; inputs: 
+        ;;  hl = moves
+        ;;  e = number of moves
+        ;; affect:  af, de, hl
+__ef9367_tiny::
+        ld      a,e                     ; moves to b
+        or      a                       ; zero moves?
+        ret     z
+        ld      b,a                     ; b=move counter
+tny_loop:
+        ld      a,(hl)                  ; move to a
+        push    af                      ; store it
+        ld      d,#0                    ; assume pen up
+        ;; now check pen...
+        rlca                            ; get color to first 2 bits
+        and     #0b00000011             ; get color
+        jr      z,tny_set_pen           ; CO_NONE=raise the pen
+        inc     d                       ; pen down to d
+tny_set_pen:
+        ;; compare d to (pen_down) cached value
+        ld      a,(pen_down)
+        cp      d
+        jr      z,tny_set_color         ; if the same no change
+        ;; if we are here we need to change the pen status
+        ;; a has the inverse value!
+        or      a                       ; cached pen down?
+        jr      nz,tny_pen_up           ; pen up
+        ;; if we are here, pen down!
+        call    wait_for_gdp
+        ld      a,#0b00000011           ; pen down
+        out     (#EF9367_CR1),a
+        and     #1                      ; a=1!
+        ld      (pen_down),a            ; write to cache
+        jr      tny_set_color
+tny_pen_up:
+        ;; if we are here, pen up!
+        call    wait_for_gdp
+        ld      a,#0b00000010           ; pen up
+        out     (#EF9367_CR1),a
+        xor     a
+        ld      (pen_down),a            ; and set cached value
+        jr      tny_draw_move           ; done!
+        ;; pen is down/up as it should be
+        ;; now set the eraser or ink
+tny_set_color:
+        ;; TODO: implement eraser
+tny_draw_move:
+        pop     af                      ; move back to a
+        inc     hl                      ; next move
+        ;; make a move!
+        or      #0b10000001             ; set both bits to 1
+        xor     #0b00000100             ; negate y sign (rev.axis)
+        call    ef9367_cmd              ; and draw!
+        ;; and, finally, move!
+        djnz    tny_loop                ; and loop
         ret
 
 

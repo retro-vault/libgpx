@@ -38,4 +38,14 @@ typedef struct raster_glyph_s {
     uint8_t data[0];                    /* start of data */
 } raster_glyph_t;
 
+/* Tiny glyph header. */
+typedef struct tiny_glyph_s {
+    uint8_t reserved:5;                 /* stride-1 (1-16) */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t width;                      /* width-1 (1-256) */
+    uint8_t height;                     /* height-1 (1-256) */
+    uint8_t moves;                      /* number of moves */
+    uint8_t data[0];                    /* start of data */
+} tiny_glyph_t;
+
 #endif /* __GLYPH_H__ */

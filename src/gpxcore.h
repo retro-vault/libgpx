@@ -58,7 +58,8 @@ typedef struct gpx_s {
 
 
 /* set color consts. */
-#define CO_BACK             1
-#define CO_FORE             2
+#define CO_NONE             0
+#define CO_FORE             1
+#define CO_BACK             2
 
 #endif /* __GPXDEF_H__ */
