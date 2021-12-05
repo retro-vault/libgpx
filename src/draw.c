@@ -15,6 +15,7 @@
 #include <clip.h>
 #include <glyph.h>
 #include <font.h>
+#include <std.h>
 
 void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
     /* are we inside clip area? */
@@ -60,23 +61,31 @@ void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius)
 void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1) {
     /* first check for point, horizontal line or vertical lines */
     if (x0==x1 && y0==y1) { /* point */
+        /* inside clip area ? */
+        if (gpx_rect_contains(&(g->clip_area),x0,y0))
+            _plotxy(x0,y0);
     } else if (x0==x1) {    /* vertical line */
+
     } else if (y0==y1) {    /* horizontal line */
+        /* smaller first */
+        if (x0>x1) {
+            coord tmp=x0;
+            x0=x1;
+            x1=tmp;
+        }
+        /* are we out of the clip area? */
+        if ( x0 > g->clip_area.x1 ||  x1 < g->clip_area.x0 )
+            return; 
+        /* limit line to the inside of clip area */
+        if ( x0 < g->clip_area.x0 ) x0=g->clip_area.x0;
+        if ( x1 > g->clip_area.x1 ) x1=g->clip_area.x1;
+        /* Finally, quick draw. */
+        _hline(x0, x1, y0);
     } else {
         if (!_cohen_sutherland(&(g->clip_area),&x0,&y0,&x1,&y1))
             return;         /* rejected */
-        else {              /* bresenham */
-            int dx = _abs(x1-x0), sx = x0<x1 ? 1 : -1;
-            int dy = _abs(y1-y0), sy = y0<y1 ? 1 : -1; 
-            int err = (dx>dy ? dx : -dy)/2, e2;
-            
-            for(;;){
-                _plotxy(x0,y0);
-                if (x0==x1 && y0==y1) break;
-                e2 = err;
-                if (e2 >-dx) { err -= dy; x0 += sx; }
-                if (e2 < dy) { err += dx; y0 += sy; }
-            }
+        else {              /* cut it! */
+
         }
     }
 }
@@ -102,6 +111,7 @@ void gpx_draw_glyph(
        just return. */
     rect_t grect={ x, y, 0, 0 };
     rect_t intersect;
+    uint8_t *dptr;
 
     /* Use different logic for each glyph class. */
     if (glyph->class == GYCLS_RASTER) {
@@ -113,7 +123,7 @@ void gpx_draw_glyph(
         if (gpx_rect_intersect(&grect,&(g->clip_area),&intersect)==NULL)
             return;
         /* Get the pointer to start of data. */
-        uint8_t *dptr=raster->data;   
+        dptr=raster->data;   
         /* Skip over clipped lines. */
         uint16_t skip=( (intersect.y0 - y) * (raster->stride + 1) );
         dptr += skip;
@@ -128,6 +138,33 @@ void gpx_draw_glyph(
                 intersect.x0-x, 
                 intersect.x1 - x + 1);
             dptr = dptr + raster->stride + 1; /* Next row. */
+        }
+    } else if (glyph->class == GYCLS_TINY) {
+        /* Convert to tiny glyph. */
+        tiny_glyph_t* tiny=(tiny_glyph_t *)glyph;
+        grect.x1=x+tiny->width;
+        grect.y1=y+tiny->height;
+        /* Check initial cliping. */
+        if (gpx_rect_intersect(&grect,&(g->clip_area),&intersect)==NULL)
+            return;
+        /* Zero moves? */
+        if (tiny->moves==0) return;
+        /* Get pointer to data. */
+        dptr=tiny->data;
+        /* First two bytes are origin. */
+        x=x+dptr[0]; y=y+dptr[1];
+        /* If we're here, we have intersection. To clip or not to clip? */
+        if (intersect.x1-intersect.x0==tiny->width && intersect.y1-intersect.y0==tiny->height)
+            _tinyxy(x,y,dptr+2,tiny->moves-2, NULL);
+        else {
+            unsigned char tclip[6];
+            tclip[0]=dptr[0];               /* origin x */
+            tclip[1]=dptr[1];               /* origin y */
+            tclip[2]=intersect.x0-grect.x0;
+            tclip[3]=intersect.y0-grect.y0;
+            tclip[4]=intersect.x1-grect.x0;
+            tclip[5]=intersect.y1-grect.y0;
+            _tinyxy(x,y,dptr+2,tiny->moves-2, &tclip);
         }
     }
 }

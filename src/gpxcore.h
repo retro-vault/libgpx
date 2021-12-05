@@ -62,4 +62,8 @@ typedef struct gpx_s {
 #define CO_FORE             1
 #define CO_BACK             2
 
+/* page ops */
+#define PG_DISPLAY          1
+#define PG_WRITE            2
+
 #endif /* __GPXDEF_H__ */

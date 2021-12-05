@@ -24,4 +24,7 @@ extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
 /* intersection of rectangles */
 extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
 
+/* normalize rect coordinates i.e. ie from left top to right bottom */
+extern void gpx_rect_norm(rect_t *r);
+
 #endif /* __RECT_H__ */

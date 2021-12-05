@@ -33,4 +33,11 @@ extern void _ef9367_cls();
 /* put pixel at x,y using drawing mode */
 extern void _ef9367_put_pixel();
 
+/* draw fast line */ 
+extern void _ef9367_draw_line(
+    unsigned int x0, 
+    unsigned int y0, 
+    unsigned int x1,
+    unsigned int y1);  
+
 #endif /* __EF9367_H__ */

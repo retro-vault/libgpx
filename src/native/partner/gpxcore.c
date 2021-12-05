@@ -12,6 +12,7 @@
 #include <std.h>
 #include <gpxcore.h>
 
+#include <rect.h>
 #include "partner/ef9367.h"
 
 /* there can be only one gpx! */
@@ -81,11 +82,11 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
     g; blit;
     __asm
         push    ix                      ; store index 
-        ld      ix, #0                  ; index to 0
+        ld      ix, #4                  ; index to 0
         add     ix, sp                  ; ix = sp
-        ld      l, 2(ix)                ; g to hl
-        ld      h, 3(ix)
-        ld      b, 4(ix)                ; blit mode into b
+        ld      l, (ix)                ; g to hl
+        ld      h, 1(ix)
+        ld      b, 2(ix)                ; blit mode into b
         ld      (hl), b                 ; update gpx_t
         call    __ef9367_set_blit_mode  ; set blit mode!
         pop     ix                      ; restore ix
@@ -93,5 +94,29 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
 }
 
 void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
+    /* copy rectangle and...*/
     _memcpy(&(g->clip_area),clip_area,sizeof(rect_t));
+    /* .. normalize coordinates (left,top,right,bottom) */
+    gpx_rect_norm(&(g->clip_area));
+}
+
+void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
+    
+    uint8_t grcc=0;
+
+    /* Set display page? */
+    if (pgop&PG_DISPLAY && g->display_page!=page)
+    {} /* TODO: update grcc */
+
+    /* Set write page? */
+    if (pgop&PG_WRITE && g->write_page!=page)
+    {} /* TODO: update grcc */
+
+    /* write grcc back */
+}
+
+uint8_t gpx_get_page(gpx_t *g, uint8_t pgop) {
+    g; pgop;
+    /* always the same page on speccy */
+    return 0;
 }

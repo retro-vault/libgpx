@@ -32,4 +32,14 @@ typedef struct tiny_move_s {
     uint8_t co0:1;                      /* low color bit */
 } tiny_move_t;
 
+/* Structure for clipping tiny glyph. */
+typedef struct tiny_clip_s {
+    uint8_t posx;
+    uint8_t poxy;
+    uint8_t left;
+    uint8_t top;
+    uint8_t right;
+    uint8_t bottom;
+} tiny_clip_t;
+
 #endif /* __TINY_H__ */

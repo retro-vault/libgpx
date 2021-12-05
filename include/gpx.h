@@ -103,8 +103,8 @@ extern gpx_cap_t* gpx_cap(gpx_t *g);
 
 /* ----- drawing modes, styles, patterns, colors --------------------------- */
 
-#define PG_WRITE    1
-#define PG_DISPLAY  2
+#define PG_DISPLAY  1
+#define PG_WRITE    2
 
 /* set curent page */
 extern void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop);
@@ -227,6 +227,9 @@ extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
 
 /* intersection of rectangles */
 extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
+
+/* normalize rect coordinates i.e. ie from left top to right bottom */
+extern void gpx_rect_norm(rect_t *r);
 
 
 #endif /* __GPX_H__ */

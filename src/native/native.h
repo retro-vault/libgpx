@@ -32,11 +32,22 @@ extern void _stridexy(
     uint8_t start, 
     uint8_t end);
 
+/* Structure for clipping tiny glyph. */
+typedef struct tiny_clip_s {
+    uint8_t posx;
+    uint8_t poxy;
+    uint8_t left;
+    uint8_t top;
+    uint8_t right;
+    uint8_t bottom;
+} tiny_clip_t;
+
 /* tiny */
 extern int _tinyxy(
     coord x, 
     coord y, 
     uint8_t *moves,
-    uint8_t num);
+    uint8_t num,
+    void *clip);
 
 #endif /* __NATIVE_H__ */

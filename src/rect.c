@@ -33,3 +33,9 @@ rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect) {
 		return intersect;
 	} else return NULL;
 }
+
+void gpx_rect_norm(rect_t *r) {
+    coord tmp;
+    if (r->x0>r->x1) {tmp=r->x0; r->x0=r->x1; r->x1=tmp;}
+    if (r->y0>r->y1) {tmp=r->y0; r->y0=r->y1; r->y1=tmp;}
+}

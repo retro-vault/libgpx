@@ -19,7 +19,10 @@
         .globl  __ef9367_move_right
         .globl  __ef9367_stride
         .globl  __ef9367_tiny
-        .globl  _ef9367_draw_line
+        .globl  __ef9367_hline
+        .globl  __ef9367_vline
+        .globl  __ef9367_draw_line
+
 	    
 		.include "ef9367.inc"
 
@@ -218,6 +221,84 @@ __ef9367_move_right::
         ret
 
 
+        ;; ---------------------
+		;; void __ef9367_hline()
+        ;; ---------------------
+        ;; draw horizontal len from current x,y
+        ;; inputs:
+        ;;  hl=len
+__ef9367_hline::
+        ld      de,#EF9367_MAX_DELTA    ; de=max delta len.
+hline_loop:
+        ;; do we have 256 pixels left?
+        ld      a,h                     ; test h for 0
+        or      a               
+        jr      nz,hline_more           ; we have more...
+        ;; draw it
+        call    wait_for_gdp
+        ;; at this point l is line len
+        ld      a,l
+        out     (#EF9367_DX),a
+        ;; and draw!
+        call    wait_for_gdp
+        ld      a,#0b00010000           ; ignore dy
+        call    ef9367_cmd
+        ret
+hline_more:
+        or      a                       ; clear carry
+        sbc     hl,de                   ; reduce for 256
+        ld      a,#EF9367_MAX_DELTA     ; dx
+        call    wait_for_gdp
+        out     (#EF9367_DX),a
+        ;; and draw!
+        call    wait_for_gdp
+        ld      a,#0b00010000           ; ignore dy
+        call    ef9367_cmd
+        ;; loop
+        jr      hline_loop
+        ret
+
+
+
+        ;; ---------------------
+		;; void __ef9367_vline()
+        ;; ---------------------
+        ;; draw vertical len from current x,y
+        ;; inputs:
+        ;;  hl=len
+__ef9367_vline::
+        ld      de,#EF9367_MAX_DELTA    ; de=max delta len.
+vline_loop:
+        ;; do we have 256 pixels left?
+        ld      a,h                     ; test h for 0
+        or      a               
+        jr      nz,vline_more           ; we have more...
+        ;; draw it
+        call    wait_for_gdp
+        ;; at this point l is line len
+        ld      a,l
+        out     (#EF9367_DY),a
+        ;; and draw!
+        call    wait_for_gdp
+        ld      a,#0b00010100           ; ignore dy
+        call    ef9367_cmd
+        ret
+vline_more:
+        or      a                       ; clear carry
+        sbc     hl,de                   ; reduce for 256
+        ld      a,#EF9367_MAX_DELTA     ; dx
+        call    wait_for_gdp
+        out     (#EF9367_DY),a
+        ;; and draw!
+        call    wait_for_gdp
+        ld      a,#0b00010100           ; ignore dy
+        call    ef9367_cmd
+        ;; loop
+        jr      vline_loop
+        ret    
+
+
+
         ;; -------------------
 		;; void _ef9367_tiny()
         ;; -------------------
@@ -225,8 +306,26 @@ __ef9367_move_right::
         ;; inputs: 
         ;;  hl = moves
         ;;  e = number of moves
-        ;; affect:  af, de, hl
+        ;;  bc = pointer to tiny_clip_s
+        ;; globals:
+        ;;  b is command counter
+        ;;  c is used to signal active clipping
+        ;; affect:  af, bc, de, hl
 __ef9367_tiny::
+        ;; first store clipping rectangle flag into d
+        ld      d,#0                    ; assume no clipping!
+        ld      a,b
+        or      c
+        jr      z,tny_clip_flag
+        ;; if we are here, we have clip.
+        ;; move it to hl'
+        push    bc
+        exx
+        pop     hl                      ; hl'=tiny_clip_s
+        exx
+        inc     d                       ; e=1 (we have clip!)
+tny_clip_flag:
+        ld      c,d                     ; clip flag to c
         ld      a,e                     ; moves to b
         or      a                       ; zero moves?
         ret     z
@@ -267,7 +366,19 @@ tny_pen_up:
         ;; pen is down/up as it should be
         ;; now set the eraser or ink
 tny_set_color:
-        ;; TODO: implement eraser
+        ;; is color
+        pop     af
+        push    af
+        rlca                            ; color to first two bits
+        and     #0b00000010             ; mask?
+        jr      nz,tny_eraser
+        ;; if we are here it's pen
+        ld      a,#EF9367_CMD_DMOD_SET
+        call    ef9367_cmd
+        jr      tny_draw_move
+tny_eraser:
+        ld      a,#EF9367_CMD_DMOD_CLR
+        call    ef9367_cmd
 tny_draw_move:
         pop     af                      ; move back to a
         inc     hl                      ; next move
@@ -347,173 +458,160 @@ strd_get_nxt:
 
 
         ;; ----------------------
-		;; void ef9367_draw_line(
-        ;;     uint16_t x0, 
-        ;;     uint16_t y0, 
-        ;;     uint16_t x1,
-        ;;     uint16_t y1,
-        ;;     uint8_t mode,
-        ;;     uint8_t mask);  
+		;; void _ef9367_draw_line(
+        ;;     unsigned int  x0, 
+        ;;     unsigned int  y0, 
+        ;;     unsigned int  x1,
+        ;;     unsigned int  y1);  
         ;; ----------------------
 		;; draws line fast
-        ;; affect:  -
-_ef9367_draw_line::
+        ;; affect: 
+__ef9367_draw_line::
         ;; store ix to stack, we'll use it to access args.
-        push ix
-        ld ix,#4                        ; first arg.
-        add ix,sp
-        ;; goto xy
-        ;; TODO: call xy_internal
+        push    ix
+        ld      ix,#4                   ; first arg.
+        add     ix,sp
         ;; y0 to de
-        ld e,2(ix)                      ; de=y0
-        ld d,3(ix)
+        ld      e,2(ix)                 ; de=y0
+        ld      d,3(ix)
+        ;; goto hl=x,de=y
+        ld      l,(ix)
+        ld      h,1(ix)
+        call    ef9367_xy
         ;; find delta signs and mex line len
-        ld a,#0x11                      ; a will hold the deltas
-        or a                            ; clear carry flag
-        ld l,6(ix)                      ; hl=y1
-        ld h,7(ix)
-        push hl                         ; store y1.
-        sbc hl,de                       ; hl=y1-y0-c (C=0)
+        ld      a,#0x11                 ; a will hold the deltas
+        ld      l,6(ix)                 ; hl=y1
+        ld      h,7(ix)
+        push    hl                      ; store y1.
+        or      a                       ; clear carry flag
+        sbc     hl,de                   ; hl=y1-y0-c (C=0)
         ;; note: partner has reverse y axis
-        jr c, dli_negat_dy              ; y1<y0, no change to delta sign
-        pop de                          ; clean the stack (remove y1)
+        jr      c, dli_negat_dy         ; y1<y0, no change to delta sign
+        pop     de                      ; clean the stack (remove y1)
         ;; set flag (remember, reverse y axis!)
-        or #4                           ; set flag (bit 2 of a)
-        jr dli_dy_done                  ; we're done 
+        or      #4                      ; set flag (bit 2 of a)
+        jr      dli_dy_done             ; we're done 
 dli_negat_dy:
-        pop hl                          ; hl=y1 (again)
-        ex de,hl                        ; reverese equation
-        sbc hl,de                       ; and make result positive
-        inc hl                          ; +1, because of carry
+        pop     hl                      ; hl=y1 (again)
+        ex      de,hl                   ; reverese equation
+        or      a                       ; clear carry...
+        sbc     hl,de                   ; and make result positive
+        ;; at this point hl is abs(dy)
 dli_dy_done:
-        ex de,hl                         ; de=abs(y1-y0)
+        ex      de,hl                   ; de=abs(y1-y0)
         ;; start dx calculation
-        ld c,(ix)                       ; bc=x0
-        ld b,1(ix)
-        ld l,4(ix)                      ; hl=x1
-        ld h,5(ix)
-        pop ix                          ; restore ix forever to cln. stack
-        push de                         ; store abs(y1-y0) to stack
-        push hl                         ; store the x1 
-        or a                            ; clear carry flag
-        sbc hl,bc                       ; hl=x1-x0
-        jr nc,dli_posit_dx              ; x1>=x0, sign 0 is ok    
-        or #2                           ; set bit 1 of delta to -, C=0
-        pop de                          ; de=x1       
-        push bc                         ; bc to hl
-        pop hl                          ; hl=x0
-        sbc hl,de                       ; hl=abs(x0-x1)
-        jr dli_dx_done    
+        ld      c,(ix)                  ; bc=x0
+        ld      b,1(ix)
+        ld      l,4(ix)                 ; hl=x1
+        ld      h,5(ix)
+        pop     ix                      ; restore ix forever to cln. stack
+        push    de                      ; store abs(y1-y0) to stack
+        push    hl                      ; store the x1 
+        or      a                       ; clear carry flag
+        sbc     hl,bc                   ; hl=x1-x0
+        jr      nc,dli_posit_dx         ; x1>=x0, sign 0 is ok    
+        or      #2                      ; set bit 1 of delta to -, C=0
+        pop     de                      ; de=x1       
+        push    bc                      ; bc to hl
+        pop     hl                      ; hl=x0
+        sbc     hl,de                   ; hl=abs(x0-x1)
+        jr      dli_dx_done    
 dli_posit_dx:
-        pop de                          ; clean the stack (remove x1)
+        pop     de                      ; clean the stack (remove x1)
 dli_dx_done:
         ;; hl = abs(x1-x0) and abs(y1-y0) is already on stack
-        pop de                          ; de=abs(y1-y0)
+        pop     de                      ; de=abs(y1-y0)
         ;; but push back for later
-        push de
-        push hl                         ; both distances to stack
+        push    de
+        push    hl                      ; both distances to stack
         ;; now find longer to find out how many lines 
         ;; hl=dx, de=dy
-        or a                            ; clear carry
-        sbc hl,de
-        jr c,dli_dy_longer
-        pop hl                          ; hl is the longer one
-        push hl                         ; put it back
-        jr dli_draw_lines
+        or      a                       ; clear carry
+        sbc     hl,de
+        jr      c,dli_dy_longer
+        pop     hl                      ; hl is the longer one
+        push    hl                      ; put it back
+        jr      dli_draw_lines
 dli_dy_longer:
-        ex de,hl                        ; move longer one to hl
+        ex      de,hl                   ; move longer one to hl
 dli_draw_lines:
         ;; store longer one to stack
-        push hl
-        ;; set mode
-        push af                         ; store draw command
-        ld b,8(ix)                      ; mode to b
-        ;; TODO: call ef9367_set_dmode
-        pop af                          ; restore draw command
+        push    hl
         ;; start the recursion. there are four parameters
         ;; on stack (in the pop order): longest coordinate, 
         ;; abs(dx), abs(dy), and return
 dli_recursion:
-        pop hl                          ; get longest coordinate
-        push hl                         ; and store to stack for consistency
-        ld de,#EF9367_MAX_DELTA         ; max line we can draw
-        or a                            ; clear carry flag
-        sbc hl,de                       ; commpare
-        jr c, dli_draw_delta            ; end of recursion
+        pop     hl                      ; get longest coordinate
+        push    hl                      ; and store to stack for consistency
+        ld      de,#EF9367_MAX_DELTA    ; max line we can draw
+        or      a                       ; clear carry flag
+        sbc     hl,de                   ; commpare
+        jr      c, dli_draw_delta       ; end of recursion
         ;; we can't draw this
         ;; find mid point and divide 
         ;; the line to two lines        ;
         exx                             ; we'll need more registers
-        pop de                          ; get longest coordinate into de
-        push de
-        pop hl                          ; AND into hl
-        srl d                           ; de=long. coord/2
-        rr e
-        or a                            ; clear carry
-        sbc hl,de                       ; hl=clong. oord-de (/2 for odd numbers!)
+        pop     de                      ; get longest coordinate into de
+        push    de
+        pop     hl                      ; AND into hl
+        srl     d                       ; de=long. coord/2
+        rr      e
+        or      a                       ; clear carry
+        sbc     hl,de                   ; hl=long. coord-de (/2 for odd numbers!)
         exx
         ;; do the same for dx with std. register sets
-        pop de                          ; de=dx
-        push de
-        pop hl                          ; AND into hl
-        srl d                           ; de=dx/2
-        rr e
-        or a                            ; clear carry
-        sbc hl,de                       ; hl=dx-de (/2 for odd numbers!)
+        pop     de                      ; de=dx
+        push    de
+        pop     hl                      ; AND into hl
+        srl     d                       ; de=dx/2
+        rr      e
+        or      a                       ; clear carry
+        sbc     hl,de                   ; hl=dx-de (/2 for odd numbers!)
         ;; and, finally, for dy use bc and bc' as storage!
-        pop bc                          ; bc=dy
-        push bc                         ; store back
-        push hl                         ; store hl...
+        pop     bc                      ; bc=dy
+        push    bc                      ; store back
+        push    hl                      ; store hl...
         exx 
-        pop bc                          ; ...into alt bc
+        pop     bc                      ; ...into alt bc
         exx
-        pop hl                          ; hl=(also) dy
-        srl b                           ; bc=dy/2
-        rr c
-        or a                            ; clear carry
-        sbc hl,bc                       ; hl=dy-dy/2
+        pop     hl                      ; hl=(also) dy
+        srl     b                       ; bc=dy/2
+        rr      c
+        or      a                       ; clear carry
+        sbc     hl,bc                   ; hl=dy-dy/2
         ;; we have it all!
         ;; only return address left on staqck at this point, leave it!
         ;; nicely put halved args back to stack in reverse order, longer first!
-        push hl                         ; dy2
+        push    hl                      ; dy2
         exx
-        push bc                         ; dx2
-        push hl                         ; longer coord. 2
+        push    bc                      ; dx2
+        push    hl                      ; longer coord. 2
         exx
         ;; now the shorter line
-        ld hl,#dli_recursion            ; restart the recursion upon return
-        push hl
-        push bc                         ; dy1
-        push de                         ; dx1
+        ld      hl,#dli_recursion       ; restart the recursion upon return
+        push    hl
+        push    bc                      ; dy1
+        push    de                      ; dx1
         exx
-        push de                         ; shorter longest coord.
+        push    de                      ; shorter longest coord.
         exx
-        jr dli_recursion
-
+        jr      dli_recursion
 dli_draw_delta:
-        pop hl                          ; longest coord. ... discharge it
-        pop hl                          ; hl=dx
-        pop de                          ; de=dy
-        ld b,l                          ; b=dx
-        ld c,e                          ; c=dy 
+        pop     hl                      ; longest coord. ... discharge it
+        pop     hl                      ; hl=dx
+        pop     de                      ; de=dy
+        ld      b,l                     ; b=dx
+        ld      c,e                     ; c=dy 
         ;; superfast line drawing (delta method)
-        push af                         ; store command
-dli_wait_gdp:
-        ;; wait for GDP
-        in a,(#EF9367_STS_NI)
-        and #EF9367_STS_READY
-        jr z,dli_wait_gdp
+        push    af                      ; store command
+        call    wait_for_gdp
         ;; set deltas!
-        ld a,b
-        out (#EF9367_DX),a
-dli_wait_gdp2:
-        ;; wait for GDP
-        in a,(#EF9367_STS_NI)
-        and #EF9367_STS_READY
-        jr z,dli_wait_gdp2
-        ld a,c
-        out (#EF9367_DY),a
-        pop af
+        ld      a,b
+        out     (#EF9367_DX),a
+        call    wait_for_gdp
+        ld      a,c
+        out     (#EF9367_DY),a
+        pop     af
         ;; command is in a
-        call ef9367_cmd
+        call    ef9367_cmd
         ret
