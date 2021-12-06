@@ -59,23 +59,29 @@ void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius)
 }
 
 void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1) {
+
+    /* is line rectangle completely out of clip rect? */
+    rect_t line_rect={x0,y0,x1,y1};
+    gpx_rect_norm(&line_rect);
+    if (!gpx_rect_overlap(&line_rect,&(g->clip_area)))
+        return;
+
     /* first check for point, horizontal line or vertical lines */
     if (x0==x1 && y0==y1) { /* point */
         /* inside clip area ? */
         if (gpx_rect_contains(&(g->clip_area),x0,y0))
             _plotxy(x0,y0);
     } else if (x0==x1) {    /* vertical line */
-
+        /* smaller first */
+        y0=line_rect.y0; y1=line_rect.y1;
+        /* limit line to the inside of clip area */
+        if ( y0 < g->clip_area.y0 ) y0=g->clip_area.y0;
+        if ( y1 > g->clip_area.y1 ) y1=g->clip_area.y1;
+        /* Finally, quick draw. */
+        _vline(x0, y0, y1);
     } else if (y0==y1) {    /* horizontal line */
         /* smaller first */
-        if (x0>x1) {
-            coord tmp=x0;
-            x0=x1;
-            x1=tmp;
-        }
-        /* are we out of the clip area? */
-        if ( x0 > g->clip_area.x1 ||  x1 < g->clip_area.x0 )
-            return; 
+        x0=line_rect.x0; x1=line_rect.x1;
         /* limit line to the inside of clip area */
         if ( x0 < g->clip_area.x0 ) x0=g->clip_area.x0;
         if ( x1 > g->clip_area.x1 ) x1=g->clip_area.x1;
@@ -84,8 +90,23 @@ void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1) {
     } else {
         if (!_cohen_sutherland(&(g->clip_area),&x0,&y0,&x1,&y1))
             return;         /* rejected */
-        else {              /* cut it! */
+        else {              /* draw line */
+            /* do we recognize line pattern? */
+            _ef9367_draw_line(x0,y0,x1,y1);
 
+            /* If we don't, we'll have to do Bresenham. 
+            int dx = _abs(x1-x0), sx = x0<x1 ? 1 : -1;
+            int dy = _abs(y1-y0), sy = y0<y1 ? 1 : -1; 
+            int err = (dx>dy ? dx : -dy)/2, e2;
+            
+            for(;;){
+                _plotxy(x0,y0);
+                if (x0==x1 && y0==y1) break;
+                e2 = err;
+                if (e2 >-dx) { err -= dy; x0 += sx; }
+                if (e2 < dy) { err += dx; y0 += sy; }
+            }
+            */
         }
     }
 }

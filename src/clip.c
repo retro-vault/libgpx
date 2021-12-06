@@ -93,12 +93,12 @@ bool _cohen_sutherland(
             /* find intersection point */
             if (code_out & TOP) {
                 /* point is above the clip rectangle */
-                y = clip_area->y0;
+                y = clip_area->y1;
                 x = _bisect(*x0,*y0,*x1,*y1,y);
             }
             else if (code_out & BOTTOM) {
                 /* point is below the rectangle */
-                y = clip_area->y1;
+                y = clip_area->y0;
                 x = _bisect(*x0,*y0,*x1,*y1,y);
             }
             else if (code_out & RIGHT) {
