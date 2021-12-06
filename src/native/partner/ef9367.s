@@ -477,9 +477,15 @@ __ef9367_draw_line::
         ;; goto hl=x,de=y
         ld      l,(ix)
         ld      h,1(ix)
+        push    de                      ; gotoxy changes it
         call    ef9367_xy
+        pop     de
         ;; find delta signs and mex line len
-        ld      a,#0x11                 ; a will hold the deltas
+        ;; a will hold the deltas -
+        ;; bit 2: negative dy (reverse axis!)
+        ;; bit 1: negative dx
+        ;; the rest: ef command
+        ld      a,#0b00010001           ; command
         ld      l,6(ix)                 ; hl=y1
         ld      h,7(ix)
         push    hl                      ; store y1.
@@ -600,17 +606,11 @@ dli_draw_delta:
         pop     hl                      ; longest coord. ... discharge it
         pop     hl                      ; hl=dx
         pop     de                      ; de=dy
-        ld      b,l                     ; b=dx
-        ld      c,e                     ; c=dy 
+        ld      c,l                     ; b=dx
+        ld      b,e                     ; c=dy 
         ;; superfast line drawing (delta method)
         push    af                      ; store command
-        call    wait_for_gdp
-        ;; set deltas!
-        ld      a,b
-        out     (#EF9367_DX),a
-        call    wait_for_gdp
-        ld      a,c
-        out     (#EF9367_DY),a
+        call    ef9367_dxdy             ; set dx, dy
         pop     af
         ;; command is in a
         call    ef9367_cmd
