@@ -45,6 +45,6 @@ __tinyxy::
         call    ef9367_xy
         exx
         ;; now hl=moves, e=number of moves, bc=clip ptr.
-        call    __ef9367_tiny
+        call    __ef9367_tiny2
         exx
         ret

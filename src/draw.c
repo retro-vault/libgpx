@@ -92,7 +92,7 @@ void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1) {
             return;         /* rejected */
         else {              /* draw line */
             /* do we recognize line pattern? */
-            _ef9367_draw_line(x0,y0,x1,y1);
+            _line(x0,y0,x1,y1);
 
             /* If we don't, we'll have to do Bresenham. 
             int dx = _abs(x1-x0), sx = x0<x1 ? 1 : -1;

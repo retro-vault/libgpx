@@ -101,17 +101,16 @@ void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
 }
 
 void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
-    
-    uint8_t grcc=0;
-
-    /* Set display page? */
-    if (pgop&PG_DISPLAY && g->display_page!=page)
-    {} /* TODO: update grcc */
-
-    /* Set write page? */
-    if (pgop&PG_WRITE && g->write_page!=page)
-    {} /* TODO: update grcc */
-
+    g; page; pgop;
+    /* uint8_t grcc=0;  
+    if (
+        ((g->display_page)!=page) 
+        && ((pgop & PG_DISPLAY)!=0))
+    {} 
+    if ((pgop & PG_WRITE) && (g->write_page!=page))
+    {} 
+    */
+   
     /* write grcc back */
 }
 

@@ -9,6 +9,8 @@
         .module line
 
         .globl  __hline
+        .globl  __vline
+        .globl  __line
 
         .area   _CODE
 
@@ -73,3 +75,11 @@ __vline::
         ;; game over
         exx
         ret
+
+        ;; --------------------------------------------------
+        ;; void _line(coord x0, coord y0, coord x1, coord y1)
+        ;; --------------------------------------------------
+        ;; draw line, just rewire to hardware function, it will
+        ;; pick arguments and return to original caller
+__line::
+        jp      __ef9367_draw_line

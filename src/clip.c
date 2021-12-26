@@ -115,6 +115,8 @@ bool _cohen_sutherland(
             /* intersection point x, y is found
                we replace point outside rectangle
                by intersection point */
+            #pragma save
+            #pragma disable_warning 84
             if (code_out == c1) {
                 *x0 = x;
                 *y0 = y;
@@ -125,6 +127,7 @@ bool _cohen_sutherland(
                 *y1 = y;
                 c2=_csc(clip_area,*x1,*y1);
             }
+            #pragma restore
         }
     }
 
