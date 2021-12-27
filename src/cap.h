@@ -41,4 +41,9 @@ typedef struct gpx_cap_s {
 /* get gpx capabilities */
 extern gpx_cap_t* gpx_cap(gpx_t *g);
 
+/* quick access to display resolution */
+extern gpx_resolution_t *gpx_get_disp_page_resolution(
+    gpx_t *g,
+    gpx_resolution_t *res);
+
 #endif /* __CAP_H__ */

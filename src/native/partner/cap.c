@@ -58,3 +58,16 @@ gpx_cap_t* gpx_cap(gpx_t *g) {
     /* and return */
     return &_cap;
 }
+
+gpx_resolution_t *gpx_get_disp_page_resolution(
+    gpx_t *g,
+    gpx_resolution_t *res) {
+
+    _memcpy(
+        res,
+        &(_resolutions[(g->resolutions)[g->display_page]]),
+        sizeof(gpx_resolution_t)
+    );
+
+    return res;
+}
