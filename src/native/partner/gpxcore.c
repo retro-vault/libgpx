@@ -98,11 +98,12 @@ void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
 
     /* If null, use current resolution. */
     if (clip_area==NULL) {
-        gpx_resolution_t *res=gpx_get_disp_page_resolution(g,res);
+        gpx_resolution_t res;
+        gpx_get_disp_page_resolution(g,&res);
         g->clip_area.x0=0;
         g->clip_area.y0=0;
-        g->clip_area.x1=res->width - 1;
-        g->clip_area.y1=res->height - 1;
+        g->clip_area.x1=res.width - 1;
+        g->clip_area.y1=res.height - 1;
     } else 
         /* Copy rectangle.*/
         _memcpy(&(g->clip_area),clip_area,sizeof(rect_t));

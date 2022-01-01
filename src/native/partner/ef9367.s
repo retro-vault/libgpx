@@ -22,9 +22,6 @@
         .globl  __ef9367_hline
         .globl  __ef9367_vline
         .globl  __ef9367_draw_line
-
-
-        .globl  __ef9367_tiny2
 	    
 		.include "ef9367.inc"
 
@@ -50,6 +47,146 @@ wait_for_gdp:
         jr      z,wait_for_gdp
         ret
 
+
+		;; is dxdy position inside rect
+		;; input:   hl ... dydx
+		;;          bc ... x0y0
+		;;          de ... x1y1
+		;; output:   a ... 0=inside, 1=outside
+        ;; affects:  a
+xy_inside_rect:
+        ld      a,l                     ; dx to A
+        cp      b                       ; compare dx to x0
+        jr      c,xyr_outside           ; it is outside
+        cp      d                       ; compare dx to x1
+        jr      nc,xyr_outside          ; it is outside
+        ld      a,h                     ; dy to A
+        cp      c                       ; compare dy to y0
+        jr      c,xyr_outside           ; it is outside
+        cp      e                       ; compare dy to xy
+        jr      nc,xyr_outside          ; it is outside
+        ;; it must be inside
+        xor     a
+        ret
+xyr_outside:	
+        ld      a,#1
+        ret
+
+
+
+        ;; extern uint16_t test(uint8_t move, uint16_t tiny)
+        .globl  _test
+_test::
+        pop     bc                      ; get return address
+        pop     hl                      ; l=move, h=low (tiny)
+        pop     de                      ; e=high(tiny)
+        ;; restore stack
+        push    de
+        push    hl
+        push    bc
+
+        push    ix
+
+        ld      a,l                     ; move to a
+        ld      l,h                     ; l=low(tiny)
+        ld      h,e                     ; h=high(tiny)
+        push    hl
+        pop     ix                      ; set ix
+        call    decode_dxdy
+
+        pop     ix
+
+        ret
+
+        ;; given ef9367 short command, it decodes
+        ;; x2, z2, dx, dy, len, sign(dx), and sign(dy) ... 
+        ;; notes:   
+        ;;  1. short command is in format 1xxxxxx1. 
+        ;;     bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
+        ;;           1 |  dx   |  dy   |sy |sx | 1
+        ;;  2. current limitation is that dx has to be 0, 
+        ;;  or dy has to be 0 or dx has to be equal to dy.
+        ;; input:   ix ... pointer to tiny_clip_t
+        ;;           a ... command
+        ;; output:  populated tiny_clip_t, ix offsets:
+        ;;          +2 ... x2
+        ;;          +3 ... y2
+        ;;          +4 ... len
+        ;;          +5 ... dx
+        ;           +6 ... dy
+        ;;          +7 ... sign(dx) i.e. -1,0,1
+        ;;          +8 ... sign(dy) i.e. -1,0,1
+        ;; affects:
+decode_dxdy:
+        rra                             ; move bit sx...
+        rra                             ; ...to carry
+        push    af                      ; store sx (in carry flag)
+        rra                             ; move sy to carry
+        push    af                      ; store sy (in carry flag)
+        push    af                      ; we'll need it twice...
+        ;; dy is now in first two bits
+        and     #0b00000011             ; cut other bits...
+        ld      4(ix),a                 ; assume len=first len, store
+        pop     af                      ; get sx (stored in carry) 
+        jr      z,dxy_zerody            ; dy==0?
+        jr      nc,dxy_posdy            ; dy==positive?
+        ;; dy is negative...
+        ld      a,4(ix)                 ; get len back
+        neg                             ; negate it!
+        ld      6(ix),a                 ; store it to dy
+        ld      a,#-1               
+        ld      8(ix),a                 ; set sign
+        jr      dxy_dx                  ; next is dx
+dxy_zerody:
+        xor     a
+        ld      6(ix),a                 ; set dy and...
+        ld      8(ix),a                 ; ...sign dy
+        jr      dxy_dx
+dxy_posdy:
+        ;; dy is positive.
+        ld      a,4(ix)                 ; get a
+        ld      6(ix),a                 ; store to dy
+        ld      a,#1                    ; sign=1
+        ld      8(ix),a                 ; to sign(dy)
+dxy_dx:
+        pop     af                      ; get a back
+        rra                             ; move dx to...
+        rra                             ; ...bits 0,1
+        and     #0b00000011             ; cut off the rest (again)
+        ;; a is now len of dx
+        cp      4(ix)                   ; compare to stored length
+        jr      nc,dxy_lenok            ; no need to change len
+        ld      4(ix),a                 ; new len is larger
+dxy_lenok:
+        ld      5(ix),a                 ; store dx
+        pop     af                      ; get sign of dx
+        jr      z,dxy_zerodx
+        jr      nc,dxy_dxok             ; not negative?
+        ;; dx is negative
+        ld      a,5(ix)                 ; get 
+        neg                             ; negate
+        ld      5(ix),a                 ; store back
+        ld      a,#-1                   ; set sign
+        ld      7(ix),a
+        jr      dxy_dxok
+dxy_zerodx:
+        xor     a
+        ld      5(ix),a
+        ld      7(ix),a
+        jr      dxy_dxok
+dxy_posdx:
+        ld      a,#1
+        ld      7(ix),a                 ; set sign
+dxy_dxok:
+        ;; finally, calculate x2 and y2
+        ld      a,(ix)                  ; get x
+        add     5(ix)                   ; add dx
+        ld      2(ix),a                 ; store to x2
+        ld      a,1(ix)                 ; get y
+        add     6(ix)                   ; add dy
+        ld      3(ix),a                 ; store to y2
+        ret
+        
 
 
         ;; executes ef9367 command (wait for status first!)
@@ -300,41 +437,6 @@ vline_more:
         ret    
 
 
-        ;; input: reg. B has the command
-		;; we only accept commands 1xxxxxx1
-		;; returns h=dy, l=dx
-decode_dxdy:
-        srl     b                       ; move bit S and throw away (must be 1)
-        srl	    b                       ; move sx to carry
-        push    af                      ; store carry
-        srl     b                       ; move sy to carry
-        push    af                      ; store carry
-        srl     b                       ; move dy to bits 0-1 ...
-        srl     b                       ; ... of register B
-        pop     af                      ; get sy
-        jr      nc,dxy_posdy            ; positive dy
-        ld      a,b                     ; get b into a
-        and     #0b00000011             ; get only bits 0-1
-        neg                             ; negate dy
-        jr	    dxy_dx                  ; next is dx
-dxy_posdy:
-        ld      a,b                     ; if we are here ...
-        and     #0b00000011             ; ...get pos dy
-dxy_dx: ld      h,a                     ; H=dy
-        srl     b                       ; get dx into
-        srl     b                       ; bits 0 - 1
-        pop     af                      ; get dx sign into C
-        jr      nc,dxy_posdx                ; it's positive!
-        ld      a,b
-        and     #0b00000011             ; ...get pos dx
-        neg
-        jr      dxy_done                ; test sbit
-dxy_posdx:  
-        ld      a,b
-        and     #0b00000011             ; tet pos dx
-dxy_done:
-        ret
-
 
         ;; -------------------
 		;; void _ef9367_tiny()
@@ -349,6 +451,7 @@ dxy_done:
         ;;  c is used to signal active clipping
         ;; affect:  af, bc, de, hl
 __ef9367_tiny::
+        push    ix                      ; store index
         ;; first store clipping rectangle flag into d
         ld      d,#0                    ; assume no clipping!
         ld      a,b
@@ -357,10 +460,15 @@ __ef9367_tiny::
         ;; if we are here, we have clip.
         ;; move it to hl'
         push    bc
+        pop     ix                      ; ix=tiny clip
+        inc     d                       ; d=1 (we have clip!)
+        ;; move clip rect to bc'=x0y0, de'=x1y1
         exx
-        pop     hl                      ; hl'=tiny_clip_s
+        ld      b,2(ix)
+        ld      c,3(ix)
+        ld      d,4(ix)
+        ld      e,5(ix)
         exx
-        inc     d                       ; e=1 (we have clip!)
 tny_clip_flag:
         ld      c,d                     ; clip flag to c
         ld      a,e                     ; moves to b
@@ -368,8 +476,40 @@ tny_clip_flag:
         ret     z
         ld      b,a                     ; b=move counter
 tny_loop:
-        ld      a,(hl)                  ; move to a
+        ld      e,(hl)                  ; move to e
+        ld      a,c                     ; clip bit to a
+        or      a                       ; test it
+        jr      nz,tny_clipping
+        ld      a,e                     ; move to a
         push    af                      ; store it
+        call    tny_handle_pen  
+tny_draw_move:
+        pop     af                      ; move back to a
+        inc     hl                      ; next move
+        ;; make a move!
+        or      #0b10000001             ; set both bits to 1
+        xor     #0b00000100             ; negate y sign (rev.axis)
+        call    ef9367_cmd              ; and draw!
+        ;; and, finally, move!
+        djnz    tny_loop                ; and loop
+        ;; restore index before exiting.
+        pop     ix
+        ret
+        ;; if we're here, then we clip!
+        ;; command is inside e a this point.
+tny_clipping:
+        ld      a,e                     ; move to a
+        push    af                      ; store move
+        djnz    tny_loop
+        ;; restore index before exiting
+        pop     ix
+        ret
+
+
+
+        ;; handle pen and color
+        ;; inputs: a is the tiny command
+tny_handle_pen:
         ld      d,#0                    ; assume pen up
         ;; now check pen...
         rlca                            ; get color to first 2 bits
@@ -391,122 +531,8 @@ tny_set_pen:
         out     (#EF9367_CR1),a
         and     #1                      ; a=1!
         ld      (pen_down),a            ; write to cache
-        jr      tny_set_color
+        jr      tny_set_color 
 tny_pen_up:
-        ;; if we are here, pen up!
-        call    wait_for_gdp
-        ld      a,#0b00000010           ; pen up
-        out     (#EF9367_CR1),a
-        xor     a
-        ld      (pen_down),a            ; and set cached value
-        jr      tny_draw_move           ; done!
-        ;; pen is down/up as it should be
-        ;; now set the eraser or ink
-tny_set_color:
-        ;; is color
-        pop     af
-        push    af
-        rlca                            ; color to first two bits
-        and     #0b00000010             ; mask?
-        jr      nz,tny_eraser
-        ;; if we are here it's pen
-        ld      a,#EF9367_CMD_DMOD_SET
-        call    ef9367_cmd
-        jr      tny_draw_move
-tny_eraser:
-        ld      a,#EF9367_CMD_DMOD_CLR
-        call    ef9367_cmd
-tny_draw_move:
-        pop     af                      ; move back to a
-        inc     hl                      ; next move
-        ;; make a move!
-        or      #0b10000001             ; set both bits to 1
-        xor     #0b00000100             ; negate y sign (rev.axis)
-        call    ef9367_cmd              ; and draw!
-        ;; and, finally, move!
-        djnz    tny_loop                ; and loop
-        ret
-
-
-        ;; -------------------
-		;; void _ef9367_tiny()
-        ;; -------------------
-        ;; draw fast tiny at (preset) x,y
-        ;; inputs: 
-        ;;  hl = moves
-        ;;  e = number of moves
-        ;;  bc = pointer to tiny_clip_s
-        ;; globals:
-        ;;  b is command counter
-        ;;  c is used to signal active clipping
-        ;; affect:  af, bc, de, hl
-__ef9367_tiny2::
-        ;; first store clipping rectangle flag into d
-        ld      d,#0                    ; assume no clipping!
-        ld      a,b
-        or      c
-        jr      z,tny_clip_flag2
-        ;; if we are here, we have clip.
-        ;; move it to hl'
-        push    bc
-        exx
-        pop     hl                      ; hl'=tiny_clip_s
-        exx
-        inc     d                       ; e=1 (we have clip!)
-tny_clip_flag2:
-        ld      c,d                     ; clip flag to c
-        ld      a,e                     ; moves to b
-        or      a                       ; zero moves?
-        ret     z
-        ld      b,a                     ; b=move counter
-tny_loop2:
-        ld      e,(hl)                  ; move to e
-        ld      a,c                     ; clip bit to a
-        or      a                       ; test it
-        jr      nz,tny_clipping2
-        ld      a,e                     ; move to a
-        push    af                      ; store it
-        call    tny_handle_pen  
-tny_draw_move2:
-        pop     af                      ; move back to a
-        inc     hl                      ; next move
-        ;; make a move!
-        or      #0b10000001             ; set both bits to 1
-        xor     #0b00000100             ; negate y sign (rev.axis)
-        call    ef9367_cmd              ; and draw!
-        ;; and, finally, move!
-        djnz    tny_loop2               ; and loop
-        ret
-        ;; if we're here, then we clip!
-tny_clipping2:
-        ret
-
-        ;; handle pen and color
-        ;; inputs: a is the tiny command
-tny_handle_pen:
-        ld      d,#0                    ; assume pen up
-        ;; now check pen...
-        rlca                            ; get color to first 2 bits
-        and     #0b00000011             ; get color
-        jr      z,tny_set_pen2          ; CO_NONE=raise the pen
-        inc     d                       ; pen down to d
-tny_set_pen2:
-        ;; compare d to (pen_down) cached value
-        ld      a,(pen_down)
-        cp      d
-        jr      z,tny_set_color2        ; if the same no change
-        ;; if we are here we need to change the pen status
-        ;; a has the inverse value!
-        or      a                       ; cached pen down?
-        jr      nz,tny_pen_up2          ; pen up
-        ;; if we are here, pen down!
-        call    wait_for_gdp
-        ld      a,#0b00000011           ; pen down
-        out     (#EF9367_CR1),a
-        and     #1                      ; a=1!
-        ld      (pen_down),a            ; write to cache
-        jr      tny_set_color2
-tny_pen_up2:
         ;; if we are here, pen up!
         call    wait_for_gdp
         ld      a,#0b00000010           ; pen up
@@ -516,19 +542,19 @@ tny_pen_up2:
         ret                             ; to tny_draw_move
         ;; pen is down/up as it should be
         ;; now set the eraser or ink
-tny_set_color2:
+tny_set_color:
         pop     de                      ; return address
         pop     af                      ; get command 
         push    af                      ; and store back
         push    de
         rlca                            ; color to first two bits
         and     #0b00000010             ; mask?
-        jr      nz,tny_eraser2
+        jr      nz,tny_eraser
         ;; if we are here it's pen
         ld      a,#EF9367_CMD_DMOD_SET
         call    ef9367_cmd
         ret
-tny_eraser2:
+tny_eraser:
         ld      a,#EF9367_CMD_DMOD_CLR
         call    ef9367_cmd
         ret
