@@ -48,32 +48,6 @@ wait_for_gdp:
         ret
 
 
-		;; is dxdy position inside rect
-		;; input:   hl ... dydx
-		;;          bc ... x0y0
-		;;          de ... x1y1
-		;; output:   a ... 0=inside, 1=outside
-        ;; affects:  a
-xy_inside_rect:
-        ld      a,l                     ; dx to A
-        cp      b                       ; compare dx to x0
-        jr      c,xyr_outside           ; it is outside
-        cp      d                       ; compare dx to x1
-        jr      nc,xyr_outside          ; it is outside
-        ld      a,h                     ; dy to A
-        cp      c                       ; compare dy to y0
-        jr      c,xyr_outside           ; it is outside
-        cp      e                       ; compare dy to xy
-        jr      nc,xyr_outside          ; it is outside
-        ;; it must be inside
-        xor     a
-        ret
-xyr_outside:	
-        ld      a,#1
-        ret
-
-
-
         ;; extern uint16_t test(uint8_t move, uint16_t tiny)
         .globl  _test
 _test::
@@ -85,39 +59,110 @@ _test::
         push    hl
         push    bc
 
+        ;; store ix
         push    ix
 
+        ;; shuffle parametersd
         ld      a,l                     ; move to a
         ld      l,h                     ; l=low(tiny)
         ld      h,e                     ; h=high(tiny)
         push    hl
         pop     ix                      ; set ix
-        call    decode_dxdy
-
+        call    decode_dxdy             ; decode command
+        call    xy_inside_rect          ; set clip filter
+        ;; restore ix
         pop     ix
-
         ret
+
+
+		;; given tiny_clip_t pointer, it checks if both
+        ;; points are inside clip rectangle
+		;; input:   ix ... tiny_clip_t
+        ;;          +0 ... x0
+        ;;          +1 ... y0
+        ;;          +2 ... x1
+        ;;          +3 ... y1
+        ;;          +9 ... clipstat 
+        ;;         +10 ... clipx0
+        ;;         +11 ... clipy0
+        ;;         +12 ... clipx1
+        ;;         +13 ... clipy1
+		;; output:  populated tiny_clip_t, ix offsets:
+        ;;          +9 bit 0 is pt0, bit 1 is pt1
+        ;;             1 means inside, 0 outside
+        ;; affects:  -
+xy_inside_rect:
+        push    af                      ; store a and flags
+        xor     a                       ; assume both outside
+        ld      9(ix),a                 ; clear
+        ;; check pt0
+        ld      a,(ix)                  ; x0
+        cp      10(ix)                  ; compare to clipx0
+        jr      c,xyr_pt0_outside       ; it is outside
+        cp      12(ix)                  ; compare to clipx1
+        jr      z,xyr_pt0_right_eq      ; equal is still in...
+        jr      nc,xyr_pt0_outside      ; it is outside
+xyr_pt0_right_eq:
+        ld      a,1(ix)                 ; y0
+        cp      11(ix)                  ; compare to clipy0
+        jr      c,xyr_pt0_outside       ; it is outside
+        cp      13(ix)                  ; compare to clipy1
+        jr      z,xyr_pt0_bottom_eq     ; equal is still in...
+        jr      nc,xyr_pt0_outside      ; it is outside
+xyr_pt0_bottom_eq:
+        ;; it must be inside
+        ld      a,#1                    ; success!
+        ld      9(ix),a                 ; store pt0 result        
+        jr      xyr_next_pt
+xyr_pt0_outside:	
+        xor     a                       ; store 0
+        ld      9(ix),a                 ; as result for pt0
+xyr_next_pt:
+         ;; check pt1
+        ld      a,2(ix)                 ; x1
+        cp      10(ix)                  ; compare to clipx0
+        jr      c,xyr_done              ; it is outside
+        cp      12(ix)                  ; compare to clipx1
+        jr      z,xyr_pt1_right_eq
+        jr      nc,xyr_done             ; it is outside
+xyr_pt1_right_eq:
+        ld      a,3(ix)                 ; y1
+        cp      11(ix)                  ; compare to clipy0
+        jr      c,xyr_done              ; it is outside
+        cp      13(ix)                  ; compare to clipy1
+        jr      z,xyr_pt1_bottom_eq     ; equal is still in...
+        jr      nc,xyr_done             ; it is outside
+xyr_pt1_bottom_eq:
+        ;; it's inside, set bit 1, keep bit 0
+        ld      a,9(ix)
+        or      #0b00000010
+        ld      9(ix),a
+xyr_done:
+        pop     af                      ; restore a and flags
+        ret
+
 
         ;; given ef9367 short command, it decodes
         ;; x2, z2, dx, dy, len, sign(dx), and sign(dy) ... 
         ;; notes:   
-        ;;  1. short command is in format 1xxxxxx1. 
+        ;;  1. short command must be in format 1xxxxxx1. 
         ;;     bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
         ;;           1 |  dx   |  dy   |sy |sx | 1
-        ;;  2. current limitation is that dx has to be 0, 
-        ;;  or dy has to be 0 or dx has to be equal to dy.
         ;; input:   ix ... pointer to tiny_clip_t
+        ;;          +0 ... x0
+        ;;          +1 ... y0
         ;;           a ... command
         ;; output:  populated tiny_clip_t, ix offsets:
-        ;;          +2 ... x2
-        ;;          +3 ... y2
-        ;;          +4 ... len
+        ;;          +2 ... x1
+        ;;          +3 ... y1
+        ;;          +4 ... offset (len-1)
         ;;          +5 ... dx
-        ;           +6 ... dy
+        ;;          +6 ... dy
         ;;          +7 ... sign(dx) i.e. -1,0,1
         ;;          +8 ... sign(dy) i.e. -1,0,1
-        ;; affects:
+        ;; affects: -
 decode_dxdy:
+        push    af                      ; store original move!
         rra                             ; move bit sx...
         rra                             ; ...to carry
         push    af                      ; store sx (in carry flag)
@@ -126,18 +171,19 @@ decode_dxdy:
         push    af                      ; we'll need it twice...
         ;; dy is now in first two bits
         and     #0b00000011             ; cut other bits...
-        ld      4(ix),a                 ; assume len=first len, store
-        pop     af                      ; get sx (stored in carry) 
+        ld      4(ix),a                 ; assume offset=first len
         jr      z,dxy_zerody            ; dy==0?
+        pop     af                      ; get sx (stored in carry) 
         jr      nc,dxy_posdy            ; dy==positive?
         ;; dy is negative...
-        ld      a,4(ix)                 ; get len back
+        ld      a,4(ix)                 ; get offset back
         neg                             ; negate it!
         ld      6(ix),a                 ; store it to dy
         ld      a,#-1               
         ld      8(ix),a                 ; set sign
         jr      dxy_dx                  ; next is dx
 dxy_zerody:
+        pop     af                      ; clear (remainder!)
         xor     a
         ld      6(ix),a                 ; set dy and...
         ld      8(ix),a                 ; ...sign dy
@@ -155,13 +201,14 @@ dxy_dx:
         and     #0b00000011             ; cut off the rest (again)
         ;; a is now len of dx
         cp      4(ix)                   ; compare to stored length
-        jr      nc,dxy_lenok            ; no need to change len
+        jr      c,dxy_lenok             ; no need to change len
         ld      4(ix),a                 ; new len is larger
 dxy_lenok:
         ld      5(ix),a                 ; store dx
+        or      a                       ; clear carry
+        jr      z,dxy_zerodx            ; check zero
         pop     af                      ; get sign of dx
-        jr      z,dxy_zerodx
-        jr      nc,dxy_dxok             ; not negative?
+        jr      nc,dxy_posdx            ; not negative?
         ;; dx is negative
         ld      a,5(ix)                 ; get 
         neg                             ; negate
@@ -170,6 +217,7 @@ dxy_lenok:
         ld      7(ix),a
         jr      dxy_dxok
 dxy_zerodx:
+        pop     af                      ; clear stack
         xor     a
         ld      5(ix),a
         ld      7(ix),a
@@ -180,11 +228,12 @@ dxy_posdx:
 dxy_dxok:
         ;; finally, calculate x2 and y2
         ld      a,(ix)                  ; get x
-        add     5(ix)                   ; add dx
+        add     5(ix)                   ; a=x+dx
         ld      2(ix),a                 ; store to x2
         ld      a,1(ix)                 ; get y
-        add     6(ix)                   ; add dy
+        add     6(ix)                   ; a=y+dy
         ld      3(ix),a                 ; store to y2
+        pop     af                      ; restore original move
         ret
         
 
