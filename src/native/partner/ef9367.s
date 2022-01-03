@@ -145,8 +145,8 @@ xyr_done:
         ;; given ef9367 short command, it decodes
         ;; x2, z2, dx, dy, len, sign(dx), and sign(dy) ... 
         ;; notes:   
-        ;;  1. short command must be in format 1xxxxxx1. 
-        ;;     bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
+        ;;  short command must be in format 1xxxxxx1. 
+        ;;  bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
         ;;           1 |  dx   |  dy   |sy |sx | 1
         ;; input:   ix ... pointer to tiny_clip_t
         ;;          +0 ... x0
@@ -252,8 +252,11 @@ ef9367_cmd:
         ;; move the cursor to x,y
         ;; notes:   y is transformed bottom to top!
         ;; inputs:  hl=x, de=y
-        ;; affect:  af, de, hl
+        ;; affect:  af
 ef9367_xy::
+        ;; store hl and de regs
+        push    de
+        push    hl
         ;; reverse y coordinate
         push    hl                      ; store x
         ld      hl,(yrev)               ; hl=max y
@@ -271,6 +274,9 @@ ef9367_xy::
         out (#EF9367_YPOS_LO),a
         ld a,d
         out (#EF9367_YPOS_HI),a
+        ;; restore de and hl
+        pop     hl
+        pop     de
         ret
 
 
@@ -511,13 +517,6 @@ __ef9367_tiny::
         push    bc
         pop     ix                      ; ix=tiny clip
         inc     d                       ; d=1 (we have clip!)
-        ;; move clip rect to bc'=x0y0, de'=x1y1
-        exx
-        ld      b,2(ix)
-        ld      c,3(ix)
-        ld      d,4(ix)
-        ld      e,5(ix)
-        exx
 tny_clip_flag:
         ld      c,d                     ; clip flag to c
         ld      a,e                     ; moves to b
@@ -548,12 +547,77 @@ tny_draw_move:
         ;; command is inside e a this point.
 tny_clipping:
         ld      a,e                     ; move to a
-        push    af                      ; store move
-        djnz    tny_loop
+        call    decode_dxdy             ; initial decode
+tny_cliploop:
+        ;; first calculate clip points
+        call    xy_inside_rect
+        ;; now decide clip strategy
+        ;; 1. if both ends are outside, ignore move
+        ld      a,9(ix)                 ; a=clipstat 
+        or      a
+        jr      z,tny_clip_move_done    ; both ends outside clip area
+        ;; 2. if both ends are inside, use standard move
+        cp      #3                      ; both in
+        jr      z,tny_clip_none
+        cp      #2
+        jr      z,tny_fosi              ; first out second in
+        jr      tny_fiso                ; must be first in second out
+tny_clip_none:
+        ;; both are inside...
+        ld      a,e                     ; move to a
+        push    af
+        call    tny_handle_pen          ; set color
+        pop     af
+        ;; make move
+        or      #0b10000001             ; set both bits to 1
+        xor     #0b00000100             ; negate y sign (rev.axis)
+        call    ef9367_cmd              ; and draw!
+        jr      tny_clip_move_done      ; and we're done
+        ;; 3. if first in second out, draw until end of area
+tny_fiso:
+
+        jr      tny_incomplete_next
+        ;; 4. if first out, second in, goto xy and draw the rest
+tny_fosi:
+
+tny_incomplete_next:
+        ;; next point
+        call    tny_pt0_pixel
+        ;; all moves done?
+        ld      a,4(ix)                 ; current offset to a
+        or      a                       ; zero?
+        jr      z,tny_clip_move_done
+        dec     a
+        ld      4(ix),a                 ; store back pixel counter
+        ;; and loop
+        jr      tny_cliploop
+
+tny_clip_move_done:
+        call    tny_pt1_2_pt0           ; to end point...
+        inc     hl                      ; next move
+        djnz    tny_loop                ; and next move
         ;; restore index before exiting
         pop     ix
         ret
 
+tny_pt0_pixel:
+        ld      a,(ix)                  ; x to a
+        add     7(ix)                   ; add sign x i.e. 1 pixel move
+        ld      (ix),a                  ; to x
+        ld      a,1(ix)                 ; y to a
+        add     8(ix)                   ; add sign y
+        ld      1(ix),a                 ; to y
+        ret
+
+        ;; moves point 1 to point 0
+        ;; inputs:  ix ... tiny_clip_t
+tny_pt1_2_pt0:
+        ;; move pt1 to pt0
+        ld      a,2(ix)
+        ld      (ix),a
+        ld      a,3(ix)
+        ld      1(ix),a
+        ret
 
 
         ;; handle pen and color
