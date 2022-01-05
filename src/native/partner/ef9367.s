@@ -147,7 +147,7 @@ xyr_done:
         ;; notes:   
         ;;  short command must be in format 1xxxxxx1. 
         ;;  bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
-        ;;           1 |  dx   |  dy   |sy |sx | 1
+        ;;        1 |  dx   |  dy   |sy |sx | 1
         ;; input:   ix ... pointer to tiny_clip_t
         ;;          +0 ... x0
         ;;          +1 ... y0
@@ -575,11 +575,57 @@ tny_clip_none:
         jr      tny_clip_move_done      ; and we're done
         ;; 3. if first in second out, draw until end of area
 tny_fiso:
-
+        ld      d,#0b10000001           ; create base command 
+        ld      a,7(ix)                 ; sign x
+        and     #0b10000000             ; is it negative?
+        jr      z,tny_fiso_posdx
+        ;; it's negative
+        ld      a,d                     ; get d
+        or      #2                      ; set sx bit
+        ld      d,a                     ; back to d
+        ld      a,7(ix)
+        neg                             ; if negative - make positive
+        jr      tny_fiso_shift_dx
+tny_fiso_posdx:
+        ld      a,7(ix)                 ; just a, no need for sign.
+tny_fiso_shift_dx:
+        ;; dx is in a (bits 0-1), move to bits 5-6
+        rlca
+        rlca
+        rlca
+        rlca
+        rlca
+        or      d                       ; or current command
+        ld      d,a                     ; back to d
+        ;; now handle y direction
+        ;; remember: y is reverse axis!!!
+        ld      a,8(ix)                 ; sign y
+        and     #0b10000000             ; is negative?
+        jr      z,tny_fiso_posdy        ; it's positive...
+        ld      a,8(ix)                 ; sign back
+        neg                             ; make positive
+        jr      tny_fiso_shift_dy       ; and shift into command
+tny_fiso_posdy:
+        ld      a,d                     ; get command
+        or      #4                      ; y is reverse axis, set -dy
+        ld      d,a                     ; back to command
+        ld      a,8(ix)                 ; get sign y
+tny_fiso_shift_dy:
+        ;; dy is in a (bits 0-1), move to bits 3-4
+        rlca
+        rlca
+        rlca
+        or      d                       ; add to current command
+        ;; a now has the complete command
+        ;; execute it!
+        call    ef9367_cmd              ; draw pixel and move!
         jr      tny_incomplete_next
         ;; 4. if first out, second in, goto xy and draw the rest
 tny_fosi:
-
+        ;; update coordinates in tiny_clip_t
+        ;; move to xy (absolute)!
+        ;; next point
+        jr      tny_incomplete_next
 tny_incomplete_next:
         ;; next point
         call    tny_pt0_pixel
@@ -595,7 +641,9 @@ tny_incomplete_next:
 tny_clip_move_done:
         call    tny_pt1_2_pt0           ; to end point...
         inc     hl                      ; next move
-        djnz    tny_loop                ; and next move
+        ;; execute "long djnz"
+        dec     b
+        jp      nz,tny_loop
         ;; restore index before exiting
         pop     ix
         ret
