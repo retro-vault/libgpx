@@ -172,20 +172,20 @@ void gpx_draw_glyph(
         if (tiny->moves==0) return;
         /* Get pointer to data. */
         dptr=tiny->data;
-        /* First two bytes are origin. */
-        x=x+dptr[0]; y=y+dptr[1];
         /* If we're here, we have intersection. To clip or not to clip? */
         if (intersect.x1-intersect.x0==tiny->width && intersect.y1-intersect.y0==tiny->height)
-            _tinyxy(x,y,dptr+2,tiny->moves-2, NULL);
+            _tinyxy(x,y,dptr,tiny->moves, NULL);
         else {
-            unsigned char tclip[6];
-            tclip[0]=dptr[0];               /* origin x */
-            tclip[1]=dptr[1];               /* origin y */
-            tclip[2]=intersect.x0-grect.x0;
-            tclip[3]=intersect.y0-grect.y0;
-            tclip[4]=intersect.x1-grect.x0;
-            tclip[5]=intersect.y1-grect.y0;
-            _tinyxy(x,y,dptr+2,tiny->moves-2, &tclip);
+            unsigned char tclip[14];
+            /* Initial offset. */
+            tclip[0]=dptr[0];
+            tclip[1]=dptr[1];
+            /* Clip rect. */
+            tclip[10]=intersect.x0-grect.x0;
+            tclip[11]=intersect.y0-grect.y0;
+            tclip[12]=intersect.x1-grect.x0;
+            tclip[13]=intersect.y1-grect.y0;
+            _tinyxy(x,y,dptr,tiny->moves, &tclip);
         }
     }
 }
