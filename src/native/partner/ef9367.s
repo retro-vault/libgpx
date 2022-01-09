@@ -74,6 +74,56 @@ _test::
         pop     ix
         ret
 
+        ;; space for debug trace, 32 bytes
+_dtrace::
+        .dw     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+        .macro  WTRACE value,offset
+        push    af
+        ld      a,#value
+        WTRACEA offset
+        pop     af
+        .endm
+
+        .macro  WTRACEA offset
+        push    hl
+        push    de
+        ld      hl,#_dtrace
+        ld      d,#0
+        ld      e,#offset
+        add     hl,de
+        ld      (hl),a
+        pop     de
+        pop     hl
+        .endm
+
+        .macro  ITRACE offset
+        push    hl
+        push    de
+        push    af
+        ld      hl,#_dtrace
+        ld      d,#0
+        ld      e,#offset
+        add     hl,de
+        ld      a,(hl)
+        inc     a
+        ld      (hl),a
+        pop     af
+        pop     de
+        pop     hl
+        .endm
+
+        .macro  RTRACE offset
+        push    hl
+        push    de
+        ld      hl,#_dtrace
+        ld      d,#0
+        ld      e,#offset
+        add     hl,de
+        ld      a,(hl)
+        pop     de
+        pop     hl
+        .endm
 
 		;; given tiny_clip_t pointer, it checks if both
         ;; points are inside clip rectangle
@@ -513,13 +563,13 @@ __ef9367_tiny::
         or      c
         jr      z,tny_clip_flag
         ;; if we are here, we have clip.
-        ;; move it to hl'
+        ;; move it to ix
         push    bc
         pop     ix                      ; ix=tiny clip
         inc     d                       ; d=1 (we have clip!)
 tny_clip_flag:
         ld      c,d                     ; clip flag to c
-        ld      a,e                     ; moves to b
+        ld      a,e                     ; moves to a
         or      a                       ; zero moves?
         ret     z
         ld      b,a                     ; b=move counter
@@ -548,7 +598,6 @@ tny_draw_move:
 tny_clipping:
         ld      a,e                     ; move to a
         call    decode_dxdy             ; initial decode
-tny_cliploop:
         ;; first calculate clip points
         call    xy_inside_rect
         ;; now decide clip strategy
@@ -573,22 +622,131 @@ tny_clip_none:
         xor     #0b00000100             ; negate y sign (rev.axis)
         call    ef9367_cmd              ; and draw!
         jr      tny_clip_move_done      ; and we're done
+
         ;; 3. if first in second out, draw until end of area
 tny_fiso:
+        ld      a,e                     ; original move to a
+        call    tny_handle_pen          ; set pen
+tny_fiso_loop1:
+        call    tny_nextpix             ; calculate next pixel
+        call    ef9367_cmd              ; draw it
+        call    xy_inside_rect          ; calculate next clip
+        or      a                       ; test a
+        jr      nz,tny_fiso_loop1
+        ;; now we are out!
+tny_fiso_loop2:
+        ld      a,4(ix)
+        or      a
+        jr      z,tny_clip_move_done
+        call    tny_nextpix
+        jr      tny_fiso_loop2
+        jr      tny_clip_move_done
+
+        ;; 4. if first out, second in, goto xy and draw the rest
+tny_fosi:
+        ;; first is out so move p0 to next pixel
+        call    tny_nextpix
+        call    xy_inside_rect          ; check clipping (again)
+        cp      #3                      ; both are now in?
+        jr      nz, tny_fosi            ; if not - loop.
+        ;; move to position, both pixels are in
+        call    tny_movep0
+        ;; set pen...
+        ld      a,e
+        call    tny_handle_pen
+        ;; draw single pixel
+        ld      a,#0b10000001
+        call    ef9367_cmd
+        ;; the end?
+tny_fosi_loop:
+        ld      a,4(ix)
+        or      a
+        jr      z,tny_clip_move_done
+        call    tny_nextpix
+        call    ef9367_cmd
+        jr      tny_fosi_loop
+        ;; next move!
+tny_clip_move_done:
+        call    tny_pt1_2_pt0           ; to end point...
+        inc     hl                      ; next move
+        ;; execute "long djnz"
+        dec     b        
+        jp      nz,tny_loop
+        ;; restore index before exiting
+        pop     ix
+        ret
+
+        ;; move cursor to p0 (relative)
+        ;; input:   ix ... tiny_clip_t pointer
+        ;;          +0 ... relative x
+        ;;          +1 ... relative y
+        ;;         hl' ... absolute x
+        ;;         de' ... absolute y 
+tny_movep0:
+        ;; now move to initial position, which is 
+        ;; at x + dx, and y + dy. initial dx and dy
+        ;; are bytes 0 and 1 of moves.
+        exx                             ; alt set on
+        ;; store regs
+        push    af
+        push    de
+        push    hl
+        ld      a,(ix)                  ; move p0 (dx) to a
+        push    de                      ; store y
+        ld      d,#0                    ; de=dx
+        ld      e,a                     ; -"- 
+        add     hl,de                   ; x = x + dx
+        pop     de                      ; de = y
+        ld      a,1(ix)                 ; dy to a
+        push    hl                      ; store x
+        ex      de,hl                   ; hl=y
+        ld      d,#0
+        ld      e,a                     ; de=dy
+        add     hl,de                   ; hl=y+dy
+        ex      de,hl                   ; de=y
+        pop     hl                      ; hl=x
+        call    ef9367_xy
+        pop     hl
+        pop     de
+        pop     af
+        exx                             ; alt set off
+        ret
+
+        ;; calculate next pixel
+        ;; from pt0 and sx and sy.
+        ;; input:   ix ... tiny_clip_t pointer
+        ;; output:  +0 ... new x
+        ;;          +1 ... new y
+        ;;          +4 ... new len
+        ;;           a ... command to draw this (if required)
+tny_nextpix:
+        ;; first dx
+        ld      a,(ix)                  ; x to a
+        add     7(ix)                   ; add sign x i.e. 1 pixel move
+        ld      (ix),a                  ; to x
+        ;; now dy
+        ld      a,1(ix)                 ; y to a
+        add     8(ix)                   ; add sign y
+        ld      1(ix),a                 ; to y
+        ;; reduce length
+        ld      a,4(ix)                 ; current offset to a
+        dec     a
+        ld      4(ix),a                 ; store back pixel counter
+        ;; and finally, generate command.
         ld      d,#0b10000001           ; create base command 
         ld      a,7(ix)                 ; sign x
         and     #0b10000000             ; is it negative?
-        jr      z,tny_fiso_posdx
+        jr      z,tny_np_posdx
         ;; it's negative
         ld      a,d                     ; get d
         or      #2                      ; set sx bit
         ld      d,a                     ; back to d
         ld      a,7(ix)
         neg                             ; if negative - make positive
-        jr      tny_fiso_shift_dx
-tny_fiso_posdx:
+        jr      tny_np_shift_dx
+tny_np_posdx:
         ld      a,7(ix)                 ; just a, no need for sign.
-tny_fiso_shift_dx:
+tny_np_shift_dx:
         ;; dx is in a (bits 0-1), move to bits 5-6
         rlca
         rlca
@@ -601,60 +759,22 @@ tny_fiso_shift_dx:
         ;; remember: y is reverse axis!!!
         ld      a,8(ix)                 ; sign y
         and     #0b10000000             ; is negative?
-        jr      z,tny_fiso_posdy        ; it's positive...
+        jr      z,tny_np_posdy        ; it's positive...
         ld      a,8(ix)                 ; sign back
         neg                             ; make positive
-        jr      tny_fiso_shift_dy       ; and shift into command
-tny_fiso_posdy:
+        jr      tny_np_shift_dy       ; and shift into command
+tny_np_posdy:
         ld      a,d                     ; get command
         or      #4                      ; y is reverse axis, set -dy
         ld      d,a                     ; back to command
         ld      a,8(ix)                 ; get sign y
-tny_fiso_shift_dy:
+tny_np_shift_dy:
         ;; dy is in a (bits 0-1), move to bits 3-4
         rlca
         rlca
         rlca
         or      d                       ; add to current command
         ;; a now has the complete command
-        ;; execute it!
-        call    ef9367_cmd              ; draw pixel and move!
-        jr      tny_incomplete_next
-        ;; 4. if first out, second in, goto xy and draw the rest
-tny_fosi:
-        ;; update coordinates in tiny_clip_t
-        ;; move to xy (absolute)!
-        ;; next point
-        jr      tny_incomplete_next
-tny_incomplete_next:
-        ;; next point
-        call    tny_pt0_pixel
-        ;; all moves done?
-        ld      a,4(ix)                 ; current offset to a
-        or      a                       ; zero?
-        jr      z,tny_clip_move_done
-        dec     a
-        ld      4(ix),a                 ; store back pixel counter
-        ;; and loop
-        jr      tny_cliploop
-
-tny_clip_move_done:
-        call    tny_pt1_2_pt0           ; to end point...
-        inc     hl                      ; next move
-        ;; execute "long djnz"
-        dec     b
-        jp      nz,tny_loop
-        ;; restore index before exiting
-        pop     ix
-        ret
-
-tny_pt0_pixel:
-        ld      a,(ix)                  ; x to a
-        add     7(ix)                   ; add sign x i.e. 1 pixel move
-        ld      (ix),a                  ; to x
-        ld      a,1(ix)                 ; y to a
-        add     8(ix)                   ; add sign y
-        ld      1(ix),a                 ; to y
         ret
 
         ;; moves point 1 to point 0
@@ -666,8 +786,6 @@ tny_pt1_2_pt0:
         ld      a,3(ix)
         ld      1(ix),a
         ret
-
-
         ;; handle pen and color
         ;; inputs: a is the tiny command
 tny_handle_pen:
@@ -720,6 +838,35 @@ tny_eraser:
         call    ef9367_cmd
         ret
 
+
+
+TNY_TRACE:
+        ;; TRACE.
+        push    af
+        ITRACE  9
+        ;; points
+        ld      a,(ix)
+        WTRACEA 0
+        ld      a,1(ix)
+        WTRACEA 1
+        ld      a,2(ix)
+        WTRACEA 2
+        ld      a,3(ix)
+        WTRACEA 3
+        ;; rect
+        ld      a,10(ix)
+        WTRACEA 4
+        ld      a,11(ix)
+        WTRACEA 5
+        ld      a,12(ix)
+        WTRACEA 6
+        ld      a,13(ix)
+        WTRACEA 7
+        ;; status
+        ld      a,9(ix)
+        WTRACEA 8
+        pop     af
+        ret
 
 
         ;; ---------------------
