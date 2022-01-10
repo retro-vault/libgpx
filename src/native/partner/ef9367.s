@@ -647,6 +647,7 @@ tny_fosi:
         ;; first is out so move p0 to next pixel
         call    tny_nextpix
         call    xy_inside_rect          ; check clipping (again)
+        ld      a,9(ix)                 ; get clip status
         cp      #3                      ; both are now in?
         jr      nz, tny_fosi            ; if not - loop.
         ;; move to position, both pixels are in
@@ -663,6 +664,10 @@ tny_fosi_loop:
         or      a
         jr      z,tny_clip_move_done
         call    tny_nextpix
+
+        call    TNY_TRACE
+        jr      tny_clip_move_done
+
         call    ef9367_cmd
         jr      tny_fosi_loop
         ;; next move!
@@ -786,6 +791,7 @@ tny_pt1_2_pt0:
         ld      a,3(ix)
         ld      1(ix),a
         ret
+
         ;; handle pen and color
         ;; inputs: a is the tiny command
 tny_handle_pen:
@@ -838,12 +844,9 @@ tny_eraser:
         call    ef9367_cmd
         ret
 
-
-
-TNY_TRACE:
+TNY_TRACE::
         ;; TRACE.
         push    af
-        ITRACE  9
         ;; points
         ld      a,(ix)
         WTRACEA 0
@@ -865,7 +868,12 @@ TNY_TRACE:
         ;; status
         ld      a,9(ix)
         WTRACEA 8
+        ;; pos 4=offset
+        ld      a,4(ix)
+        WTRACEA 9
+        ;; increate slot 9 to 1
         pop     af
+        WTRACEA 10
         ret
 
 
