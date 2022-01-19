@@ -41,7 +41,6 @@ _gpx_cls::
         inc     hl
         ;; get back color
         ld      a,(hl)
-        ;;ld      b,18(ix)                ; fore color
         out     (#BDRPORT),a            ; set border
         ;; prepare attr
         rlca                            ; bits 3-5

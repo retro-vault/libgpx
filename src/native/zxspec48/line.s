@@ -27,11 +27,3 @@ __hline::
         ;; fast horizontal line drawing
 __vline::
         ret
-
-        ;; --------------------------------------------------
-        ;; void _line(coord x0, coord y0, coord x1, coord y1)
-        ;; --------------------------------------------------
-        ;; draw line, just rewire to hardware function, it will
-        ;; pick arguments and return to original caller
-__line::
-        ret
