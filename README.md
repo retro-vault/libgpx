@@ -330,9 +330,9 @@ Use `gpx_measure_string()` to measure string.
 | Implementation internals  | [Available](ZXSPEC48.md) |
 
 [language.url]:   https://isocpp.org/
-[language.badge]: https://img.shields.io/badge/languages-c%2Cz80%20assembly-blue.svg
+[language.badge]: https://img.shields.io/badge/languages-c%2C%20z80%20assembly-blue.svg
 
 [standard.url]:   https://en.wikipedia.org/wiki/C_(programming_language)
-[standard.badge]: https://img.shields.io/badge/standard-c11-blue.svg
+[standard.badge]: https://img.shields.io/badge/standards-c11%2C%20sdcc-blue.svg
 
 [status.badge]:  https://img.shields.io/badge/status-development-red.svg
