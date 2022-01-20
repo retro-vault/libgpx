@@ -1,3 +1,5 @@
+![status.badge] [![language.badge]][language.url] [![standard.badge]][standard.url] 
+
 # libgpx
 
 Welcome to **libgpx**, a multiplatform graphics library for 8bit micros. 
@@ -326,3 +328,11 @@ Use `gpx_measure_string()` to measure string.
 | Page(s)                   | 1         |
 | *libgpx* size in bytes    | N/A       |
 | Implementation internals  | [Available](ZXSPEC48.md) |
+
+[language.url]:   https://isocpp.org/
+[language.badge]: https://img.shields.io/badge/language-c-blue.svg
+
+[standard.url]:   https://en.wikipedia.org/wiki/C_(programming_language)
+[standard.badge]: https://img.shields.io/badge/standard-c11-blue.svg
+
+[status.badge]:  https://img.shields.io/badge/status-development-red.svg
