@@ -1,4 +1,4 @@
-![status.badge] [![language.badge]][language.url] [![standard.badge]][standard.url] [![compiler.badge]][compiler.url] 
+![status.badge] [![language.badge]][language.url] [![compiler.badge]][compiler.url] 
 
 # libgpx
 
@@ -330,10 +330,7 @@ Use `gpx_measure_string()` to measure string.
 | Implementation internals  | [Available](ZXSPEC48.md) |
 
 [language.url]:   https://isocpp.org/
-[language.badge]: https://img.shields.io/badge/languages-c%2C%20z80%20assembly-blue.svg
-
-[standard.url]:   https://en.wikipedia.org/wiki/C_(programming_language)
-[standard.badge]: https://img.shields.io/badge/standard-c11-blue.svg
+[language.badge]: https://img.shields.io/badge/languages-c11%2C%20z80%20assembly-blue.svg
 
 [compiler.url]:   http://sdcc.sourceforge.net/
 [compiler.badge]: https://img.shields.io/badge/compiler-sdcc-blue.svg
