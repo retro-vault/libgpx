@@ -1,4 +1,4 @@
-![status.badge] [![language.badge]][language.url] [![compiler.badge]][compiler.url] 
+![status.badge] ![language.badge] [![compiler.badge]][compiler.url] 
 
 # libgpx
 
@@ -329,7 +329,6 @@ Use `gpx_measure_string()` to measure string.
 | *libgpx* size in bytes    | N/A       |
 | Implementation internals  | [Available](ZXSPEC48.md) |
 
-[language.url]:   https://isocpp.org/
 [language.badge]: https://img.shields.io/badge/languages-c11%2C%20z80%20assembly-blue.svg
 
 [compiler.url]:   http://sdcc.sourceforge.net/
