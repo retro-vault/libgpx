@@ -359,7 +359,7 @@ __ef9367_init::
         ld      a,#PIO_GR_CMN_1024x512  
 		out     (#PIO_GR_CMN),a
         ;; cache resolution as yrev(erse)
-        ld      hl, #EF9367_HIRES_HEIGHT
+        ld      hl, #EF9367_HIRES_HEIGHT - 1
         ld      (yrev),hl
         ret
 
@@ -472,34 +472,38 @@ __ef9367_move_right::
         ;; inputs:
         ;;  hl=len
 __ef9367_hline::
-        ld      de,#EF9367_MAX_DELTA    ; de=max delta len.
-hline_loop:
-        ;; do we have 256 pixels left?
-        ld      a,h                     ; test h for 0
-        or      a               
-        jr      nz,hline_more           ; we have more...
-        ;; draw it
+        ;; make sure dy is 0
         call    wait_for_gdp
-        ;; at this point l is line len
+        xor     a
+        out     (#EF9367_DY),a
+        ;; we will draw the line one max delta
+        ;; at the time. first check if line is shorter
+        ;; than max delta.
+hline_loop:
+        ld      de, #EF9367_MAX_DELTA
+        push    hl                      ; store hl
+        or      a                       ; clear carry
+        sbc     hl,de                   ; compare len to max
+        jr      c,hline_tail            ; len is smaller
+        ;; line is longer or equal to max delta...
+        ;; draw max delta line
+        pop     hl
+        call    wait_for_gdp
+        ld      a,#EF9367_MAX_DELTA
+        out     (#EF9367_DX),a
+        ld      a,#0b00010000           ; ignore dy
+        call    ef9367_cmd
+        or      a                       ; ccy
+        sbc     hl,de                   ; new len
+        jr      hline_loop
+        ;;      draw last line (length is in l)
+hline_tail:
+        pop     hl                      ; restore hl
+        call    wait_for_gdp
         ld      a,l
         out     (#EF9367_DX),a
-        ;; and draw!
-        call    wait_for_gdp
         ld      a,#0b00010000           ; ignore dy
         call    ef9367_cmd
-        ret
-hline_more:
-        or      a                       ; clear carry
-        sbc     hl,de                   ; reduce for 256
-        ld      a,#EF9367_MAX_DELTA     ; dx
-        call    wait_for_gdp
-        out     (#EF9367_DX),a
-        ;; and draw!
-        call    wait_for_gdp
-        ld      a,#0b00010000           ; ignore dy
-        call    ef9367_cmd
-        ;; loop
-        jr      hline_loop
         ret
 
 
@@ -511,35 +515,39 @@ hline_more:
         ;; inputs:
         ;;  hl=len
 __ef9367_vline::
-        ld      de,#EF9367_MAX_DELTA    ; de=max delta len.
-vline_loop:
-        ;; do we have 256 pixels left?
-        ld      a,h                     ; test h for 0
-        or      a               
-        jr      nz,vline_more           ; we have more...
-        ;; draw it
+        ;; make sure dx is 0
         call    wait_for_gdp
-        ;; at this point l is line len
+        xor     a
+        out     (#EF9367_DX),a
+        ;; we will draw the line one max delta
+        ;; at the time. first check if line is shorter
+        ;; than max delta.
+vline_loop:
+        ld      de, #EF9367_MAX_DELTA
+        push    hl                      ; store hl
+        or      a                       ; clear carry
+        sbc     hl,de                   ; compare len to max
+        jr      c,vline_tail            ; len is smaller
+        ;; line is longer or equal to max delta...
+        ;; draw max delta line
+        pop     hl
+        call    wait_for_gdp
+        ld      a,#EF9367_MAX_DELTA
+        out     (#EF9367_DY),a
+        ld      a,#0b00010100           ; ignore dx
+        call    ef9367_cmd
+        or      a                       ; ccy
+        sbc     hl,de                   ; new len
+        jr      vline_loop
+        ;;      draw last line (length is in l)
+vline_tail:
+        pop     hl                      ; restore hl
+        call    wait_for_gdp
         ld      a,l
         out     (#EF9367_DY),a
-        ;; and draw!
-        call    wait_for_gdp
-        ld      a,#0b00010100           ; ignore dy
+        ld      a,#0b00010100           ; ignore dx
         call    ef9367_cmd
         ret
-vline_more:
-        or      a                       ; clear carry
-        sbc     hl,de                   ; reduce for 256
-        ld      a,#EF9367_MAX_DELTA     ; dx
-        call    wait_for_gdp
-        out     (#EF9367_DY),a
-        ;; and draw!
-        call    wait_for_gdp
-        ld      a,#0b00010100           ; ignore dy
-        call    ef9367_cmd
-        ;; loop
-        jr      vline_loop
-        ret    
 
 
 
@@ -599,7 +607,7 @@ tny_clipping:
         ld      a,e                     ; move to a
         call    decode_dxdy             ; initial decode
         ;; first calculate clip points
-        call    xy_inside_rect
+        call    xy_inside_rect        
         ;; now decide clip strategy
         ;; 1. if both ends are outside, ignore move
         ld      a,9(ix)                 ; a=clipstat 
@@ -610,6 +618,7 @@ tny_clipping:
         jr      z,tny_clip_none
         cp      #2
         jr      z,tny_fosi              ; first out second in
+        ;; if we are here it's 1...
         jr      tny_fiso                ; must be first in second out
 tny_clip_none:
         ;; both are inside...
@@ -622,23 +631,24 @@ tny_clip_none:
         xor     #0b00000100             ; negate y sign (rev.axis)
         call    ef9367_cmd              ; and draw!
         jr      tny_clip_move_done      ; and we're done
-
         ;; 3. if first in second out, draw until end of area
 tny_fiso:
         ld      a,e                     ; original move to a
         call    tny_handle_pen          ; set pen
 tny_fiso_loop1:
         call    tny_nextpix             ; calculate next pixel
-        call    ef9367_cmd              ; draw it
+        call    ef9367_cmd              ; draw it      
+        ;; TODO: possible bug!
         call    xy_inside_rect          ; calculate next clip
-        or      a                       ; test a
+        ld      a,9(ix)                 ; get clip status
+        and     #1                      ; bit 0 is on?
         jr      nz,tny_fiso_loop1
         ;; now we are out!
 tny_fiso_loop2:
-        ld      a,4(ix)
-        or      a
-        jr      z,tny_clip_move_done
-        call    tny_nextpix
+        ld      a,4(ix)                 ; check length
+        or      a               
+        jr      z,tny_clip_move_done    ; no more pixels, we're done
+        call    tny_nextpix             ; more pixels
         jr      tny_fiso_loop2
         jr      tny_clip_move_done
 
@@ -656,7 +666,7 @@ tny_fosi:
         ld      a,e
         call    tny_handle_pen
         ;; draw single pixel
-        ld      a,#0b10000001
+        ld      a,#0b10000000
         call    ef9367_cmd
         ;; the end?
 tny_fosi_loop:
@@ -664,10 +674,6 @@ tny_fosi_loop:
         or      a
         jr      z,tny_clip_move_done
         call    tny_nextpix
-
-        call    TNY_TRACE
-        jr      tny_clip_move_done
-
         call    ef9367_cmd
         jr      tny_fosi_loop
         ;; next move!
@@ -691,7 +697,7 @@ tny_movep0:
         ;; now move to initial position, which is 
         ;; at x + dx, and y + dy. initial dx and dy
         ;; are bytes 0 and 1 of moves.
-        exx                             ; alt set on
+        exx                             ; alt set on      
         ;; store regs
         push    af
         push    de
@@ -763,11 +769,13 @@ tny_np_shift_dx:
         ;; now handle y direction
         ;; remember: y is reverse axis!!!
         ld      a,8(ix)                 ; sign y
+        or      a                       ; check carry
+        jr      z,tny_np_zero_dy        ; no sign!
         and     #0b10000000             ; is negative?
-        jr      z,tny_np_posdy        ; it's positive...
+        jr      z,tny_np_posdy          ; it's positive...
         ld      a,8(ix)                 ; sign back
         neg                             ; make positive
-        jr      tny_np_shift_dy       ; and shift into command
+        jr      tny_np_shift_dy         ; and shift into command
 tny_np_posdy:
         ld      a,d                     ; get command
         or      #4                      ; y is reverse axis, set -dy
@@ -779,7 +787,10 @@ tny_np_shift_dy:
         rlca
         rlca
         or      d                       ; add to current command
+        ld      d,a                     ; back to d
+tny_np_zero_dy:
         ;; a now has the complete command
+        ld      a,d                     ; command to a
         ret
 
         ;; moves point 1 to point 0
@@ -870,8 +881,21 @@ TNY_TRACE::
         WTRACEA 8
         ;; pos 4=offset
         ld      a,4(ix)
-        WTRACEA 9
-        ;; increate slot 9 to 1
+        WTRACEA 9    
+        ;; now store basic regs HL, DE and BC
+        ld      a,h
+        WTRACEA 16
+        ld      a,l
+        WTRACEA 17
+        ld      a,b
+        WTRACEA 18
+        ld      a,c
+        WTRACEA 19
+        ld      a,d
+        WTRACEA 20
+        ld      a,e
+        WTRACEA 21
+        ;; and original A value
         pop     af
         WTRACEA 10
         ret

@@ -38,7 +38,7 @@ __hline::
         pop     hl                      ; restore x1
         pop     de                      ; restore x0
         ;; and draw deltas
-        or      a                       ; clera carry
+        or      a                       ; clear carry
         sbc     hl,de                   ; line length to hl
         call    __ef9367_hline
         ;; game over

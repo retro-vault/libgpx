@@ -11,7 +11,7 @@
         ;; --- limits ---------------------------------------------------------
         .equ    EF9367_HIRES_WIDTH,     1024
         .equ    EF9367_HIRES_HEIGHT,    512
-        .equ    EF9367_MAX_DELTA,       255
+        .equ    EF9367_MAX_DELTA,       0xff
 
         ;; --- blit modes -----------------------------------------------------
         .equ    EF9367_BM_NONE,         0
