@@ -1,31 +1,32 @@
 # Virtual paths are all subfolders!
-DIRS	=	$(wildcard native/$(PLATFORM)/)
+DIRS      =  $(wildcard native/$(PLATFORM)/)
 vpath %.c $(DIRS)
 vpath %.s $(DIRS)
 vpath %.h $(DIRS)
 
 # Source files.
-C_SRCS	=	$(wildcard *.c) $(wildcard native/$(PLATFORM)/*.c)
-S_SRCS	=	$(wildcard *.s) $(wildcard native/$(PLATFORM)/*.s)
-OBJS	=	$(addprefix $(BUILD_DIR)/, \
+C_SRCS   =  $(wildcard *.c) $(wildcard native/$(PLATFORM)/*.c)
+S_SRCS   =  $(wildcard *.s) $(wildcard native/$(PLATFORM)/*.s)
+OBJS     =  $(addprefix $(BUILD_DIR)/, \
 				$(notdir \
-					$(patsubst %.c,%.rel,$(C_SRCS)) \
-					$(patsubst %.s,%.rel,$(S_SRCS)) \
+					$(patsubst %.c,%.$(OBJ_EXT),$(C_SRCS)) \
+					$(patsubst %.s,%.$(OBJ_EXT),$(S_SRCS)) \
 				) \
 			)
-TARGET = libgpx
+TARGET	 = libgpx
 
-# Rules.
+# Default.
 .PHONY: all
-all:	$(BUILD_DIR)/$(TARGET).lib
+all: $(BUILD_DIR)/$(TARGET).$(LIB_EXT)
 
-$(BUILD_DIR)/$(TARGET).lib: $(OBJS)
+# Common rules for Z80.
+$(BUILD_DIR)/$(TARGET).$(LIB_EXT): $(OBJS)
 	$(AR) $(ARFLAGS) $@ $^
 
-$(BUILD_DIR)/%.rel:	%.s
+$(BUILD_DIR)/%.$(OBJ_EXT):	%.s
 	$(AS) $(ASFLAGS) $(BUILD_DIR)/$(@F) $<
 
-$(BUILD_DIR)/%.rel: %.c
+$(BUILD_DIR)/%.$(OBJ_EXT): %.c
 	$(CC) -c -o $(BUILD_DIR)/$(@F) $< $(CFLAGS)
 
-$(BUILD_DIR)/%.rel: %.h
+$(BUILD_DIR)/%.$(OBJ_EXT): %.h

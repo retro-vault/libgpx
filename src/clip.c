@@ -82,7 +82,7 @@ bool _cohen_sutherland(
         else {
             /* some segment of line lies within the rectangle */
             unsigned char code_out;
-            coord x, y;
+            coord x = 0, y = 0;
   
             /* at least one endpoint is outside the rectangle, pick it. */
             if (c1 != 0)
@@ -115,8 +115,10 @@ bool _cohen_sutherland(
             /* intersection point x, y is found
                we replace point outside rectangle
                by intersection point */
+            #ifdef SDCC
             #pragma save
             #pragma disable_warning 84
+            #endif
             if (code_out == c1) {
                 *x0 = x;
                 *y0 = y;
@@ -127,7 +129,9 @@ bool _cohen_sutherland(
                 *y1 = y;
                 c2=_csc(clip_area,*x1,*y1);
             }
+            #ifdef SDCC
             #pragma restore
+            #endif
         }
     }
 

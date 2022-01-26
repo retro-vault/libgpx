@@ -25,7 +25,6 @@ void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
 
 void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius)
 {
-    g;
     int f = 1 - radius;
     int ddF_x = 1;
     int ddF_y = -2 * radius;
@@ -187,8 +186,6 @@ void gpx_draw_string(
 
     /* first get spacing hint */
     while (*text) {
-        uint8_t chi=*text-f->first_ascii;
-        uint16_t *offsets=f->glyph_offsets;
         uint16_t offs=f->glyph_offsets[*text-f->first_ascii];
         raster_glyph_t *glyph=(raster_glyph_t *)(start+offs);
         gpx_draw_glyph(g,x,y,(glyph_t*)glyph);
