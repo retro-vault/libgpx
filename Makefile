@@ -53,13 +53,12 @@ export INC_DIR		=	$(ROOT)/include $(ROOT)/src $(ROOT)/src/native
 
 
 # Subfolders for make.
-SUBDIRS 			=	src test
+SUBDIRS 			=	src
 
 # Default target
 .PHONY: all
 all: $(BUILD_DIR) $(SUBDIRS)
 	cp $(BUILD_DIR)/*.$(LIB_EXT) $(BIN_DIR)
-	find $(BUILD_DIR) -perm /a+x -exec cp {} $(BIN_DIR) \;
 
 .PHONY: $(BUILD_DIR)
 $(BUILD_DIR):
