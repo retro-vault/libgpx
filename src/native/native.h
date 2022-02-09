@@ -46,7 +46,7 @@ typedef struct tiny_clip_s {
 } tiny_clip_t;
 
 /* tiny */
-extern int _tinyxy(
+extern void _tinyxy(
     coord x, 
     coord y, 
     uint8_t *moves,
