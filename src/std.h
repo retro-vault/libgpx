@@ -20,7 +20,10 @@
 #define TRUE 1
 
 /* stdlib.h */
+#ifndef NULL
 #define NULL     (void *)0
+#endif
+
 extern int _abs (int i);
 
 #ifdef SDCC

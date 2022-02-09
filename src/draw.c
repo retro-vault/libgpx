@@ -17,6 +17,8 @@
 #include <font.h>
 #include <std.h>
 
+extern void gpx_set_line_style(gpx_t *g, uint8_t line_style);
+
 void gpx_draw_pixel(gpx_t *g, coord x, coord y) {
     /* are we inside clip area? */
     if (gpx_rect_contains(&(g->clip_area),x,y))
@@ -105,6 +107,20 @@ void gpx_draw_rect(gpx_t *g, rect_t *rect) {
     gpx_draw_line(g,rect->x0, rect->y0, rect->x0, rect->y1);
     /* right */
     gpx_draw_line(g,rect->x1, rect->y0, rect->x1, rect->y1);
+}
+
+void gpx_fill_rect(gpx_t *g, rect_t *rect) {
+    /* first save current line style */
+    uint8_t current_line_style=g->line_style;
+    /* draw horz. lines */
+    uint8_t index=0;
+    for(int y=rect->y0; y<rect->y1; y++) {
+        gpx_set_line_style(g,(g->fill_brush)[index++]);
+        gpx_draw_line(g,rect->x0,y,rect->x1,y);
+        if (index==g->fill_brush_size) index=0;
+    }   
+    /* restore line style */
+    g->line_style=current_line_style;
 }
 
 void gpx_draw_glyph(

@@ -32,7 +32,7 @@ typedef struct rect_s {                 /* the rectangle */
 } rect_t;
 
 /* drawing mode */
-#define BLT_NONE            0           /* no drawing, pen up */
+#define BLT_NONE            0           /* no drawing, why? */
 #define BLT_COPY            1           /* standard operation */
 #define BLT_XOR             2           /* XOR operations */
 
@@ -128,10 +128,10 @@ extern void gpx_set_clip_area(gpx_t *g, rect_t *clip_area);
 extern void gpx_set_blit(gpx_t *g, uint8_t blit);
 
 /* set line style  */
-extern void gpx_line_style(gpx_t *g, uint8_t line_style);
+extern void gpx_set_line_style(gpx_t *g, uint8_t line_style);
 
 /* set fill brush */
-extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
+extern void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
 
 
 

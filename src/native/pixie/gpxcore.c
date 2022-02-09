@@ -16,14 +16,14 @@
 #include <sys/mman.h>
 
 #include <std.h>
+#include <util.h>
 #include <string.h>
 #include <gpxcore.h>
 #include <cap.h>
 #include <pixie/pixie.h>
 
-
 /* there can be only one gpx! */
-static gpx_t _g;
+gpx_t _g;
 static bool _ginitialized = false;
 
 /* capabilities */
@@ -72,10 +72,14 @@ gpx_t* gpx_init() {
 }
 
 void gpx_exit(gpx_t* g) {
+    UNUSED(g);
 }
 
 /* get the capabilities */
-gpx_cap_t* gpx_cap(gpx_t *g) {
+gpx_cap_t* gpx_cap(gpx_t *g) 
+{
+    UNUSED(g);
+
     /* not the first time? */
     if (_capinitialized) return &_cap;
     /* signal initialized */
@@ -101,6 +105,7 @@ gpx_cap_t* gpx_cap(gpx_t *g) {
 gpx_resolution_t *gpx_get_disp_page_resolution(
     gpx_t *g,
     gpx_resolution_t *res) {
+    UNUSED(g);
 
     memcpy(
         res,
@@ -114,21 +119,29 @@ gpx_resolution_t *gpx_get_disp_page_resolution(
 /* ----- dummy functions that do not work on zx spectrum ------------------- */
 
 void gpx_set_resolution(gpx_t *g, uint8_t resolution) {
+    UNUSED(g);
+    UNUSED(resolution);
 }
 
 void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
+    UNUSED(g);
+    UNUSED(page);
+    UNUSED(pgop);
 }
 
 uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
-    /* always the same page on speccy */
+    UNUSED(g);
+    UNUSED(page);
+    UNUSED(pgop);
+    /* always the same page */
     return 0;
 }
 
-void gpx_line_style(gpx_t *g, uint8_t line_style) {
+void gpx_set_line_style(gpx_t *g, uint8_t line_style) {
     g->line_style=line_style;
 }
 
-void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
+void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
     
     /* copy brush */
     memcpy(&(g->fill_brush),fill_brush,fill_brush_size);
