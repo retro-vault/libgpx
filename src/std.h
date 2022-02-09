@@ -23,6 +23,7 @@
 #define NULL     (void *)0
 extern int _abs (int i);
 
+#ifdef SDCC
 /* stdint.h */
 typedef signed char     int8_t;
 typedef unsigned char   uint8_t;
@@ -30,6 +31,9 @@ typedef int             int16_t;
 typedef unsigned int    uint16_t;
 typedef long            int32_t;
 typedef unsigned long   uint32_t;
+#else
+#include <stdint.h>
+#endif
 
 /* string.h */
 extern void _memcpy (void* dst, void* src, unsigned int num);

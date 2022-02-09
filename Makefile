@@ -25,7 +25,7 @@ export ASFLAGS	=	-xlos -g
 export AR		=	sdar
 export ARFLAGS	=	-rc
 else # Default platform for this branch is uxfb
-export PLATFORM =   uxfb
+export PLATFORM =   pixie
 export CC		=	gcc
 export CFLAGS	=	-Wall -Wextra -std=c99 -g $(addprefix -I,$(INC_DIR))
 export AS		=	as
@@ -36,12 +36,14 @@ endif
 
 
 # Platform file extenions.
-ifeq ($(PLATFORM),uxfb)
+ifeq ($(PLATFORM),pixie)
 export OBJ_EXT = o
 export LIB_EXT = a
+export EXE_EXT = out
 else
 export OBJ_EXT = rel
 export LIB_EXT = lib
+export EXE_EXT = ihx
 endif
 
 
@@ -53,7 +55,8 @@ export INC_DIR		=	$(ROOT)/include $(ROOT)/src $(ROOT)/src/native
 
 
 # Subfolders for make.
-SUBDIRS 			=	src playground
+SUBDIRS 			=	src $(LAB)
+
 
 # Default target
 .PHONY: all

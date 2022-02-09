@@ -34,19 +34,30 @@ static unsigned char _csc(rect_t *clip_area, coord x, coord y)
 }
 
 static coord _bisect(coord a0, coord b0, coord a1, coord b1, coord b) {
-    coord mida, midb;
+    
+    /* temps */
+    coord ta, tb;
+    
+    /* make sure b0 < b1 */
+    if (b0>b1) {
+        /* swap */
+        ta=a0; tb=b0;
+        a0=a1; b0=b1;
+        a1=ta; b1=tb;
+    }
+
     /* as long as we don't hit the b ...*/
     while (b!=b0 && b!=b1) {
         /* get mid point of line */
-        mida = (a1+a0)/2;
-        midb = (b1+b0)/2;
+        ta = (a0+a1)/2;
+        tb = (b0+b1)/2;
         /* if mid point is above b */
-        if (midb < b) {
-            b0 = midb;
-            a0 = mida;
+        if (tb < b) {
+            b0 = tb;
+            a0 = ta;
         } else {
-            b1 = midb;
-            a1 = mida;
+            b1 = tb;
+            a1 = ta;
         }
     }
     if (b==b0)
