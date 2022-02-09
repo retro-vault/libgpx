@@ -9,17 +9,31 @@
  * 26.01.2022   tstih
  *
  */
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
+
 #include <std.h>
 #include <string.h>
 #include <gpxcore.h>
+#include <cap.h>
+#include <pixie/pixie.h>
+
 
 /* there can be only one gpx! */
 static gpx_t _g;
 static bool _ginitialized = false;
 
-/* zx spectrum page resolution */
-static uint8_t _current_resolution;
+/* capabilities */
+static gpx_cap_t _cap;
+static bool _capinitialized = false;
 
+/* pages and resolutions */
+static uint8_t _current_resolution;
+static gpx_page_t _page0;
+static gpx_resolution_t _native_resolution;
 
 /* ----- initialization and exit ------------------------------------------- */
 
@@ -44,24 +58,58 @@ gpx_t* gpx_init() {
     _g.fore_color = 0;    
     _g.back_color = 1;
 
-    /* resolutions for the only page is 0 (256x192) */
+    /* resolutions for the only page is 0 */
     _current_resolution=0;
     _g.resolutions=&_current_resolution;
 
     /* finally, clipping rect. */
     _g.clip_area.x0=_g.clip_area.y0=0;
-    _g.clip_area.x1=800;
-    _g.clip_area.y1=600;
+    _g.clip_area.x1=PIXIE_WIDTH-1;
+    _g.clip_area.y1=PIXIE_HEIGHT-1;
 
     /* return it */
     return &_g;
 }
 
 void gpx_exit(gpx_t* g) {
-    g;
-    /* nothing, for now */
 }
 
+/* get the capabilities */
+gpx_cap_t* gpx_cap(gpx_t *g) {
+    /* not the first time? */
+    if (_capinitialized) return &_cap;
+    /* signal initialized */
+    _capinitialized=true;
+    
+    /* configure pages */
+    _cap.num_pages=1;
+    _cap.pages=&_page0;                  /* point to page 0 */
+    _page0.num_resolutions=1;
+    _page0.resolutions=&_native_resolution;
+    _native_resolution.width=PIXIE_WIDTH;
+    _native_resolution.height=PIXIE_HEIGHT;
+
+    /* simulate mono */
+    _cap.num_colors=2;
+    _cap.fore_color=1;
+    _cap.back_color=0;
+
+    /* and return */
+    return &_cap;
+}
+
+gpx_resolution_t *gpx_get_disp_page_resolution(
+    gpx_t *g,
+    gpx_resolution_t *res) {
+
+    memcpy(
+        res,
+        &_native_resolution,
+        sizeof(gpx_resolution_t)
+    );
+
+    return res;
+}
 
 /* ----- dummy functions that do not work on zx spectrum ------------------- */
 

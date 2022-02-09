@@ -27,13 +27,6 @@ extern void _hline(coord x0, coord x1, coord y);
 /* std line */
 extern void _line(coord x0, coord y0, coord x1, coord y1);
 
-/* draw fast line */ 
-extern void _ef9367_draw_line(
-    coord x0, 
-    coord y0, 
-    coord x1,
-    coord y1);  
-
 /* stride */
 extern void _stridexy(
     coord x, 
