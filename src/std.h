@@ -26,7 +26,7 @@
 
 extern int _abs (int i);
 
-#ifdef SDCC
+#ifdef __SDCC
 /* stdint.h */
 typedef signed char     int8_t;
 typedef unsigned char   uint8_t;
