@@ -31,6 +31,11 @@ typedef struct rect_s {                 /* the rectangle */
 	coord y1;
 } rect_t;
 
+typedef struct point_s {
+    coord x;
+    coord y;
+} point_t;
+
 /* drawing mode */
 #define BLT_NONE            0           /* no drawing, why? */
 #define BLT_COPY            1           /* standard operation */
@@ -146,15 +151,23 @@ extern void gpx_draw_pixel(gpx_t *g, coord x, coord y);
 /* draw circle */
 extern void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius);
 
-/* -draw line */
+/* draw line */
 extern void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1);
 
-/* -draw rectangle */
+/* draw rectangle */
 extern void gpx_draw_rect(gpx_t *g, rect_t *rect);
 
-/* -fill rectangle */
+/* draw polygon */
+extern void gpx_draw_polygon(gpx_t *g, int num_points, point_t points[]);
+
+/* fill rectangle */
 extern void gpx_fill_rect(gpx_t *g, rect_t *rect);
 
+/* fill circle */
+void gpx_fill_circle(gpx_t *g, coord x0, coord y0, coord radius);
+
+/* fill polygon */
+extern void gpx_fill_polygon(gpx_t *g, int num_points, point_t points[]);
 
 
 /* ----- glyphs ------------------------------------------------------------ */

@@ -155,7 +155,14 @@ void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
 }
 
 void gpx_set_blit(gpx_t *g, uint8_t blit) {
+    /* store blit */
     g->blit=blit;
+    /* and activate on pixie */
+    static char buffer[0xff];
+    sprintf(buffer,"B%d\n",blit);
+    int channel=open_pixie_channel();
+    write(channel,buffer,strlen(buffer));
+    close_pixie_channel(channel);
 }
 
 void gpx_set_color(gpx_t *g, color c, uint8_t ct) {

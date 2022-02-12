@@ -32,6 +32,11 @@ typedef struct rect_s {                 /* the rectangle */
 	coord y1;
 } rect_t;
 
+typedef struct point_s {
+    coord x;
+    coord y;
+} point_t;
+
 /* drawing mode */
 #define BLT_NONE            0           /* no drawing, pen up */
 #define BLT_COPY            1           /* standard operation */
