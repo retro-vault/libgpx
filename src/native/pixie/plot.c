@@ -1,7 +1,7 @@
-    /*
- * gpxcore.c
+/*
+ * plot.c
  *
- * Graphics init and exit functions for Unix frambuffer.
+ * Basic drawing functions.
  * 
  * MIT License (see: LICENSE)
  * copyright (c) 2022 tomaz stih
