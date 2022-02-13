@@ -67,6 +67,9 @@ gpx_t* gpx_init() {
     _g.clip_area.x1=PIXIE_WIDTH-1;
     _g.clip_area.y1=PIXIE_HEIGHT-1;
 
+    /* initialize capabilities internals */
+    gpx_cap(&_g);
+
     /* return it */
     return &_g;
 }
@@ -171,3 +174,4 @@ void gpx_set_color(gpx_t *g, color c, uint8_t ct) {
     else
         g->fore_color=c;
 }
+
