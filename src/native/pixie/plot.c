@@ -80,3 +80,11 @@ void _tinyxy(
     UNUSED(moves);UNUSED(num);
     UNUSED(clip);
 }
+
+void gpx_cls(gpx_t *g) {
+    static char buffer='C'; /* clear */
+    UNUSED(g);
+    int channel=open_pixie_channel();
+    write(channel,&buffer,1);
+    close_pixie_channel(channel);
+}
