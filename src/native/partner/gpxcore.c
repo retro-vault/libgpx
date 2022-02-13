@@ -55,6 +55,9 @@ gpx_t* gpx_init() {
     _g.clip_area.x1=EF9367_HIRES_WIDTH-1;
     _g.clip_area.y1=EF9367_HIRES_HEIGHT-1;
 
+    /* call gpx_cap to initialize the structure...*/
+    gpx_cap(&_g);
+
     /* now that we prepared everything ... configure the hardware 
        to match our settings */
     _ef9367_init();
@@ -130,4 +133,18 @@ uint8_t gpx_get_page(gpx_t *g, uint8_t pgop) {
     g; pgop;
     /* always the same page on speccy */
     return 0;
+}
+
+void gpx_set_line_style(gpx_t *g, uint8_t line_style) {
+    g->line_style=line_style;
+}
+
+void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
+    
+    /* copy brush */
+    for (register uint8_t i=0;i<fill_brush_size;i++)
+        g->fill_brush[i]=fill_brush[i];
+
+    /* and store size. */
+    g->fill_brush_size=fill_brush_size;
 }
