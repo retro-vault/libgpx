@@ -12,16 +12,30 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <pixie/pixie.h>
 
-int open_pixie_channel() {
-    int channel;
-    if ( (channel = open(PIXIE_PIPE, O_WRONLY)) < 0)
+/* pixie comms */
+
+static int _fd=0;
+static char _buffer[MAX_PIXIE_BUFFER];
+
+void pxopen() {
+    if ( (_fd = open(PIXIE_PIPE, O_WRONLY)) < 0)
         exit(1);
-    return channel;
 }
 
-void close_pixie_channel(int channel) {
-    close(channel);
+void pxclose() {
+    close(_fd);
+}
+
+void pxwrite(const char *format, ...) {
+
+    /* Pass to file... */
+    va_list argptr;
+    va_start(argptr, format);
+    vsprintf(_buffer, format, argptr);
+    write(_fd,_buffer,strlen(_buffer));
+    va_end(argptr);
 }

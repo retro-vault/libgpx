@@ -19,34 +19,22 @@
 
 #include <pixie/pixie.h>
 
-#define MAX_BUFFER_LEN 0xff
-
 /* pick modes from current graphics 
    disclaimer: there is only one, always! */
 extern gpx_t _g;
 
 void _plotxy(coord x, coord y) {
-
     /* be compatible and don't draw if BLT_NONE. */
     if (_g.blit==BLT_NONE) return;
-
-    static char buffer[MAX_BUFFER_LEN];
-    sprintf(buffer,"P%d,%d\n",x,y);
-    int channel=open_pixie_channel();
-    write(channel,buffer,strlen(buffer));
-    close_pixie_channel(channel);
+    /* and write */
+    pxwrite("P%d,%d\n",x,y);
 }
 
-void _line(coord x0, coord y0, coord x1, coord y1) {
-    
+void _line(coord x0, coord y0, coord x1, coord y1) {   
     /* be compatible and don't draw if BLT_NONE. */
     if (_g.blit==BLT_NONE) return;
-    
-    static char buffer[MAX_BUFFER_LEN];
-    sprintf(buffer,"L%d,%d,%d,%d,%d\n",x0,y0,x1,y1,_g.line_style);
-    int channel=open_pixie_channel();
-    write(channel,buffer,strlen(buffer));
-    close_pixie_channel(channel);
+    /* and write */
+    pxwrite("L%d,%d,%d,%d,%d\n",x0,y0,x1,y1,_g.line_style);
 }
 
 void _hline(coord x0, coord x1, coord y) {
@@ -82,9 +70,6 @@ void _tinyxy(
 }
 
 void gpx_cls(gpx_t *g) {
-    static char buffer='C'; /* clear */
     UNUSED(g);
-    int channel=open_pixie_channel();
-    write(channel,&buffer,1);
-    close_pixie_channel(channel);
+    pxwrite("C\n");
 }

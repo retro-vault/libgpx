@@ -19,7 +19,7 @@
 
 /* ----- core gpx new type(s) ---------------------------------------------- */
 typedef int16_t coord;
-typedef int16_t color;                  /* if more then 16 colors, then it's a pointer */
+typedef uint16_t color;                 /* depends on implementation */
 
 
 
@@ -108,6 +108,7 @@ extern gpx_cap_t* gpx_cap(gpx_t *g);
 extern gpx_resolution_t *gpx_get_disp_page_resolution(
     gpx_t *g,
     gpx_resolution_t *res);
+
 
 /* ----- drawing modes, styles, patterns, colors --------------------------- */
 

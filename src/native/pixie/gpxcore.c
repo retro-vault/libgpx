@@ -35,9 +35,14 @@ static uint8_t _current_resolution;
 static gpx_page_t _page0;
 static gpx_resolution_t _native_resolution;
 
+
+
 /* ----- initialization and exit ------------------------------------------- */
 
 gpx_t* gpx_init() {
+
+    /* open pixie channel */
+    pxopen();
 
     /* not the first time? */
     if (_ginitialized) return &_g;
@@ -76,6 +81,7 @@ gpx_t* gpx_init() {
 
 void gpx_exit(gpx_t* g) {
     UNUSED(g);
+    pxclose();
 }
 
 /* get the capabilities */
@@ -98,8 +104,8 @@ gpx_cap_t* gpx_cap(gpx_t *g)
 
     /* simulate mono */
     _cap.num_colors=2;
-    _cap.fore_color=1;
-    _cap.back_color=0;
+    _cap.fore_color=0;
+    _cap.back_color=1;
 
     /* and return */
     return &_cap;
@@ -161,17 +167,14 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
     /* store blit */
     g->blit=blit;
     /* and activate on pixie */
-    static char buffer[0xff];
-    sprintf(buffer,"B%d\n",blit);
-    int channel=open_pixie_channel();
-    write(channel,buffer,strlen(buffer));
-    close_pixie_channel(channel);
+    pxwrite("B%d\n",blit);
 }
 
 void gpx_set_color(gpx_t *g, color c, uint8_t ct) {
     if (ct==CO_BACK)
-        g->back_color=c;
-    else
+        g->back_color=c; /* no effect... */
+    else {
         g->fore_color=c;
+        pxwrite("I%d\n",c == 0 ? 255 : 0);
+    }
 }
-

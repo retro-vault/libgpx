@@ -12,12 +12,16 @@
 #ifndef __PIXIE_H__
 #define __PIXIE_H__
 
-#define PIXIE_WIDTH     1024
-#define PIXIE_HEIGHT    512
-#define PIXIE_PIPE      "/tmp/pixie.pipe"
+#define PIXIE_WIDTH         1024
+#define PIXIE_HEIGHT        512
+#define PIXIE_PIPE          "/tmp/pixie.pipe"
+
+/* max buffer to send...*/
+#define MAX_PIXIE_BUFFER    32
 
 /* Pixie file descriptor. */
-extern int open_pixie_channel();
-extern void close_pixie_channel(int channel);
+extern void pxopen();
+extern void pxclose();
+extern void pxwrite(const char *format, ...);
 
 #endif /* __PIXIE_H__ */

@@ -46,6 +46,11 @@ export LIB_EXT = lib
 export EXE_EXT = ihx
 endif
 
+# Other extensions...
+export DAT_EXT = dat
+export GPY_EXT = g
+export FNT_EXT = f
+
 
 # Global settings: folders.
 export ROOT			=	$(realpath .)
@@ -61,8 +66,12 @@ SUBDIRS 			=	src $(LAB)
 # Default target
 .PHONY: all
 all: $(BUILD_DIR) $(SUBDIRS)
-	cp $(BUILD_DIR)/*.$(LIB_EXT) $(BIN_DIR)
-	find $(BUILD_DIR) -perm /a+x -exec cp {} $(BIN_DIR) \;
+	cp $(BUILD_DIR)/*.$(LIB_EXT) $(BIN_DIR) 2>/dev/null || :
+	cp $(BUILD_DIR)/*.$(GPY_EXT) $(BIN_DIR) 2>/dev/null || :
+	cp $(BUILD_DIR)/*.$(FNT_EXT) $(BIN_DIR) 2>/dev/null || :
+	cp $(BUILD_DIR)/*.$(DAT_EXT) $(BIN_DIR) 2>/dev/null || :
+	find $(BUILD_DIR) -perm /a+x -exec cp {} $(BIN_DIR) \; 2>/dev/null || :
+
 
 
 .PHONY: $(BUILD_DIR)
