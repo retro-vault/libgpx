@@ -3,6 +3,5 @@
         "${workspaceFolder}/include",
         "${workspaceFolder}/src",
         "${workspaceFolder}/src/native"
-    ],
-    "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
+    ]
 }
