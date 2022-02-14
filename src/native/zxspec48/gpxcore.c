@@ -80,11 +80,11 @@ uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
     return 0;
 }
 
-void gpx_line_style(gpx_t *g, uint8_t line_style) {
+void gpx_set_line_style(gpx_t *g, uint8_t line_style) {
     g->line_style=line_style;
 }
 
-void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
+void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
     
     /* copy brush */
     _memcpy(&(g->fill_brush),fill_brush,fill_brush_size);

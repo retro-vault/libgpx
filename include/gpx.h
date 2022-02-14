@@ -19,7 +19,7 @@
 
 /* ----- core gpx new type(s) ---------------------------------------------- */
 typedef int16_t coord;
-typedef int16_t color;                  /* if more then 16 colors, then it's a pointer */
+typedef uint16_t color;                 /* depends on implementation */
 
 
 
@@ -31,8 +31,13 @@ typedef struct rect_s {                 /* the rectangle */
 	coord y1;
 } rect_t;
 
+typedef struct point_s {
+    coord x;
+    coord y;
+} point_t;
+
 /* drawing mode */
-#define BLT_NONE            0           /* no drawing, pen up */
+#define BLT_NONE            0           /* no drawing, why? */
 #define BLT_COPY            1           /* standard operation */
 #define BLT_XOR             2           /* XOR operations */
 
@@ -104,6 +109,7 @@ extern gpx_resolution_t *gpx_get_disp_page_resolution(
     gpx_t *g,
     gpx_resolution_t *res);
 
+
 /* ----- drawing modes, styles, patterns, colors --------------------------- */
 
 #define PG_DISPLAY  1
@@ -128,10 +134,10 @@ extern void gpx_set_clip_area(gpx_t *g, rect_t *clip_area);
 extern void gpx_set_blit(gpx_t *g, uint8_t blit);
 
 /* set line style  */
-extern void gpx_line_style(gpx_t *g, uint8_t line_style);
+extern void gpx_set_line_style(gpx_t *g, uint8_t line_style);
 
 /* set fill brush */
-extern void gpx_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
+extern void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush);
 
 
 
@@ -146,15 +152,23 @@ extern void gpx_draw_pixel(gpx_t *g, coord x, coord y);
 /* draw circle */
 extern void gpx_draw_circle(gpx_t *g, coord x0, coord y0, coord radius);
 
-/* -draw line */
+/* draw line */
 extern void gpx_draw_line(gpx_t *g, coord x0, coord y0, coord x1, coord y1);
 
-/* -draw rectangle */
+/* draw rectangle */
 extern void gpx_draw_rect(gpx_t *g, rect_t *rect);
 
-/* -fill rectangle */
+/* draw polygon */
+extern void gpx_draw_polygon(gpx_t *g, int num_points, point_t points[]);
+
+/* fill rectangle */
 extern void gpx_fill_rect(gpx_t *g, rect_t *rect);
 
+/* fill circle */
+void gpx_fill_circle(gpx_t *g, coord x0, coord y0, coord radius);
+
+/* fill polygon */
+extern void gpx_fill_polygon(gpx_t *g, int num_points, point_t points[]);
 
 
 /* ----- glyphs ------------------------------------------------------------ */

@@ -27,12 +27,11 @@ extern void _hline(coord x0, coord x1, coord y);
 /* std line */
 extern void _line(coord x0, coord y0, coord x1, coord y1);
 
-/* draw fast line */ 
-extern void _ef9367_draw_line(
-    coord x0, 
-    coord y0, 
-    coord x1,
-    coord y1);  
+/* fast rotate byte left */
+extern uint8_t _roleft(uint8_t b, uint8_t shifts);
+
+/* fast rotate byte left */
+extern uint8_t _roright(uint8_t b, uint8_t shifts);
 
 /* stride */
 extern void _stridexy(
@@ -53,7 +52,7 @@ typedef struct tiny_clip_s {
 } tiny_clip_t;
 
 /* tiny */
-extern int _tinyxy(
+extern void _tinyxy(
     coord x, 
     coord y, 
     uint8_t *moves,
