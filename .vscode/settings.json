@@ -1,8 +1,4 @@
 {
-    "files.associations": {
-        "stdint.h": "c",
-        "*.txtc": "c"
-    },
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/include",
         "${workspaceFolder}/src",
