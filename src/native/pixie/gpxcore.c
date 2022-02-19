@@ -133,17 +133,21 @@ void gpx_set_resolution(gpx_t *g, uint8_t resolution) {
 }
 
 void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
-    UNUSED(g);
-    UNUSED(page);
-    UNUSED(pgop);
+    if (pgop&PG_DISPLAY) {
+        g->display_page=page;
+        pxwrite("PAGE DISPLAY %d\n",page);
+    }
+    if (pgop&PG_WRITE) {
+        g->write_page=page;
+        pxwrite("PAGE WRITE %d\n",page);
+    }
 }
 
 uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
-    UNUSED(g);
-    UNUSED(page);
-    UNUSED(pgop);
-    /* always the same page */
-    return 0;
+    if (pgop==PG_DISPLAY)
+        return g->display_page;
+    else
+        return g->write_page;
 }
 
 void gpx_set_line_style(gpx_t *g, uint8_t line_style) {

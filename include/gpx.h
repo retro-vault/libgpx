@@ -110,6 +110,7 @@ extern gpx_resolution_t *gpx_get_disp_page_resolution(
     gpx_resolution_t *res);
 
 
+
 /* ----- drawing modes, styles, patterns, colors --------------------------- */
 
 #define PG_DISPLAY  1
@@ -165,10 +166,11 @@ extern void gpx_draw_polygon(gpx_t *g, int num_points, point_t points[]);
 extern void gpx_fill_rect(gpx_t *g, rect_t *rect);
 
 /* fill circle */
-void gpx_fill_circle(gpx_t *g, coord x0, coord y0, coord radius);
+extern void gpx_fill_circle(gpx_t *g, coord x0, coord y0, coord radius);
 
 /* fill polygon */
 extern void gpx_fill_polygon(gpx_t *g, int num_points, point_t points[]);
+
 
 
 /* ----- glyphs ------------------------------------------------------------ */

@@ -299,7 +299,15 @@ void gpx_draw_string(
     /* first get spacing hint */
     while (*text)
     {
-        uint16_t offs = f->glyph_offsets[*text - f->first_ascii];
+#ifdef __SDCC
+    uint16_t offs = (f->glyph_offsets)[*text - f->first_ascii];
+#else
+    uint8_t* ptr = (uint8_t*)f + 5; /* different size of zero array for linux */
+    uint8_t 
+        *high=ptr + 2*(*text - f->first_ascii),
+        *low=high+1;
+    uint16_t offs = *high*256+*low;
+#endif
         raster_glyph_t *glyph = (raster_glyph_t *)(start + offs);
         gpx_draw_glyph(g, x, y, (glyph_t *)glyph);
         x = x + glyph->width + f->hor_spacing_hint;
