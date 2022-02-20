@@ -40,4 +40,10 @@ extern void _ef9367_draw_line(
     unsigned int x1,
     unsigned int y1);  
 
+/* set display page */
+extern void _ef9367_set_dpage(int page);
+
+/* set write page */
+extern void _ef9367_set_wpage(int page);
+
 #endif /* __EF9367_H__ */

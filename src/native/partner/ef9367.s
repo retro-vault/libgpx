@@ -15,6 +15,8 @@
 		.globl	__ef9367_init
         .globl 	__ef9367_cls
         .globl  __ef9367_set_blit_mode
+        .globl  __ef9367_set_dpage
+        .globl  __ef9367_set_wpage
         .globl  __ef9367_put_pixel
         .globl  __ef9367_move_right
         .globl  __ef9367_stride
@@ -42,88 +44,18 @@ yrev:
         ;; affects: a
 wait_for_gdp:
         ;; make sure GDP is free
-        in      a,(#EF9367_STS_NI)      ; read the status register
+        in      a,(EF9367_STS_NI)       ; read the status register
         and     #EF9367_STS_READY       ; get ready flag, it's the same bit
         jr      z,wait_for_gdp
         ret
 
-
-        ;; extern uint16_t test(uint8_t move, uint16_t tiny)
-        .globl  _test
-_test::
-        pop     bc                      ; get return address
-        pop     hl                      ; l=move, h=low (tiny)
-        pop     de                      ; e=high(tiny)
-        ;; restore stack
-        push    de
-        push    hl
-        push    bc
-
-        ;; store ix
-        push    ix
-
-        ;; shuffle parametersd
-        ld      a,l                     ; move to a
-        ld      l,h                     ; l=low(tiny)
-        ld      h,e                     ; h=high(tiny)
-        push    hl
-        pop     ix                      ; set ix
-        call    decode_dxdy             ; decode command
-        call    xy_inside_rect          ; set clip filter
-        ;; restore ix
-        pop     ix
+        ;; wait for VBL
+        ;; affects: a
+wait_vbl:
+        in      a,(EF9367_STS_NI)
+        and     #EF9367_STS_NI_VBLANK
+        jr      z,wait_vbl
         ret
-
-        ;; space for debug trace, 32 bytes
-_dtrace::
-        .dw     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-
-        .macro  WTRACE value,offset
-        push    af
-        ld      a,#value
-        WTRACEA offset
-        pop     af
-        .endm
-
-        .macro  WTRACEA offset
-        push    hl
-        push    de
-        ld      hl,#_dtrace
-        ld      d,#0
-        ld      e,#offset
-        add     hl,de
-        ld      (hl),a
-        pop     de
-        pop     hl
-        .endm
-
-        .macro  ITRACE offset
-        push    hl
-        push    de
-        push    af
-        ld      hl,#_dtrace
-        ld      d,#0
-        ld      e,#offset
-        add     hl,de
-        ld      a,(hl)
-        inc     a
-        ld      (hl),a
-        pop     af
-        pop     de
-        pop     hl
-        .endm
-
-        .macro  RTRACE offset
-        push    hl
-        push    de
-        ld      hl,#_dtrace
-        ld      d,#0
-        ld      e,#offset
-        add     hl,de
-        ld      a,(hl)
-        pop     de
-        pop     hl
-        .endm
 
 		;; given tiny_clip_t pointer, it checks if both
         ;; points are inside clip rectangle
@@ -364,6 +296,68 @@ __ef9367_init::
         ret
 
 
+        ;; --------------------------------
+		;; void _ef9367_set_dpage(int page)
+        ;; --------------------------------
+		;; sets the display page
+        ;; affects: af, hl, de
+__ef9367_set_dpage::
+        ;; get page into hl
+        pop     de
+        pop     hl
+        push    hl
+        push    de
+        ;; get current register to a
+        call    wait_for_gdp
+        in      a, (#PIO_GR_CMN)
+        ld      h,a                     ; store a to h
+        ld      a,l                     ; get page
+        or      a                       ; set flags
+        jr      z,sdp_zero              ; page is zero
+        ;; if we are here, page is 1
+        ld      a,h
+        or      #PIO_GR_CMN_DISP_PG
+        jr      sdp_done
+sdp_zero:
+        ld      a,h                     ; restore a
+        and     #~PIO_GR_CMN_DISP_PG    ; set DISP page bit to 0
+sdp_done:
+        push    af
+        call    wait_vbl
+        pop     af
+        out     (#PIO_GR_CMN),a         ; set page!
+        ret
+
+
+        ;; --------------------------------
+		;; void _ef9367_set_wpage(int page)
+        ;; --------------------------------
+		;; sets the write page
+        ;; affects: af, hl, de
+__ef9367_set_wpage::
+        ;; get page into hl
+        pop     de
+        pop     hl
+        push    hl
+        push    de
+        ;; get current register to a
+        call    wait_for_gdp
+        in      a, (#PIO_GR_CMN)
+        ld      h,a                     ; store a to h
+        ld      a,l                     ; get page
+        or      a                       ; set flags
+        jr      z,swp_zero              ; page is zero
+        ;; if we are here, page is 1
+        ld      a,h
+        or      #PIO_GR_CMN_WR_PG
+        jr      swp_done
+swp_zero:
+        ld      a,h                     ; restore a
+        and     #~PIO_GR_CMN_WR_PG      ; set WR page bit to 0
+swp_done:
+        out     (#PIO_GR_CMN),a         ; set page!
+        ret
+
 
         ;; ------------------
 		;; void _ef9367_cls()
@@ -371,8 +365,8 @@ __ef9367_init::
 		;; clear graphic screen
         ;; affect:  af
 __ef9367_cls::
-		ld a,#EF9367_CMD_CLS
-		call ef9367_cmd
+		ld      a,#EF9367_CMD_CLS
+		call    ef9367_cmd
         ret
 
 
@@ -853,51 +847,6 @@ tny_set_color:
 tny_eraser:
         ld      a,#EF9367_CMD_DMOD_CLR
         call    ef9367_cmd
-        ret
-
-TNY_TRACE::
-        ;; TRACE.
-        push    af
-        ;; points
-        ld      a,(ix)
-        WTRACEA 0
-        ld      a,1(ix)
-        WTRACEA 1
-        ld      a,2(ix)
-        WTRACEA 2
-        ld      a,3(ix)
-        WTRACEA 3
-        ;; rect
-        ld      a,10(ix)
-        WTRACEA 4
-        ld      a,11(ix)
-        WTRACEA 5
-        ld      a,12(ix)
-        WTRACEA 6
-        ld      a,13(ix)
-        WTRACEA 7
-        ;; status
-        ld      a,9(ix)
-        WTRACEA 8
-        ;; pos 4=offset
-        ld      a,4(ix)
-        WTRACEA 9    
-        ;; now store basic regs HL, DE and BC
-        ld      a,h
-        WTRACEA 16
-        ld      a,l
-        WTRACEA 17
-        ld      a,b
-        WTRACEA 18
-        ld      a,c
-        WTRACEA 19
-        ld      a,d
-        WTRACEA 20
-        ld      a,e
-        WTRACEA 21
-        ;; and original A value
-        pop     af
-        WTRACEA 10
         ret
 
 

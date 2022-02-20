@@ -88,7 +88,7 @@ void gpx_set_blit(gpx_t *g, uint8_t blit) {
         push    ix                      ; store index 
         ld      ix, #4                  ; index to 0
         add     ix, sp                  ; ix = sp
-        ld      l, (ix)                ; g to hl
+        ld      l, (ix)                 ; g to hl
         ld      h, 1(ix)
         ld      b, 2(ix)                ; blit mode into b
         ld      (hl), b                 ; update gpx_t
@@ -116,23 +116,21 @@ void gpx_set_clip_area(gpx_t *g, rect_t *clip_area) {
 }
 
 void gpx_set_page(gpx_t *g, uint8_t page, uint8_t pgop) {
-    g; page; pgop;
-    /* uint8_t grcc=0;  
-    if (
-        ((g->display_page)!=page) 
-        && ((pgop & PG_DISPLAY)!=0))
-    {} 
-    if ((pgop & PG_WRITE) && (g->write_page!=page))
-    {} 
-    */
-   
-    /* write grcc back */
+    if (pgop&PG_DISPLAY) {
+        g->display_page=page;
+        _ef9367_set_dpage(page);
+    }
+    if (pgop&PG_WRITE) {
+        g->write_page=page;
+        _ef9367_set_wpage(page);
+    }
 }
 
-uint8_t gpx_get_page(gpx_t *g, uint8_t pgop) {
-    g; pgop;
-    /* always the same page on speccy */
-    return 0;
+uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
+    if (pgop==PG_DISPLAY)
+        return g->display_page;
+    else
+        return g->write_page;
 }
 
 void gpx_set_line_style(gpx_t *g, uint8_t line_style) {
@@ -147,4 +145,8 @@ void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) 
 
     /* and store size. */
     g->fill_brush_size=fill_brush_size;
+}
+
+void gpx_set_color(gpx_t *g, color c, uint8_t ct) {
+    g; c; ct;
 }
