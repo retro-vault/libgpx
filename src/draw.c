@@ -304,8 +304,8 @@ void gpx_draw_string(
 #else
     uint8_t* ptr = (uint8_t*)f + 5; /* different size of zero array for linux */
     uint8_t 
-        *high=ptr + 2*(*text - f->first_ascii),
-        *low=high+1;
+        *low=ptr + 2*(*text - f->first_ascii),
+        *high=low+1;
     uint16_t offs = *high*256+*low;
 #endif
         raster_glyph_t *glyph = (raster_glyph_t *)(start + offs);
