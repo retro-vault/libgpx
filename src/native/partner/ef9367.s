@@ -323,7 +323,7 @@ sdp_zero:
         and     #~PIO_GR_CMN_DISP_PG    ; set DISP page bit to 0
 sdp_done:
         push    af
-        call    wait_vbl
+        call    wait_vbl                
         pop     af
         out     (#PIO_GR_CMN),a         ; set page!
         ret
