@@ -134,7 +134,10 @@ uint8_t gpx_get_page(gpx_t *g, uint8_t page, uint8_t pgop) {
 }
 
 void gpx_set_line_style(gpx_t *g, uint8_t line_style) {
+    /* remember into graphics context */
     g->line_style=line_style;
+    /* and set it... */
+    _ef9367_set_lstyle(line_style);
 }
 
 void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) {
@@ -149,4 +152,19 @@ void gpx_set_fill_brush(gpx_t *g, uint8_t fill_brush_size, uint8_t *fill_brush) 
 
 void gpx_set_color(gpx_t *g, color c, uint8_t ct) {
     g; c; ct;
+}
+
+void gpx_set_resolution(gpx_t *g, uint8_t resolution) {
+    
+    /* set HW resolution */
+    _ef9367_set_res(resolution);
+
+    /* store to internal cache */
+    _current_resolutions[0]=resolution;
+    _current_resolutions[1]=resolution;
+
+    /* clip rect... */
+    g->clip_area.y1 = resolution ? 
+        EF9367_LORES_HEIGHT - 1 :
+        EF9367_HIRES_HEIGHT - 1;
 }

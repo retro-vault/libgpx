@@ -24,6 +24,8 @@
         .globl  __ef9367_hline
         .globl  __ef9367_vline
         .globl  __ef9367_draw_line
+        .globl  __ef9367_set_lstyle
+        .globl  __ef9367_set_res
 	    
 		.include "ef9367.inc"
 
@@ -34,6 +36,8 @@ blit_mode:
         .db     1                       ; default mode is 1 (BL_COPY)
 pen_down:
         .db     1                       ; default is pen down
+lne_style:
+        .db     1                       ; line style
 yrev:
         .dw     1                       ; y reverse axis size
 
@@ -274,6 +278,94 @@ ef9367_dxdy::
         ret
 
 
+
+        ;; ----------------------------------
+		;; void __ef9367_set_res(uint8_t res)
+        ;; ----------------------------------
+        ;; sets the resolution
+        ;; affect:  
+__ef9367_set_res::
+        ;; get byte arg to L
+        pop     de
+        pop     hl
+        push    hl
+        push    de
+        ;; read current resolution
+        call    wait_for_gdp
+        in      a,(PIO_GR_CMN)
+        and     #PIO_GR_CMD_RES_MSK
+        ld      b,a                     ; store to b
+        ;; just two resolutions...
+        ld      a,l
+        or      a
+        jr      z,sres_high
+        ;; if we are here it is default 1024x256
+        ld      a,b
+        or      #PIO_GR_CMN_1024x256
+        ld      hl, #EF9367_LORES_HEIGHT - 1
+        jr      sres_set      
+sres_high:
+        ;; it is 1024x512
+        ld      a,b
+        or      #PIO_GR_CMN_1024x512
+        ld      hl, #EF9367_HIRES_HEIGHT - 1
+sres_set:
+        ;; and write new resolution
+        out     (PIO_GR_CMN),a
+        ld      (yrev),hl
+        ret
+
+
+        ;; ------------------------------------
+		;; void __ef9367_set_lstyle(uint8_t ls)
+        ;; ------------------------------------
+        ;; sets the line style...
+        ;; affect:  
+__ef9367_set_lstyle::
+        ;; get style into l
+        pop     de                      ; ret code
+        pop     hl                      ; style to l
+        push    hl                      ; restore...
+        push    de                      ; ...stack
+        ld      a,(lne_style)           ; get current style to a
+        cp      l                       ; same as l?
+        ret     z                       ; no change...
+        ld      a,l                     ; line style to a
+        cp      #0b11111111             ; solid line
+        jr      z,sls_solid
+        cp      #0b11001100             ; dotted
+        jr      z,sls_dotted
+        cp      #0b10101010             ; custom dotted
+        jr      z,sls_dotted
+        cp      #0b11110000             ; dashed
+        jr      z,sls_dashed
+        ;; if we are here it is custome style
+        ;; set solid style and remember it...
+sls_solid:
+        ld      h,#EF9367_CR2_SOLID
+        call    sls_update
+        jr      sls_remember
+sls_dotted:
+        ld      h,#EF9367_CR2_DOTTED
+        call    sls_update
+        jr      sls_remember
+sls_dashed:
+        ld      h,#EF9367_CR2_DASHED
+        call    sls_update
+        jr      sls_remember
+sls_update:
+        call    wait_for_gdp
+        in      a,(EF9367_CR2)          ; get current style
+        and     #0b11111100             ; reset bits 0 and 1
+        or      h                       ; write h into these bits
+        out     (EF9367_CR2),a          ; write back
+        ret 
+sls_remember:
+        ld      a,l                     ; line style to a and...
+        ld      (lne_style),a           ; ...store to mem
+        ret
+
+
         ;; -------------------
 		;; void _ef9367_init()
         ;; -------------------
@@ -282,14 +374,14 @@ ef9367_dxdy::
         ;; affect:  a, bc, flags
 __ef9367_init::
         ld      a,#0b00000011           ; pen down, default pen
-        out     (#EF9367_CR1),a         ; control reg 1 to default
+        out     (EF9367_CR1),a          ; control reg 1 to default
         xor     a                       ; a=0
-        out     (#EF9367_CR2),a         ; control reg 2 to default
-        out     (#EF9367_CH_SIZE),a     ; no scaling!
+        out     (EF9367_CR2),a          ; control reg 2 to default
+        out     (EF9367_CH_SIZE),a      ; no scaling!
         ;; this sets default (MAX) resolution
         ;; and default page to 0
         ld      a,#PIO_GR_CMN_1024x512  
-		out     (#PIO_GR_CMN),a
+		out     (PIO_GR_CMN),a
         ;; cache resolution as yrev(erse)
         ld      hl, #EF9367_HIRES_HEIGHT - 1
         ld      (yrev),hl
@@ -309,7 +401,7 @@ __ef9367_set_dpage::
         push    de
         ;; get current register to a
         call    wait_for_gdp
-        in      a, (#PIO_GR_CMN)
+        in      a, (PIO_GR_CMN)
         ld      h,a                     ; store a to h
         ld      a,l                     ; get page
         or      a                       ; set flags
@@ -325,7 +417,7 @@ sdp_done:
         push    af
         call    wait_vbl                
         pop     af
-        out     (#PIO_GR_CMN),a         ; set page!
+        out     (PIO_GR_CMN),a          ; set page!
         ret
 
 

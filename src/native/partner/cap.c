@@ -38,16 +38,13 @@ gpx_cap_t* gpx_cap(gpx_t *g) {
     /* native idp resolution 1 */
     _resolutions[1].width=1024;
     _resolutions[1].height=256;
-    /* emulated resolution (does not exist on idp) 2 */
-    _resolutions[2].width=512;
-    _resolutions[2].height=256;
     
     /* populate pages */
     _cap.num_pages=2;
     _cap.pages=_pages;
-    _pages[0].num_resolutions=3;
+    _pages[0].num_resolutions=2;
     _pages[0].resolutions=_resolutions;
-    _pages[1].num_resolutions=3;
+    _pages[1].num_resolutions=2;
     _pages[1].resolutions=_resolutions;
 
     /* configure colors */
