@@ -283,6 +283,12 @@ void gpx_draw_glyph(
             tclip[13] = intersect.y1 - grect.y0;
             _tinyxy(x, y, dptr, tiny->moves, &tclip);
         }
+    } else if (glyph->class == GYCLS_LINES) {
+        /* We have lines. Line glyphs are stored as a series of 
+           pixels, with coordinates from 0 to 254. Value 255 is 
+           an escape sequence and is followed by an escape command.*/
+        lines_glyph_t *lines=(lines_glyph_t *)glyph;
+        
     }
 }
 

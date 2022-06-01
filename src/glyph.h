@@ -48,4 +48,27 @@ typedef struct tiny_glyph_s {
     uint8_t data[0];                    /* start of data */
 } tiny_glyph_t;
 
+/* Line glyph header. */
+typedef struct line_glyph_s {
+    uint8_t len_msb:5;                  /* data len MSB */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t width;                      /* width-1 (1-256) */
+    uint8_t height;                     /* height-1 (1-256) */
+    uint8_t len_lsb;                    /* number of moves */
+    uint8_t data[0];                    /* start of data */
+} line_glyph_t;
+
+/* RLE glyph header. */
+typedef struct rle_glyph_s {
+    uint8_t height_msb:2;               /* height MSB */
+    uint8_t width_msb:2;                /* width MSB */
+    uint8_t byte_aligned:1;             /* reserved */
+    uint8_t class:3;                    /* high nibble */
+    uint8_t width_lsb;                  /* width-1 (1-256) */
+    uint8_t height_lsb;                 /* height-1 (1-256) */
+    uint8_t reserved2;                  /* number of moves */
+    uint8_t data[0];                    /* start of data */
+} rle_glyph_t;
+
+
 #endif /* __GLYPH_H__ */

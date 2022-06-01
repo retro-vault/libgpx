@@ -84,38 +84,143 @@ And the result on ZX Spectrum 48K.
 
 ## Page switching
 
-If the platform supports multiple pages you can call `gpx_get_page()` and `gpx_set_page()` to switch pages. Both calls also contain `flags` member which tell whether you'd just like to redirect graphical writes to page (but not switch) or switch to a page.
+If the platform supports multiple pages use `gpx_get_page()` to 
+get current page and `gpx_set_page()` to switch to desired page. 
 
-Once you set the page, all operations will go to that page.
+ > It is possible to set current **display page** and current
+ > **write page**. The display page is the currently shown page,
+ > and the write page is the target page for all drawing. 
+
+You can use a combination of bitmask flags `PG_WRITE` and `PG_DISPLAY` 
+to set the page.
+
+~~~cpp
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#include "partner.h"
+
+#include <gpx.h>
+
+int main() {
+
+    /* enter gpx mode */
+    gpx_t *g=gpx_init();
+    if (g==NULL) {
+        printf("Can't enter graphics mode.\n");
+        return 1;
+    }
+
+    /* clear screen */
+    gpx_cls(g);
+
+    /* animation using page switching. */
+    gpx_set_page(g,1,PG_WRITE);
+    rect_t pg1rect={100,100,200,200};
+    gpx_fill_rect(g,&pg1rect);
+    
+    rect_t pg0rect={300,300,400,400};
+    gpx_set_page(g,0,PG_WRITE);
+    gpx_fill_rect(g,&pg0rect);
+
+
+    /* switch pages 100 times */
+    for(int i=0;i<100;i++)
+        gpx_set_page(g,i%2,PG_DISPLAY);
+
+    /* leave gpx mode */
+    gpx_exit(NULL);
+
+    return 0;
+}
+~~~
 
 ## Colors
 
-The library at present only supports monochrome graphics, but its interface is prepared for color displays. You can set the color by calling `gpx_set_color()`, passing the `color_t` and color flags. Flags are used because on some systems you can set background and foreground color (for example: paper and ink on ZX Spectrum).
+The library at present only supports monochrome graphics, but its interface is prepared for color displays. You can set the color by calling `gpx_set_color()`, passing the `color` and color flags. Flags are used because on some systems you can set background and foreground color (for example: paper and ink on ZX Spectrum).
 
 You can obtain black and white colors and number of supported colors by calling the `gpx_query_cap()`.
 
+## Rectangles
+
+Rectangle type `rect_t` has four coordinates: `x0`,`y0`,`x1` and `y1`. Operations that consume rectangles always include border. Hence, a rectangle with same coordinates is a line or a pixel. Following core rectangle arithmetic functions are provided with the library.
+
+~~~cpp
+/* does rectangle contains point? */
+extern bool gpx_rect_contains(rect_t *r, coord x, coord y);
+
+/* do rectangles overlap? */
+extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
+
+/* intersection of rectangles */
+extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
+
+/* normalize rect coordinates i.e. ie from left top to right bottom */
+extern void gpx_rect_norm(rect_t *r);
+~~~
+
 ## Clipping
 
-You can set a rectangular clipping region for all drawing. The clipping region is of type `rect_t` and is set by calling `gpx_set_clip()`. Passing `NULL` sets entire screen as the clipping region (=no clipping).
+You can set a rectangular clipping region for all drawing. The clipping region is of type `rect_t` and is set by calling `gpx_set_clip_area()`. Passing `NULL` sets entire screen as the clipping region (=no clipping).
+
+ > After the call to `gpx_init`, the defautl clipping area is entire screen.
+
+~~~cpp
+/* set clip. rectangle to 0, 0, 99, 99*/
+rect_t ul_area={0, 0, 99, 99};
+gpx_set_clip_area(g,&ul_area);
+/* after this call all drawing operations outside the clip 
+   rectangle will be invisible */
+~~~
 
 ## Blit mode
 
-Operations such as drawing lines, use blit mode. At present two blit modes are supported: `BM_XOR` and `BP_COPY`. You can set the blit mode using function `gpx_set_blit()` and read it by `gpx_get_blit()`.
+Operations such as drawing lines, use blit mode. At present three blit 
+modes are supported: `BLT_NONE`, `BLT_XOR` and `BLT_COPY`. You can set the blit mode using function `gpx_set_blit()` and read it by `gpx_get_blit()`.
 
-## Patterns
+> Mode `BM_NONE` is a dummy mode and disables all drawing operations.
 
-### Line pattern
+~~~cpp
+/* set XOR drawing mode for all drawing operations. */
+gpx_set_blit(g,BLT_XOR);
+~~~
 
-Call `set_line_pattern()` to pass a 1 byte line pattern. You can use predefined line patterns or custom line patterns. If you use a predefined pattern it might get hardware accelerated. 
+## Styles
 
-The predefined patterns are:
- * LP_SOLID    11111111
- * LP_DOTTED   10101010
- * LP_DASHED   11001100
+### Line styles
 
-### Fill pattern
+Call `gpx_set_line_style()` to pass a 1 byte line pattern. Line styles are applied to all draw fuinctions: lines, rectangles, circles, and polygons. But not to glyphs. 
 
-Call the `set_fill_pattern()` to pass a min. 1 to max 8 byte fill pattern.
+You can use predefined line patterns or custom line patterns. If you use a predefined pattern the drawing
+might get hardware accelerated. 
+
+The predefined (well known) line style constants:
+ * LS_SOLID    11111111
+ * LS_DOTTED   10101010
+ * LS_DASHED   11001100
+
+~~~cpp
+uint8_t shft_dashed_style=0x33;     /* 00110011 */
+gpx_set_line_style(g,shft_dashed_style);
+~~~
+
+### Fill brushes
+
+Call the `gpx_set_fill_brush()` to pass a min. 1 to max 8 byte fill pattern. Fill pattern will be applied to all fill functions: rectangles, circles and polygons. But not to glyphs.
+
+ > Fills are implemented by scan line drawing. Each line is assigned one byte from the fill pattern as its'
+ > line style. If all bytes in fill are well known line styles, then fill might be accelerated.
+
+~~~cpp
+/* fill circle with cross pattern */
+uint8_t cross[8] = {
+    0x81, 0x42, 0x24, 0x18, /* internals: each byte is line style */
+    0x18, 0x24, 0x42, 0x81
+};
+gpx_set_fill_brush(g,8,cross);
+gpx_fill_circle(g,550,300,100);
+~~~
 
 ## Resolution
 
@@ -144,7 +249,10 @@ void main() {
 ## Clearing the screen
 
 Use `gpx_cls()` to clear screen. Clear screen will respect 
-current back color, fore color and page setting.
+current back color, and fore color. 
+
+ > This function will, due to some hardware limitations, ignore current page settings 
+ > and always clear the display page.
 
 ~~~cpp
 #include <gpx.h>
@@ -233,7 +341,7 @@ The rest of the 4 byte structure depends on glyph class.
 
 ![glyph_t structure](docs/img/glyph_t.png)
 
-#### Glyph format limits
+### Glyph format limits
 
 The `*glyph_t` structure immposes some reasonable limits for a glyph. 
 All glyhps except the *RLE* are limited to 256x256. *RLE* has
@@ -247,7 +355,74 @@ have max. of 4096 lines.
  > commands for *Iskra Delta Partner GDP* is not supported on other
  > platforms.
 
-### Array of glyphs: the envelope approach
+### LINES format
+
+The lines format uses two subsequent bytes of data as relative x,y
+coordinates of point from 0-254. A value of 255 is the escape sequence
+and is followed by a command.
+
+Here's an example.
+
+`12, 15, 30, 40, 20, 20, 255, 0, 17, 13, 20, 28`
+
+first stroke is
+
+`line from 12, 15 to 30, 40`
+`line from 30, 40 to 20, 20`
+
+escape sequence `255` followed by command `0` means "line break" i.e.
+end of stroke. Next stroke is
+
+`line from 17,13 to 20,20`
+
+ > The only available command  is `0` which interrupts the current stroke.
+
+### RLE format
+
+RLE is an encoding for glyphs, optimized for fast drawing. You might've 
+read about RLE "compression", which is based on wriing bytes that releat
+with a byte value and a counter. 
+
+In *libgpx* we talk about encoding, because the focus is not on compression,
+but on faster drawing.
+
+RLE format in libgpx can be aligned on a byyte or a bit boundary. 
+
+#### Byte aligned RLE 
+
+Byte aligned RLE rewrites repeating bytes with byte value and a counter. If the value does not repeat it is not compressed. For example value `ABCDE` would not change. But if the value repeats multiple times, then it is escaped by repeating it twice and the third byte is number of repetitions. For example the value `AAAAAAB` would be compressed into `AA6B`.
+
+Byte aligned RLE is useful for raster optimization and can actually achieve compression.
+
+#### Bit aligned RLE
+
+Bit or pixel aligned RLE breaks down image to vector operations. 
+Let's examine how this is done on following scan- line example, 
+encoded as a pattern of bits: 1 for pixel set and 0 for background.
+
+`10001111 11100111 11111111 11111111 11111111 01010101`
+
+To encode this pattern we'll need recognize fast drawing line styles inside
+this glyph. We can see that this line can be written as:
+
+`1 000 1111111 00 111111111111111111111111111 01010101`
+
+We recognize three line styles: `11111111`, `00000000` and `01010101`. So we can encode this this as follows:
+
+11111111(1)
+00000000(3)
+11111111(7)
+00000000(2)
+11111111(27)
+01010101(8)
+
+The first number is the line style and second number is line length.
+
+ > I'm putting "compression" in quotes because this is not really a compression, 
+ > but a way to speed up drawing by using vectors. Instead of 48 pixels, we draw
+ > 6 lines. On a vector display this leads to much better pefrormance. 
+
+## Array of glyphs: the envelope approach
 
 Glyphs can be combined into more complex bitmapped structures, such as 
 fonts, animations, bitmaps, icons, or mouse mouse cursors. All of these 
@@ -280,7 +455,7 @@ You then simply call `gpx_draw_string()` to draw a sting.
 
  > Don't forget that fonts also use the *blit mode*, and if it is not `BM_COPY`, background may not be deleted.
 
-### Font header
+## Font header
 
 The font header structure contains basic information about the font and a table of pointers to each
 glyph. This way glyphs can have different sizes (i.e. in proportional fonts, the letter i takes much
@@ -288,8 +463,6 @@ less memory space than the letter w) and we avoid expensive calculations to find
 
 Because each glyph contains its width, it also makes it easy for us to measure strings by simply
 iterating through all the glyphs in the string, and maxing the height and summing the width.
-
-
 
 ### Measuring text
 
@@ -328,6 +501,22 @@ Use `gpx_measure_string()` to measure string.
 | Page(s)                   | 1         |
 | *libgpx* size in bytes    | N/A       |
 | Implementation internals  | [Available](ZXSPEC48.md) |
+
+---
+
+## Pixie Linux Vector Display Emulator
+
+![Pixie](docs/img/zxspec48.jpg)
+
+| Trait                     | Value     |
+|---------------------------|----------:|
+| Processor                 | Any Linux |
+| Graphics type             | Vector    |
+| Native resolution         | Custom    |
+| Colors                    | 256       |
+| Page(s)                   | Custom    |
+| *libgpx* size in bytes    | N/A       |
+| Implementation internals  | [Available](http://github.com/tstih/pixie) |
 
 [language.badge]: https://img.shields.io/badge/languages-c11%2C%20z80%20assembly-blue.svg
 
