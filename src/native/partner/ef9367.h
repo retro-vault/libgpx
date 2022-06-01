@@ -23,6 +23,8 @@
 /* hires mode screen size */
 #define EF9367_HIRES_WIDTH      1024
 #define EF9367_HIRES_HEIGHT     512
+#define EF9367_LORES_WIDTH      1024
+#define EF9367_LORES_HEIGHT     256
 
 /* initializes gdp, enter hires (1024x512) mode */
 extern void _ef9367_init();
@@ -39,5 +41,17 @@ extern void _ef9367_draw_line(
     unsigned int y0, 
     unsigned int x1,
     unsigned int y1);  
+
+/* set display page */
+extern void _ef9367_set_dpage(int page);
+
+/* set write page */
+extern void _ef9367_set_wpage(int page);
+
+/* set line style */
+extern void _ef9367_set_lstyle(uint8_t ls);
+
+/* set resolution...0=hires, 1=lores */
+extern void _ef9367_set_res(uint8_t res);
 
 #endif /* __EF9367_H__ */

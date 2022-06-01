@@ -11,6 +11,8 @@
         ;; --- limits ---------------------------------------------------------
         .equ    EF9367_HIRES_WIDTH,     1024
         .equ    EF9367_HIRES_HEIGHT,    512
+        .equ    EF9367_LORES_WIDTH,     1024
+        .equ    EF9367_LORES_HEIGHT,    256
         .equ    EF9367_MAX_DELTA,       0xff
 
         ;; --- blit modes -----------------------------------------------------
@@ -114,7 +116,9 @@
         .equ    PIO_GR_CMN_WR_PG,       0x02    ; write page of memory
         .equ    PIO_GR_CMN_XOR_MODE,    0x04    ; write mode (xor)
         ;; bits 3-4 are resolution
-        .equ    PIO_GR_CMN_1024x512,    0x18    ; hires        
+        .equ    PIO_GR_CMN_1024x512,    0x18    ; hires    
+        .equ    PIO_GR_CMN_1024x256,    0x00    ; lores
+        .equ    PIO_GR_CMD_RES_MSK,     0xE7    ; resolutio mask    
         .equ    PIO_GR_CMN_EF9367I,     0x20    ; RO:EF9367 interrupt 
         .equ    PIO_GR_CMN_AVDINT,      0x40    ; RO:avd interrupt
         .equ    PIO_GR_CMN_SCRL_MDE,    0x80    ; scroll mode
