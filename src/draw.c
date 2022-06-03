@@ -287,7 +287,7 @@ void gpx_draw_glyph(
         /* We have lines. Line glyphs are stored as a series of 
            pixels, with coordinates from 0 to 254. Value 255 is 
            an escape sequence and is followed by an escape command.*/
-        lines_glyph_t *lines=(lines_glyph_t *)glyph;
+        /* lines_glyph_t *lines=(lines_glyph_t *)glyph; */
         
     }
 }
