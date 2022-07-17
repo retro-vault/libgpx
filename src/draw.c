@@ -285,8 +285,11 @@ void gpx_draw_glyph(
         }
     } else if (glyph->class == GYCLS_LINES) {
         /* We have lines. Line glyphs are stored as a series of 
-           pixels, with coordinates from 0 to 254. Value 255 is 
-           an escape sequence and is followed by an escape command.*/
+           delta pixels, with coordinates from -127 to 127. 
+           Value -128 is an escape sequence and is followed by 
+           an escape command.
+           
+           */
         /* lines_glyph_t *lines=(lines_glyph_t *)glyph; */
         
     }
