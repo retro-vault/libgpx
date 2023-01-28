@@ -324,18 +324,17 @@ the glyph. Each glyph type has its own optimal drawing function.
 
 ### Glyph classes
 
-Each glyph has a 4 byte glyph header. First three bits tell the glyph class.
-At present only 2 bits are used for the class, and bit 0 is reserved for
-possible future extensions.
+Each glyph has a 4 byte glyph header. First three bits of the first byte tell the glyph class.
 
 Following glyph classes are supported.
 
 | Name      | Class | Description                                |
 |-----------|-------|--------------------------------------------|
-| Raster    |  X00  | Encoded as standard 1bpp raster            |
-| Tiny      |  X01  | Encoded as Partners' relative movements    |
-| Lines     |  X10  | Encoded as lines (scanlines or outline)    |
-| RLE       |  X11  | Encoded as RLE compressed graphics         |
+| Raster    |  000  | Encoded as standard 1bpp raster            |
+| Tiny      |  001  | Encoded as Partners' relative movements    |
+| Lines     |  010  | Encoded as lines (scanlines or outline)    |
+| RLE bit   |  011  | Encoded as bit RLE graphics                |
+| RLE byte  |  100  | Encoded as byte RLE graphics               |
 
 The rest of the 4 byte structure depends on glyph class.
 
@@ -358,24 +357,37 @@ have max. of 4096 lines.
 ### LINES format
 
 The lines format uses two subsequent bytes of data as relative x,y
-coordinates of point from 0-254. A value of 255 is the escape sequence
-and is followed by a command.
+coordinates of point from -127 to 127. A value of -128 is the escape sequence and is followed by a command.
 
 Here's an example.
 
-`12, 15, 30, 40, 20, 20, 255, 0, 17, 13, 20, 28`
+`12, 15, 30, 40, 20, 20, -128, 0, 17, 13, 20, 28`
 
 first stroke is
 
 `line from 12, 15 to 30, 40`
 `line from 30, 40 to 20, 20`
 
-escape sequence `255` followed by command `0` means "line break" i.e.
-end of stroke. Next stroke is
+escape sequence `-128` followed by command `0` means "line break" i.e.end of stroke. Next stroke is
 
 `line from 17,13 to 20,20`
 
- > The only available command  is `0` which interrupts the current stroke.
+Following are available commands
+
+| Code (bin)     | Command                       |
+|:--------------:|-------------------------------|
+|  0000 00 0 0   | End of current stroke.        |
+|  0000 xx 0 0   | Reserved                      |
+|  0000 00 1 0   | End of stroke, no color       | 
+|  0000 01 1 0   | End of stroke, set fore color | 
+|  0000 10 1 0   | End of stroke, set back color |
+|  0000 11 1 0   | Reserved                      |
+|  0000 00 1 1   | Set color to transparent      |
+|  0000 01 1 1   | Set fore color                |
+|  0000 10 1 1   | Set back color                |
+|  0000 11 1 1   | Reserved                      |
+
+ > Bit 0 tells if the stroke continues (=1) or ends (=0). Bit 1 tells if pen changes. Bits 3 and 4 tell the new pen. Top nibble is reserved for more commands.
 
 ### RLE format
 
