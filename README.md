@@ -1,538 +1,598 @@
-![status.badge] ![language.badge] [![compiler.badge]][compiler.url] 
-
 # libgpx
 
-Welcome to **libgpx**, a multiplatform graphics library for 8bit micros. 
-
-# Compiling libgpx
-
-Run the `make` command with platform name as target in the root directory.
-
- > Supported platforms are `zxspec48` and `partner` and are 
- > case sensitive!
-
-~~~
-make PLATFORM=partner
-~~~
-
-After the compilation object and debug files are available in the `build` directory, and the `libgpx.lib` is copied to the `bin` directory. 
-
-# Using libgpx
-
-## Tiny coding convention
-
-(...to be continued...)
-
-## Dependencies
-
-*libgpx* has been designed as an independent library. It incudes 
-`stdbool.h`, and `stdint.h`, but uses its' own implementations.
-
-## Initializing
-
-To initialize the library, call `gpx_init()` function. This function returns a pointer to the `gpx_t` structure, which you pass to all other functions of the *libgpx*.
-
-After you're done with using the library, you should call the `gpx_exit()`. On some platform this call just deletes the `gpx_t` structure. On others it switches from grapics back to text mode.
-
-~~~cpp
-#include <gpx.h>
-
-void main() {
-    gpt_t* g=gpx_init();
-    /* your drawing code here */
-    gpx_exit(g);
-}
-~~~
-
-## Querying platform graphics capabilities
-
-If you would like to know what the gpx library can do on your platform, you can call `gpx_cap().` This function will query platform graphics capabilities (resolution, no. of pages, black and white color, etc.). This function will return pointer to `gpx_cap_t`.
-
-~~~cpp
-#include <gpx.h>
-#include <stdio.h>
-
-void main() {
-    /* enter gpx mode */
-    gpx_t *g=gpx_init();
-
-    /* query graphics capabilities */
-    gpx_cap_t *cap=gpx_cap(g);
-    printf("GRAPHICS PROPERTIES\n\n");
-    printf("No. colors %d\nBack color %d\nFore color %d\n",
-        cap->num_colors,
-        cap->back_color,
-        cap->fore_color);
-    printf("Sup. pages %d\n", cap->num_pages);
-    /* enum. pages */
-    for(int p=0; p<cap->num_pages; p++)
-        /* enum resolutions (for page) */
-        for (int r=0; r<cap->pages[p].num_resolutions; r++)
-            printf(" P%d Resol. %dx%d\n",
-                p,
-                cap->pages[p].resolutions[r].width,
-                cap->pages[p].resolutions[r].height);
-    
-    /* leave gpx mode */
-    gpx_exit(NULL);
-}
-~~~
-
-And the result on ZX Spectrum 48K.
-
-![ZX Spectrum 48K gpx_cap()](docs/img/zxspec48-gpx_cap.png)
-
-## Page switching
-
-If the platform supports multiple pages use `gpx_get_page()` to 
-get current page and `gpx_set_page()` to switch to desired page. 
-
- > It is possible to set current **display page** and current
- > **write page**. The display page is the currently shown page,
- > and the write page is the target page for all drawing. 
-
-You can use a combination of bitmask flags `PG_WRITE` and `PG_DISPLAY` 
-to set the page.
-
-~~~cpp
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-
-#include "partner.h"
-
-#include <gpx.h>
-
-int main() {
-
-    /* enter gpx mode */
-    gpx_t *g=gpx_init();
-    if (g==NULL) {
-        printf("Can't enter graphics mode.\n");
-        return 1;
-    }
-
-    /* clear screen */
-    gpx_cls(g);
-
-    /* animation using page switching. */
-    gpx_set_page(g,1,PG_WRITE);
-    rect_t pg1rect={100,100,200,200};
-    gpx_fill_rect(g,&pg1rect);
-    
-    rect_t pg0rect={300,300,400,400};
-    gpx_set_page(g,0,PG_WRITE);
-    gpx_fill_rect(g,&pg0rect);
-
-
-    /* switch pages 100 times */
-    for(int i=0;i<100;i++)
-        gpx_set_page(g,i%2,PG_DISPLAY);
-
-    /* leave gpx mode */
-    gpx_exit(NULL);
-
-    return 0;
-}
-~~~
-
-## Colors
-
-The library at present only supports monochrome graphics, but its interface is prepared for color displays. You can set the color by calling `gpx_set_color()`, passing the `color` and color flags. Flags are used because on some systems you can set background and foreground color (for example: paper and ink on ZX Spectrum).
-
-You can obtain black and white colors and number of supported colors by calling the `gpx_query_cap()`.
-
-## Rectangles
-
-Rectangle type `rect_t` has four coordinates: `x0`,`y0`,`x1` and `y1`. Operations that consume rectangles always include border. Hence, a rectangle with same coordinates is a line or a pixel. Following core rectangle arithmetic functions are provided with the library.
-
-~~~cpp
-/* does rectangle contains point? */
-extern bool gpx_rect_contains(rect_t *r, coord x, coord y);
-
-/* do rectangles overlap? */
-extern bool gpx_rect_overlap(rect_t *a, rect_t *b);
-
-/* intersection of rectangles */
-extern rect_t* gpx_rect_intersect(rect_t *a, rect_t *b, rect_t *intersect);
-
-/* normalize rect coordinates i.e. ie from left top to right bottom */
-extern void gpx_rect_norm(rect_t *r);
-~~~
-
-## Clipping
-
-You can set a rectangular clipping region for all drawing. The clipping region is of type `rect_t` and is set by calling `gpx_set_clip_area()`. Passing `NULL` sets entire screen as the clipping region (=no clipping).
-
- > After the call to `gpx_init`, the defautl clipping area is entire screen.
-
-~~~cpp
-/* set clip. rectangle to 0, 0, 99, 99*/
-rect_t ul_area={0, 0, 99, 99};
-gpx_set_clip_area(g,&ul_area);
-/* after this call all drawing operations outside the clip 
-   rectangle will be invisible */
-~~~
-
-## Blit mode
-
-Operations such as drawing lines, use blit mode. At present three blit 
-modes are supported: `BLT_NONE`, `BLT_XOR` and `BLT_COPY`. You can set the blit mode using function `gpx_set_blit()` and read it by `gpx_get_blit()`.
-
-> Mode `BM_NONE` is a dummy mode and disables all drawing operations.
-
-~~~cpp
-/* set XOR drawing mode for all drawing operations. */
-gpx_set_blit(g,BLT_XOR);
-~~~
-
-## Styles
-
-### Line styles
-
-Call `gpx_set_line_style()` to pass a 1 byte line pattern. Line styles are applied to all draw fuinctions: lines, rectangles, circles, and polygons. But not to glyphs. 
-
-You can use predefined line patterns or custom line patterns. If you use a predefined pattern the drawing
-might get hardware accelerated. 
-
-The predefined (well known) line style constants:
- * LS_SOLID    11111111
- * LS_DOTTED   10101010
- * LS_DASHED   11001100
-
-~~~cpp
-uint8_t shft_dashed_style=0x33;     /* 00110011 */
-gpx_set_line_style(g,shft_dashed_style);
-~~~
-
-### Fill brushes
-
-Call the `gpx_set_fill_brush()` to pass a min. 1 to max 8 byte fill pattern. Fill pattern will be applied to all fill functions: rectangles, circles and polygons. But not to glyphs.
-
- > Fills are implemented by scan line drawing. Each line is assigned one byte from the fill pattern as its'
- > line style. If all bytes in fill are well known line styles, then fill might be accelerated.
-
-~~~cpp
-/* fill circle with cross pattern */
-uint8_t cross[8] = {
-    0x81, 0x42, 0x24, 0x18, /* internals: each byte is line style */
-    0x18, 0x24, 0x42, 0x81
+`libgpx` is a hand-optimized 1-bit-per-pixel graphics library for Z80 targets.
+
+Primary target today is ZX Spectrum (`src/zx`).
+Partner backend (`src/partner`) is still in progress.
+
+The public API contract is defined in:
+- `include/libgpx.h`
+
+## What This Project Gives You
+
+- A strict, portable drawing API for 1bpp framebuffers.
+- A ZX Spectrum backend implemented in hand-written Z80 assembly.
+- Emulator-based behavioral testing that compares:
+  - real backend output
+  - independent oracle/stub output
+- Size-focused build flow (ROM-oriented).
+
+## Repository Layout
+
+- `include/libgpx.h`: public API and data formats.
+- `src/zx/`: ZX Spectrum implementation.
+- `src/partner/`: Partner WIP implementation.
+- `tests/`: emulator harness, ZX tests, visuals, coverage, size entry.
+- `archive/`: old snapshots (not used by current build).
+- `build/`, `bin/`: generated artifacts.
+
+## Build And Test Commands
+
+- `make build -j1`: build library + partner sample + test binaries.
+- `make tests -j1`: run full ZX real-vs-oracle emulator tests.
+- `make stub-visuals -j1`: render stub API scene artifacts to `bin/stub-visuals/`.
+- `make lib-visuals -j1`: render stacked real-vs-oracle comparisons to `bin/lib-visuals/`.
+- `make coverage -j1`: run host coverage and write `.gcov` files to `build/coverage/`.
+- `make lib-size -j1`: estimate library payload size using baseline subtraction.
+- `make clean`: remove generated build artifacts.
+
+## Platform Notes (ZX)
+
+- Screen geometry: `256x192` pixels.
+- Pixel VRAM: `0x4000..0x57ff` (6144 bytes).
+- Attribute VRAM exists separately (`0x5800..`), but libgpx drawing primitives are 1bpp pixel operations.
+- Coordinates are signed (`coord`), but visible screen space is `[0..255] x [0..191]`.
+
+## API Conventions
+
+- `clip` parameters are optional rectangles (`rect_t *`).
+- `rect_t` corners are inclusive (`x0,y0` through `x1,y1`).
+- `CO_FORE` means set pixel bit, `CO_BACK` means clear pixel bit.
+- `BM_XOR` toggles destination bits regardless of `color`.
+- All rendering is clipped to the physical screen in ZX backend.
+
+## Types, Constants, And Structures
+
+## Primitive Types
+
+- `coord`: `int16_t` signed coordinate.
+- `dim`: `uint16_t` dimension.
+- `color`: `uint8_t` (`CO_FORE`, `CO_BACK`).
+- `bmode`: `uint8_t` (`BM_CPY`, `BM_XOR`).
+- `gmode`: `uint8_t` (`GPXM_DEFAULT` currently defined).
+
+## Color And Blit Constants
+
+- `CO_FORE = 0x01`
+- `CO_BACK = 0xFE`
+- `BM_CPY = 0x00`
+- `BM_XOR = 0x01`
+
+## Geometry Structures
+
+```c
+typedef struct point_s {
+    coord x;
+    coord y;
+} point_t;
+
+typedef struct rect_s {
+    coord x0;
+    coord y0;
+    coord x1;
+    coord y1;
+} rect_t;
+```
+
+Structure plain samples:
+
+```c
+point_t p = { .x = 12, .y = 34 };
+rect_t clip = { .x0 = 10, .y0 = 10, .x1 = 100, .y1 = 80 };
+```
+
+## Graphics Context (`gpx_t`)
+
+```c
+struct gpx_s {
+    uint16_t width;
+    uint16_t height;
+    uint16_t stride;
+    uint32_t size;
 };
-gpx_set_fill_brush(g,8,cross);
-gpx_fill_circle(g,550,300,100);
-~~~
+```
 
-## Resolution
+Meaning:
+- `width`: pixel width.
+- `height`: pixel height.
+- `stride`: bytes per row.
+- `size`: total framebuffer byte count.
 
-You can obtain resolution indexes by calling `gpx_get_cap()` and iterating through the `gpx_page_t[] pages` member. Each page has a `gpx_resolution_t[] resolutions` member, which contains resolutions.
+On ZX this is `256, 192, 32, 6144`.
 
-By convention the resolutions are ordered from lowest to highest.
+## Bitmap Encoding Constants
 
- > On some platforem `libgpx` emulates lower resolutions (for example - 
- > gpx emulates 512x256 on Iskra Delta Partner). 
+Signature helpers:
+- `BMP_SIG(enc)`
+- `BMP_ENC(sig)`
 
-Resolution is also set per page, so make sure you set it for all pages you are using.
+Encodings:
+- `BMP_ENC_1BPP`
+- `BMP_ENC_1BPP_MASK`
+- `BMP_ENC_1BPP_COMPACT`
+- `BMP_ENC_1BPP_MASK_COMPACT`
 
-~~~cpp
-#include <gpx.h>
+Backward aliases:
+- `BMP_ENC_TINY_LINES`
+- `BMP_ENC_TINY_LINES_MASK`
+- `S_BMP` (standard 1bpp signature)
 
-void main() {
-    /* enter gpx mode */
-    gpx_t *g=gpx_init();
-    /* set screen resolution */
-    gpx_set_resolution(g,0);
-    /* exit gpx mode */
-    gpx_exit(g);
+Bitmap structure:
+
+```c
+typedef struct bmp_s {
+    uint8_t signature;
+    dim w;
+    dim h;
+    int16_t stride;
+    uint16_t size;
+    uint8_t bitmap[];
+} bmp_t;
+```
+
+Structure plain sample (static packed bitmap wrapper):
+
+```c
+struct bmp8x8_s {
+    uint8_t signature;
+    uint16_t w;
+    uint16_t h;
+    int16_t stride;
+    uint16_t size;
+    uint8_t bitmap[8];
+};
+
+static struct bmp8x8_s checker = {
+    S_BMP, 8, 8, 1, 8,
+    {0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55}
+};
+```
+
+## Font Format (`font_t`)
+
+Header fields:
+
+- `flags`
+- `first_ascii`
+- `last_ascii`
+- `empty_width`
+- `max_glyph_width`
+- `glyph_height`
+- `advance`
+- `descent`
+- `data[]`
+
+Flags:
+- `FONT_FLAG_PROPORTIONAL`
+- `FONT_FLAG_OFFSETS_BE`
+
+Serialized layout:
+- bytes `[0..7]`: header
+- bytes `[8..]`: glyph offset table + glyph bitmap payloads
+
+## Cursor/Stock IDs
+
+Stock bitmap IDs:
+- `GPXSB_CURSOR_CLASSIC`
+- `GPXSB_CURSOR_STD`
+- `GPXSB_CURSOR_HOURGLASS`
+- `GPXSB_CURSOR_CARET`
+- `GPXSB_CURSOR_HAND`
+
+Generic cursor IDs:
+- `GPX_CURSOR_ARROW`
+- `GPX_CURSOR_HAND`
+- `GPX_CURSOR_WAIT`
+- `GPX_CURSOR_TEXT`
+
+## Public API Reference (`include/libgpx.h`)
+
+## Lifecycle
+
+### `gpx_t *gpx_create(gmode mode)`
+
+Purpose:
+- Initialize graphics subsystem/context.
+
+Parameters:
+- `mode`: initialization mode (`GPXM_DEFAULT` available).
+
+Returns:
+- context pointer (`gpx_t *`).
+
+Special cases:
+- ZX backend currently uses a static singleton context.
+- ZX backend currently clears screen during create.
+- On ZX, `mode` is currently ignored.
+
+Sample:
+
+```c
+gpx_t *g = gpx_create(GPXM_DEFAULT);
+```
+
+### `void gpx_destroy(gpx_t *gpx)`
+
+Purpose:
+- Tear down graphics context.
+
+Parameters:
+- `gpx`: context pointer.
+
+Returns:
+- no return value.
+
+Special cases:
+- ZX backend is static; destroy is effectively a no-op.
+- Passing `NULL` is safe in current ZX behavior.
+
+Sample:
+
+```c
+gpx_destroy(g);
+gpx_destroy(NULL);
+```
+
+## Geometry/Screen
+
+### `dim gpx_width(void)`
+
+Purpose:
+- Get current display width.
+
+Returns:
+- width in pixels.
+
+Special cases:
+- ZX: `256` after normal init.
+
+### `dim gpx_height(void)`
+
+Purpose:
+- Get current display height.
+
+Returns:
+- height in pixels.
+
+Special cases:
+- ZX: `192` after normal init.
+
+### `void gpx_clrscr(void)`
+
+Purpose:
+- Clear active screen/framebuffer.
+
+Returns:
+- no return value.
+
+Special cases:
+- ZX clears pixel VRAM and resets attributes/border to defaults.
+
+Sample:
+
+```c
+gpx_clrscr();
+```
+
+## Cursor/Stock Assets
+
+### `bmp_t *gpx_get_stock_bmp(uint8_t which)`
+
+Purpose:
+- Resolve stock bitmap by ID.
+
+Parameters:
+- `which`: one of `GPXSB_*` values.
+
+Returns:
+- bitmap pointer, or `NULL` if unsupported.
+
+Special cases:
+- Invalid IDs return `NULL`.
+
+Sample:
+
+```c
+bmp_t *caret = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
+```
+
+### `bmp_t *gpx_get_cursor(uint8_t type)`
+
+Purpose:
+- Map generic cursor type to bitmap.
+
+Parameters:
+- `type`: one of `GPX_CURSOR_*`.
+
+Returns:
+- cursor bitmap pointer.
+
+Special cases:
+- ZX maps unknown values to default/classic cursor.
+
+Sample:
+
+```c
+bmp_t *cursor = gpx_get_cursor(GPX_CURSOR_HAND);
+```
+
+### `void gpx_cursor_set(bmp_t *cursor)`
+
+Purpose:
+- Set active software cursor bitmap.
+
+Parameters:
+- `cursor`: pointer to bitmap.
+
+Returns:
+- no return value.
+
+Special cases:
+- Passing `NULL` selects platform default cursor.
+- ZX validates cursor signature and falls back to default for unsupported formats.
+
+Sample:
+
+```c
+gpx_cursor_set(gpx_get_cursor(GPX_CURSOR_TEXT));
+gpx_cursor_set(NULL); // fallback/default
+```
+
+## Fonts/Text
+
+### `const font_t *gpx_get_system_font(void)`
+
+Purpose:
+- Get default UI/system font.
+
+Returns:
+- font pointer.
+
+Sample:
+
+```c
+const font_t *sys = gpx_get_system_font();
+```
+
+### `const font_t *gpx_get_tiny_font(void)`
+
+Purpose:
+- Get tiny font for compact labels.
+
+Returns:
+- font pointer.
+
+Sample:
+
+```c
+const font_t *tiny = gpx_get_tiny_font();
+```
+
+### `coord gpx_measure_text(const char *text, const font_t *font)`
+
+Purpose:
+- Measure rendered text width in pixels.
+
+Parameters:
+- `text`: zero-terminated string.
+- `font`: font blob pointer.
+
+Returns:
+- measured width.
+
+Special cases:
+- `text == NULL` or `font == NULL` returns `0`.
+- Missing/non-representable glyphs use font `empty_width`.
+- Width accumulation uses glyph width + font `advance` for drawn glyphs.
+
+Sample:
+
+```c
+coord w = gpx_measure_text("HELLO", gpx_get_system_font());
+```
+
+### `void gpx_draw_text(gpx_t *gpx, coord x, coord y, const char *text, const font_t *font, color c, bmode m, const rect_t *clip)`
+
+Purpose:
+- Draw text using serialized font glyph bitmaps.
+
+Parameters:
+- `gpx`: graphics context.
+- `x`, `y`: text baseline/start position used by backend renderer.
+- `text`: zero-terminated string.
+- `font`: serialized font data.
+- `c`: draw color (`CO_FORE`/`CO_BACK`).
+- `m`: mode (`BM_CPY`/`BM_XOR`).
+- `clip`: optional clip rectangle.
+
+Returns:
+- no return value.
+
+Special cases:
+- `text == NULL` or `font == NULL` is a no-op.
+- Unsupported/missing glyph entries advance by `empty_width`.
+- Glyph draw path uses bitmap renderer (`gpx_draw_bmp`).
+
+Sample:
+
+```c
+const font_t *f = gpx_get_system_font();
+rect_t clip = {0, 0, 255, 191};
+gpx_draw_text(g, 8, 16, "HELLO", f, CO_FORE, BM_CPY, &clip);
+```
+
+## Primitives And Shapes
+
+### `void gpx_draw_pixel(gpx_t *gpx, coord x, coord y, color c, bmode m, const rect_t *clip)`
+
+Purpose:
+- Draw one pixel.
+
+Parameters:
+- `gpx`: graphics context.
+- `x`, `y`: pixel position.
+- `c`: `CO_FORE` to set, `CO_BACK` to clear.
+- `m`: `BM_CPY` or `BM_XOR`.
+- `clip`: optional clipping rectangle.
+
+Returns:
+- no return value.
+
+Special cases:
+- Out-of-screen coordinates are ignored.
+- Clip rejection skips draw.
+- In `BM_XOR`, color is ignored and destination is toggled.
+
+Sample:
+
+```c
+gpx_draw_pixel(g, 10, 10, CO_FORE, BM_CPY, NULL);
+```
+
+### `uint8_t gpx_draw_line(gpx_t *gpx, coord x0, coord y0, coord x1, coord y1, color c, bmode m, uint8_t lpatt, const rect_t *clip)`
+
+Purpose:
+- Draw line segment with optional pattern.
+
+Parameters:
+- `gpx`: graphics context.
+- `x0,y0,x1,y1`: endpoints.
+- `c`, `m`: color and blend mode.
+- `lpatt`: 8-bit line pattern (`0xFF` = solid).
+- `clip`: optional clipping rectangle.
+
+Returns:
+- rotated pattern state after drawing, for chaining segments.
+
+Special cases:
+- Degenerate line (`x0==x1 && y0==y1`) draws at most one pixel.
+- Internal dispatch uses optimized hline/vline/bresenham paths.
+
+Sample:
+
+```c
+uint8_t patt = 0xF0;
+patt = gpx_draw_line(g, 0, 0, 100, 30, CO_FORE, BM_CPY, patt, NULL);
+patt = gpx_draw_line(g, 100, 30, 140, 50, CO_FORE, BM_CPY, patt, NULL);
+```
+
+### `void gpx_draw_rectangle(gpx_t *gpx, rect_t *r, color c, bmode m, uint8_t lpatt, const rect_t *clip)`
+
+Purpose:
+- Draw rectangle outline.
+
+Parameters:
+- `gpx`: graphics context.
+- `r`: rectangle (inclusive corners).
+- `c`, `m`: color and blend mode.
+- `lpatt`: line pattern.
+- `clip`: optional clipping rectangle.
+
+Returns:
+- no return value.
+
+Special cases:
+- ZX normalizes rectangle coordinates (`x0/x1`, `y0/y1`) internally.
+- ZX top/bottom use `lpatt`; left/right are drawn solid in current backend.
+- `r == NULL` is a no-op.
+
+Sample:
+
+```c
+rect_t r = {40, 20, 120, 80};
+gpx_draw_rectangle(g, &r, CO_FORE, BM_CPY, 0xFF, NULL);
+```
+
+### `void gpx_fill_rectangle(gpx_t *gpx, rect_t *r, color c, bmode m, uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)`
+
+Purpose:
+- Fill rectangle using repeating row-pattern bytes.
+
+Parameters:
+- `gpx`: graphics context.
+- `r`: rectangle (inclusive corners).
+- `c`, `m`: color and blend mode.
+- `fpatt`: row pattern table.
+- `fpatt_len`: number of pattern rows.
+- `clip`: optional clipping rectangle.
+
+Returns:
+- no return value.
+
+Special cases:
+- `fpatt_len == 0` is a no-op.
+- ZX normalizes rectangle coordinates internally.
+- Pattern is consumed MSB-first from `x0`, row-by-row.
+
+Sample:
+
+```c
+uint8_t pat[2] = {0xAA, 0x55};
+rect_t r = {10, 10, 60, 40};
+gpx_fill_rectangle(g, &r, CO_FORE, BM_CPY, pat, 2, NULL);
+```
+
+### `void gpx_draw_bmp(gpx_t *gpx, coord x, coord y, bmp_t *b, const rect_t *clip)`
+
+Purpose:
+- Blit bitmap at position.
+
+Parameters:
+- `gpx`: graphics context.
+- `x`, `y`: top-left destination.
+- `b`: source bitmap.
+- `clip`: optional clipping rectangle.
+
+Returns:
+- no return value.
+
+Special cases:
+- `b == NULL` is a no-op.
+- ZX supports standard and compact 1bpp formats, including masked variants.
+- Unclipped, in-range unmasked blits use a fast path; clipped/masked/edge cases use fallback.
+
+Sample:
+
+```c
+gpx_draw_bmp(g, 32, 24, (bmp_t *)&checker, NULL);
+```
+
+## End-To-End Minimal Example
+
+```c
+#include "libgpx.h"
+
+void main(void)
+{
+    gpx_t *g = gpx_create(GPXM_DEFAULT);
+    rect_t clip = {0, 0, 255, 191};
+
+    gpx_clrscr();
+    gpx_draw_pixel(g, 10, 10, CO_FORE, BM_CPY, &clip);
+    gpx_draw_line(g, 20, 20, 100, 40, CO_FORE, BM_CPY, 0xFF, &clip);
+
+    rect_t box = {30, 50, 120, 90};
+    gpx_draw_rectangle(g, &box, CO_FORE, BM_CPY, 0xFF, &clip);
+
+    const font_t *font = gpx_get_system_font();
+    gpx_draw_text(g, 8, 8, "libgpx", font, CO_FORE, BM_CPY, &clip);
+
+    __asm
+        halt
+    __endasm;
 }
-~~~
+```
 
-## Clearing the screen
+## Compatibility/Scope Note
 
-Use `gpx_cls()` to clear screen. Clear screen will respect 
-current back color, and fore color. 
-
- > This function will, due to some hardware limitations, ignore current page settings 
- > and always clear the display page.
-
-~~~cpp
-#include <gpx.h>
-
-void main() {
-    /* enter gpx mode */
-    gpx_t *g=gpx_init();
-    /* clear screen */
-    gpx_cls();
-    /* exit gpx mode */
-    gpx_exit(g);
-}
-~~~
-
-## Drawing!
-
-All drawing functions start with `gpx_draw_` and all fill functions start with `gpx_fill_`. They only accept coordinate arguments, because all other aspects of drawing (color, blit mode, clipping) is set by a separate function and stored in the `gpx_t` structure.
-
-Following functions are available.
- * `gpx_draw_line()` ... draws a line
- * `gpx_draw_circle()` ... draws a circle 
- * `gpx_draw_rect()` ... draws a rectangle
- * `gpx_fill_rect()` ... draws a filled rectangle
-
- > All functions are optimized. For example - when drawing a line,
- > horizontal line is detected and drawn using super- speeed function.
-
-~~~cpp
-#include <gpx.h>
-
-void main() {
-
-    /* enter graphics */
-    gpx_t *g=gpx_init();
-
-    /* clear screen */
-    gpx_cls(g);
-
-    /* query graphics capabilities
-       NOTE: this is only possible because initial page
-             and initial resolution are both 0. */
-    gpx_cap_t *cap=gpx_cap(g);
-    coord centerx = cap->pages[0].resolutions[0].width/2;
-    coord centery = cap->pages[0].resolutions[0].height/2;
-
-    printf("Center is at %d,%d\n",centerx, centery);
-
-    /* draw line */
-    for (coord x=centerx-20; x<centerx+20;x++)
-        gpx_draw_pixel(g,x,centery);
-
-    /* draw circle */
-    gpx_draw_circle(g,centerx,centery,20);
-
-    /* leave graphics */
-    gpx_exit(NULL);
-}
-~~~
-
-And the result on ZX Spectrum 48K.
-
-![ZX Spectrum 48K drawing](docs/img/zxspec48-gpx_draw1.png)
-
-## Glyphs
-
-The glyph is a basic building block of bitmapped graphics. Several classes 
-of glyph are supported, each having a minimal header, just enough to draw 
-the glyph. Each glyph type has its own optimal drawing function. 
-
-### Glyph classes
-
-Each glyph has a 4 byte glyph header. First three bits of the first byte tell the glyph class.
-
-Following glyph classes are supported.
-
-| Name      | Class | Description                                |
-|-----------|-------|--------------------------------------------|
-| Raster    |  000  | Encoded as standard 1bpp raster            |
-| Tiny      |  001  | Encoded as Partners' relative movements    |
-| Lines     |  010  | Encoded as lines (scanlines or outline)    |
-| RLE bit   |  011  | Encoded as bit RLE graphics                |
-| RLE byte  |  100  | Encoded as byte RLE graphics               |
-
-The rest of the 4 byte structure depends on glyph class.
-
-![glyph_t structure](docs/img/glyph_t.png)
-
-### Glyph format limits
-
-The `*glyph_t` structure immposes some reasonable limits for a glyph. 
-All glyhps except the *RLE* are limited to 256x256. *RLE* has
-two extra bits for width and height, limiting its size to
-1024x1024. *RLE* also does not need size information, because the number
-of rows equals to height, and each individual row has information about 
-its size. *Tiny* glyph can have max. 256 moves, and *line* glyph can 
-have max. of 4096 lines.
-
- > For obvious reasons, glyph type *Tiny*, which contains direct 
- > commands for *Iskra Delta Partner GDP* is not supported on other
- > platforms.
-
-### LINES format
-
-The lines format uses two subsequent bytes of data as relative x,y
-coordinates of point from -127 to 127. A value of -128 is the escape sequence and is followed by a command.
-
-Here's an example.
-
-`12, 15, 30, 40, 20, 20, -128, 0, 17, 13, 20, 28`
-
-first stroke is
-
-`line from 12, 15 to 30, 40`
-`line from 30, 40 to 20, 20`
-
-escape sequence `-128` followed by command `0` means "line break" i.e.end of stroke. Next stroke is
-
-`line from 17,13 to 20,20`
-
-Following are available commands
-
-| Code (bin)     | Command                       |
-|:--------------:|-------------------------------|
-|  0000 00 0 0   | End of current stroke.        |
-|  0000 xx 0 0   | Reserved                      |
-|  0000 00 1 0   | End of stroke, no color       | 
-|  0000 01 1 0   | End of stroke, set fore color | 
-|  0000 10 1 0   | End of stroke, set back color |
-|  0000 11 1 0   | Reserved                      |
-|  0000 00 1 1   | Set color to transparent      |
-|  0000 01 1 1   | Set fore color                |
-|  0000 10 1 1   | Set back color                |
-|  0000 11 1 1   | Reserved                      |
-
- > Bit 0 tells if the stroke continues (=1) or ends (=0). Bit 1 tells if pen changes. Bits 3 and 4 tell the new pen. Top nibble is reserved for more commands.
-
-### RLE format
-
-RLE is an encoding for glyphs, optimized for fast drawing. You might've 
-read about RLE "compression", which is based on wriing bytes that releat
-with a byte value and a counter. 
-
-In *libgpx* we talk about encoding, because the focus is not on compression,
-but on faster drawing.
-
-RLE format in libgpx can be aligned on a byyte or a bit boundary. 
-
-#### Byte aligned RLE 
-
-Byte aligned RLE rewrites repeating bytes with byte value and a counter. If the value does not repeat it is not compressed. For example value `ABCDE` would not change. But if the value repeats multiple times, then it is escaped by repeating it twice and the third byte is number of repetitions. For example the value `AAAAAAB` would be compressed into `AA6B`.
-
-Byte aligned RLE is useful for raster optimization and can actually achieve compression.
-
-#### Bit aligned RLE
-
-Bit or pixel aligned RLE breaks down image to vector operations. 
-Let's examine how this is done on following scan- line example, 
-encoded as a pattern of bits: 1 for pixel set and 0 for background.
-
-`10001111 11100111 11111111 11111111 11111111 01010101`
-
-To encode this pattern we'll need recognize fast drawing line styles inside
-this glyph. We can see that this line can be written as:
-
-`1 000 1111111 00 111111111111111111111111111 01010101`
-
-We recognize three line styles: `11111111`, `00000000` and `01010101`. So we can encode this this as follows:
-
-11111111(1)
-00000000(3)
-11111111(7)
-00000000(2)
-11111111(27)
-01010101(8)
-
-The first number is the line style and second number is line length.
-
- > I'm putting "compression" in quotes because this is not really a compression, 
- > but a way to speed up drawing by using vectors. Instead of 48 pixels, we draw
- > 6 lines. On a vector display this leads to much better pefrormance. 
-
-## Array of glyphs: the envelope approach
-
-Glyphs can be combined into more complex bitmapped structures, such as 
-fonts, animations, bitmaps, icons, or mouse mouse cursors. All of these 
-structures are arrays (or envelopes) containing basic glyphs. By using 
-the envelope approach one can create an animation or a font, made out 
-of any glyph types.
-
- > The tradeoff of this approach is that each glyph array (such as
- > a font) is a bit larger, because collective properties, such as
- > font height are stored with each glyph. But it also results in 
- > smaller and faster code, required to manage graphics.
-
-![Various envelopes](docs/img/envelopes.png)
-
-### Glyph drawing functions
-
-Here are four main glyph drawing functions.
-
- * `gpx_draw_glyph()` ... draws a glyph
- * `gpx_draw_mglyph()` ... draws a masked glyph
- * `gpx_read_glyph()` ... read a bitmap from screen
-
-## Fonts
-
-Fonts are implemented using the glyph group of drawing functions, because each letter is just a glyph, with some extra drawing hints. 
-
-To use font you need to load it (unless already part of your C code). Each font starts with the `font_t` structure where you can find some basic font information such as average width, height, number of characters, etc.
-
-You then simply call `gpx_draw_string()` to draw a sting. 
-
- > Don't forget that fonts also use the *blit mode*, and if it is not `BM_COPY`, background may not be deleted.
-
-## Font header
-
-The font header structure contains basic information about the font and a table of pointers to each
-glyph. This way glyphs can have different sizes (i.e. in proportional fonts, the letter i takes much
-less memory space than the letter w) and we avoid expensive calculations to find each glyph.
-
-Because each glyph contains its width, it also makes it easy for us to measure strings by simply
-iterating through all the glyphs in the string, and maxing the height and summing the width.
-
-### Measuring text
-
-Use `gpx_measure_string()` to measure string. 
-
-(...to be continued...)
-
-# Supported platforms
-
-## Iskra Delta Partner
-
-![Iskra Delta Partner](docs/img/partner.jpg) 
-
-| Trait                     | Value     |
-|---------------------------|----------:|
-| Processor                 | Z80, 4Mhz |
-| Graphics type             | Vector    |
-| Native resolution         | 1024x512  |
-| Colors                    | 2         |
-| Page(s)                   | 2         |
-| *libgpx* size in bytes    | N/A       |
-| Implementation internals  | [Available](PARTNER.md) |
-
----
-
-## ZX Spectrum 48K
-
-![ZX Spectrum 48K](docs/img/zxspec48.jpg)
-
-| Trait                     | Value     |
-|---------------------------|----------:|
-| Processor                 | Z80, 4Mhz |
-| Graphics type             | Raster    |
-| Native resolution         | 256x192   |
-| Colors                    | 15        |
-| Page(s)                   | 1         |
-| *libgpx* size in bytes    | N/A       |
-| Implementation internals  | [Available](ZXSPEC48.md) |
-
----
-
-## Pixie Linux Vector Display Emulator
-
-![Pixie](docs/img/zxspec48.jpg)
-
-| Trait                     | Value     |
-|---------------------------|----------:|
-| Processor                 | Any Linux |
-| Graphics type             | Vector    |
-| Native resolution         | Custom    |
-| Colors                    | 256       |
-| Page(s)                   | Custom    |
-| *libgpx* size in bytes    | N/A       |
-| Implementation internals  | [Available](http://github.com/tstih/pixie) |
-
-[language.badge]: https://img.shields.io/badge/languages-c11%2C%20z80%20assembly-blue.svg
-
-[compiler.url]:   http://sdcc.sourceforge.net/
-[compiler.badge]: https://img.shields.io/badge/compiler-sdcc-blue.svg
-
-[status.badge]:  https://img.shields.io/badge/status-development-red.svg
+The header comment mentions additional primitive categories (for example circles/polygons), but the currently exported public API is exactly what is declared in `include/libgpx.h` and documented above.

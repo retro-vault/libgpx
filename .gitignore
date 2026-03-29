@@ -1,7 +1,16 @@
-# Output and dev directories.
+# Build artifacts
 build/
 bin/
-lab/
 
-# Visual Studio
-.vscode/
+# SDCC temporary files
+*.rel
+*.lst
+*.sym
+*.rst
+*.noi
+*.cdb
+*.ihx
+
+# Editor / OS
+.DS_Store
+*~

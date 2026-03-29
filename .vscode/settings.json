@@ -1,13 +1,22 @@
 {
-    "C_Cpp.default.includePath": [
-        "${workspaceFolder}/include",
-        "${workspaceFolder}/src",
-        "${workspaceFolder}/src/native"
-    ],
-    "files.associations": {
-        "array": "c",
-        "string_view": "c",
-        "initializer_list": "c",
-        "utility": "c"
+    "chat.tools.terminal.autoApprove": {
+        "docker run": true,
+        "cc": true,
+        "./tests/test_emulator": true,
+        "make": true,
+        "mv": true,
+        "/^g\\+\\+ -std=c\\+\\+17 -Iinclude -O2 -Wall -Wextra -o tests/test_emulator tests/test_emulator\\.cpp tests/emulator\\.cpp$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "true": true,
+        "/^sudo rm -rf build bin tests/test_emulator && make bin/libgpx\\.lib$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd /home/tstih/data/retro-vault/snatch/libgpx && mkdir -p build/tmp && docker run --rm -u \\$\\(id -u\\):\\$\\(id -g\\) -v \"\\$\\(pwd\\)\":/work -w /work wischner/sdcc-z80-zx-spectrum sh -lc 'set -e; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o build/tmp/test_draw_bmp\\.rel tests/zx/test_draw_bmp\\.c; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o build/tmp/gpx_stub\\.rel tests/zx/gpx_stub\\.c; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -o build/tmp/test_draw_bmp\\.ihx build/tmp/test_draw_bmp\\.rel build/tmp/gpx_stub\\.rel; ls -l build/tmp/test_draw_bmp\\.ihx'\n$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

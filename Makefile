@@ -1,93 +1,47 @@
-# We only allow compilation on linux!
-ifneq ($(shell uname), Linux)
-$(error OS must be Linux!)
-endif
+DOCKER_SPEC ?= wischner/sdcc-z80-zx-spectrum
+DOCKER_PARTNER ?= wischner/sdcc-z80-idp
+DOCKER_USER ?= $(shell id -u):$(shell id -g)
+SDCC ?= /opt/sdcc/bin/sdcc
 
-# Check if all required tools are on the system.
-REQUIRED = sdcc sdar sdasz80
-K := $(foreach exec,$(REQUIRED),\
-    $(if $(shell which $(exec)),,$(error "$(exec) not found. Please install or add to path.")))
+ROOT_DIR := $(CURDIR)
+BUILD_DIR ?= $(ROOT_DIR)/build
+BIN_DIR ?= $(ROOT_DIR)/bin
+BUILD_TMP ?= $(BUILD_DIR)/tmp
+TEST_BUILD_DIR ?= $(BUILD_DIR)/tests
 
+export DOCKER_SPEC DOCKER_PARTNER DOCKER_USER SDCC
+export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR
 
-# Configure tools for the target platform.
-ifeq ($(PLATFORM),partner)
-export CC		=	sdcc
-export CFLAGS	=	--std-c11 -mz80 -I. $(addprefix -I,$(INC_DIR)) --no-std-crt0 --nostdinc --nostdlib --debug -D PLATFORM=$(PLATFORM)
-export AS		=	sdasz80
-export ASFLAGS	=	-xlos -g
-export AR		=	sdar
-export ARFLAGS	=	-rc
-else ifeq ($(PLATFORM),zxspec48)
-export CC		=	sdcc
-export CFLAGS	=	--std-c11 -mz80 -I. $(addprefix -I,$(INC_DIR)) --no-std-crt0 --nostdinc --nostdlib --debug -D PLATFORM=$(PLATFORM)
-export AS		=	sdasz80
-export ASFLAGS	=	-xlos -g
-export AR		=	sdar
-export ARFLAGS	=	-rc
-else # Default platform for this branch is uxfb
-export PLATFORM =   pixie
-export CC		=	gcc
-export CFLAGS	=	-Wall -Wextra -std=c99 -g $(addprefix -I,$(INC_DIR))
-export AS		=	as
-export ASFLAGS	=	
-export AR		=	ar
-export ARFLAGS	=	-crs
-endif
+.PHONY: all build lib tests coverage visual-inputs stub-visuals lib-visuals lib-size clean
 
+all: build
 
-# Platform file extenions.
-ifeq ($(PLATFORM),pixie)
-export OBJ_EXT = o
-export LIB_EXT = a
-export EXE_EXT = out
-else
-export OBJ_EXT = rel
-export LIB_EXT = lib
-export EXE_EXT = ihx
-endif
+build:
+	$(MAKE) -C src build
+	$(MAKE) -C tests build
 
-# Other extensions...
-export DAT_EXT = dat
-export GPY_EXT = g
-export FNT_EXT = f
+lib:
+	$(MAKE) -C src lib
 
+tests:
+	$(MAKE) -C tests tests
 
-# Global settings: folders.
-export ROOT			=	$(realpath .)
-export BUILD_DIR	=	$(ROOT)/build
-export BIN_DIR		=	$(ROOT)/bin
-export INC_DIR		=	$(ROOT)/include $(ROOT)/src $(ROOT)/src/native
+coverage:
+	$(MAKE) -C tests coverage
 
+visual-inputs:
+	$(MAKE) -C tests visual-inputs
 
-# Subfolders for make.
-SUBDIRS 			=	src $(LAB)
+stub-visuals:
+	$(MAKE) -C tests stub-visuals
 
+lib-visuals:
+	$(MAKE) -C tests lib-visuals
 
-# Default target
-.PHONY: all
-all: $(BUILD_DIR) $(SUBDIRS)
-	cp $(BUILD_DIR)/*.$(LIB_EXT) $(BIN_DIR) 2>/dev/null || :
-	cp $(BUILD_DIR)/*.$(GPY_EXT) $(BIN_DIR) 2>/dev/null || :
-	cp $(BUILD_DIR)/*.$(FNT_EXT) $(BIN_DIR) 2>/dev/null || :
-	cp $(BUILD_DIR)/*.$(DAT_EXT) $(BIN_DIR) 2>/dev/null || :
-	find $(BUILD_DIR) -perm /a+x -exec cp {} $(BIN_DIR) \; 2>/dev/null || :
+lib-size:
+	$(MAKE) -C tests lib-size
 
-
-
-.PHONY: $(BUILD_DIR)
-$(BUILD_DIR):
-	# Create build dir.
-	mkdir -p $(BUILD_DIR)
-	# Remove bin dir (we are going to write again).
-	rm -f -r $(BIN_DIR)
-	# And re-create!
-	mkdir -p $(BIN_DIR)
-
-.PHONY: $(SUBDIRS)
-$(SUBDIRS):
-	$(MAKE) -C $@
-	
-.PHONY: clean
 clean:
-	rm -f -r $(BUILD_DIR)
-	rm -f -r $(BIN_DIR)
+	$(MAKE) -C src clean
+	$(MAKE) -C tests clean
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
