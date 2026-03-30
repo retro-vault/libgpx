@@ -10,6 +10,9 @@ struct MMU
 {
     unsigned char ram[0x10000];
     unsigned char io[0x100];
+    std::vector<uint8_t> partner_fb;
+    int partner_fb_width;
+    int partner_fb_height;
 
     MMU();
 };
@@ -29,9 +32,19 @@ bool run_ihx(
     MMU &mmu,
     unsigned short &loadBase,
     unsigned short &loadTop);
+bool run_partner_ihx(
+    const std::string &path,
+    MMU &mmu,
+    unsigned short &loadBase,
+    unsigned short &loadTop);
 
 uint16_t zx_screen_offset(int x, int y);
 std::vector<uint8_t> screen_snapshot(const MMU &mmu);
+uint32_t partner_screen_offset(int x, int y, int width = 1024);
+std::vector<uint8_t> partner_screen_snapshot(
+    const MMU &mmu,
+    int width = 1024,
+    int height = 256);
 
 void set_expected_pixel(std::vector<uint8_t> &expected, int x, int y);
 void xor_expected_pixel(std::vector<uint8_t> &expected, int x, int y);

@@ -15,23 +15,12 @@ extern void gpx_stub_host_reset_vram_writes(void);
 extern uint32_t gpx_stub_host_get_vram_writes(void);
 extern bmp_t *_gpx_cursor_current;
 
-struct bmp8x8_s
-{
-    uint8_t signature;
-    uint16_t w;
-    uint16_t h;
-    int16_t stride;
-    uint16_t size;
-    uint8_t bitmap[8];
-};
-
-static struct bmp8x8_s bmp_checker = {
+static uint8_t bmp_checker[] = {
     S_BMP,
     8,
     8,
-    1,
-    8,
-    {0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55}
+    8, 0,
+    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55
 };
 
 static char g_meta_expected[256];
@@ -253,7 +242,7 @@ static void sc_gpx_cursor_set(void)
     begin_scene();
     bmp_t *classic = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
     bmp_t *hand = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
-    uint8_t sig_ok[2] = {BMP_SIG(BMP_ENC_1BPP), 0};
+    uint8_t sig_ok[2] = {BMP_SIG(BMP_ENC_1BPP_MASK), 0};
     uint8_t bad_sig[2] = {0xF0, 0};
     int p1, p2, p3, p4;
     char actual[220];
@@ -272,7 +261,7 @@ static void sc_gpx_cursor_set(void)
 
     snprintf(actual, sizeof(actual), "hand=%s sig_ok=%s bad=%s null=%s",
              p1 ? "ok" : "fail", p2 ? "ok" : "fail", p3 ? "ok" : "fail", p4 ? "ok" : "fail");
-    meta_set("set hand; accept 1BPP signature; invalid->classic; null->classic",
+    meta_set("set hand; accept MASK signature; invalid->classic; null->classic",
              actual, p1 && p2 && p3 && p4);
 }
 

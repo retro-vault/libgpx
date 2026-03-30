@@ -59,23 +59,12 @@ static uint8_t rotr_n(uint8_t v, int n)
     return v;
 }
 
-struct host_bmp_checker_s
-{
-    uint8_t signature;
-    uint16_t w;
-    uint16_t h;
-    int16_t stride;
-    uint16_t size;
-    uint8_t bitmap[4];
-};
-
-static struct host_bmp_checker_s bmp_checker = {
+static uint8_t bmp_checker[] = {
     S_BMP,
     8,
     4,
-    1,
-    4,
-    {0xF0, 0x0F, 0xAA, 0x55}
+    4, 0,
+    0xF0, 0x0F, 0xAA, 0x55
 };
 
 static void test_context(void)
@@ -246,24 +235,20 @@ static void test_cursors(void)
 
     uint8_t s0[2] = {BMP_SIG(BMP_ENC_1BPP), 0};
     uint8_t s1[2] = {BMP_SIG(BMP_ENC_1BPP_MASK), 0};
-    uint8_t s2[2] = {BMP_SIG(BMP_ENC_1BPP_COMPACT), 0};
-    uint8_t s3[2] = {BMP_SIG(BMP_ENC_1BPP_MASK_COMPACT), 0};
+    uint8_t s2[2] = {BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 4), 0};
     uint8_t bad[2] = {0xF0, 0};
 
     gpx_cursor_set(hand);
     CHECK(_gpx_cursor_current == hand, "cursor_set stock pointer");
 
     gpx_cursor_set((bmp_t *)s0);
-    CHECK(_gpx_cursor_current == (bmp_t *)s0, "cursor_set 1bpp sig");
+    CHECK(_gpx_cursor_current == classic, "cursor_set 1bpp falls back");
 
     gpx_cursor_set((bmp_t *)s1);
     CHECK(_gpx_cursor_current == (bmp_t *)s1, "cursor_set 1bpp mask sig");
 
     gpx_cursor_set((bmp_t *)s2);
-    CHECK(_gpx_cursor_current == (bmp_t *)s2, "cursor_set compact sig");
-
-    gpx_cursor_set((bmp_t *)s3);
-    CHECK(_gpx_cursor_current == (bmp_t *)s3, "cursor_set compact mask sig");
+    CHECK(_gpx_cursor_current == (bmp_t *)s2, "cursor_set masked stride sig");
 
     gpx_cursor_set((bmp_t *)bad);
     CHECK(_gpx_cursor_current == classic, "cursor_set invalid falls back");

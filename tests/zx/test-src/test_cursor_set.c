@@ -11,8 +11,7 @@ void main(void)
 
     uint8_t s0[2] = {BMP_SIG(BMP_ENC_1BPP), 0};
     uint8_t s1[2] = {BMP_SIG(BMP_ENC_1BPP_MASK), 0};
-    uint8_t s2[2] = {BMP_SIG(BMP_ENC_1BPP_COMPACT), 0};
-    uint8_t s3[2] = {BMP_SIG(BMP_ENC_1BPP_MASK_COMPACT), 0};
+    uint8_t s2[2] = {BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 4), 0};
     uint8_t bad[2] = {0xF0, 0x00};
 
     uint8_t ok = 1;
@@ -30,20 +29,16 @@ void main(void)
     else gpx_draw_pixel(gpx, 2, 190, CO_FORE, BM_CPY, &full);
 
     gpx_cursor_set((bmp_t *)s2);
-    if (_gpx_cursor_current != arrow) ok = 0;
+    if (_gpx_cursor_current != (bmp_t *)s2) ok = 0;
     else gpx_draw_pixel(gpx, 3, 190, CO_FORE, BM_CPY, &full);
-
-    gpx_cursor_set((bmp_t *)s3);
-    if (_gpx_cursor_current != (bmp_t *)s3) ok = 0;
-    else gpx_draw_pixel(gpx, 4, 190, CO_FORE, BM_CPY, &full);
 
     gpx_cursor_set((bmp_t *)bad);
     if (_gpx_cursor_current != arrow) ok = 0;
-    else gpx_draw_pixel(gpx, 5, 190, CO_FORE, BM_CPY, &full);
+    else gpx_draw_pixel(gpx, 4, 190, CO_FORE, BM_CPY, &full);
 
     gpx_cursor_set((bmp_t *)0);
     if (_gpx_cursor_current != arrow) ok = 0;
-    else gpx_draw_pixel(gpx, 6, 190, CO_FORE, BM_CPY, &full);
+    else gpx_draw_pixel(gpx, 5, 190, CO_FORE, BM_CPY, &full);
 
     if (ok)
         gpx_draw_pixel(gpx, 5, 191, CO_FORE, BM_CPY, &full);

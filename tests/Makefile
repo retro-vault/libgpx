@@ -5,14 +5,16 @@ TEST_BUILD_DIR ?= $(BUILD_DIR)/tests
 TEST_EMULATOR_COV := $(TEST_BUILD_DIR)/test_emulator_cov
 TEST_ZX_API_HOST_COV := $(TEST_BUILD_DIR)/test_zx_api_host_cov
 
-.PHONY: build tests visual-inputs coverage stub-visuals lib-visuals lib-size clean
+.PHONY: build tests visual-inputs coverage stub-visuals lib-visuals partner-visuals lib-size clean
 
 build:
 	$(MAKE) -C host build
 	$(MAKE) -C zx build
+	$(MAKE) -C partner build
 
 tests: visual-inputs
 	$(MAKE) -C host run
+	$(MAKE) -C partner run
 
 visual-inputs:
 	$(MAKE) -C zx visual-inputs
@@ -34,12 +36,16 @@ stub-visuals:
 lib-visuals: visual-inputs
 	$(MAKE) -C zx/debug lib-visuals
 
+partner-visuals:
+	$(MAKE) -C partner partner-visuals
+
 lib-size:
 	$(MAKE) -C size lib-size
 
 clean:
 	$(MAKE) -C host clean
 	$(MAKE) -C zx clean
+	$(MAKE) -C partner clean
 	$(MAKE) -C zx/stub clean
 	$(MAKE) -C zx/debug clean
 	$(MAKE) -C size clean

@@ -12,7 +12,7 @@ TEST_BUILD_DIR ?= $(BUILD_DIR)/tests
 export DOCKER_SPEC DOCKER_PARTNER DOCKER_USER SDCC
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR
 
-.PHONY: all build lib tests coverage visual-inputs stub-visuals lib-visuals lib-size clean
+.PHONY: all build lib tests coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size clean
 
 all: build
 
@@ -37,6 +37,9 @@ stub-visuals:
 
 lib-visuals:
 	$(MAKE) -C tests lib-visuals
+
+partner-visuals:
+	$(MAKE) -C tests partner-visuals
 
 lib-size:
 	$(MAKE) -C tests lib-size

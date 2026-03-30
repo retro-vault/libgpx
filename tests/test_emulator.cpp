@@ -10,9 +10,8 @@ int run_emulator_unit_tests();
 struct packed_bmp_header_t
 {
     uint8_t signature;
-    uint16_t w;
-    uint16_t h;
-    int16_t stride;
+    uint8_t w;
+    uint8_t h;
     uint16_t size;
 } __attribute__((packed));
 
@@ -37,8 +36,9 @@ static void draw_expected_bmp_packed(
     const packed_bmp_header_t *header =
         reinterpret_cast<const packed_bmp_header_t *>(raw);
     const uint8_t *bitmap = raw + sizeof(packed_bmp_header_t);
+    uint8_t stride = BMP_STRIDE(header->signature);
     for (coord row = 0; row < header->h; ++row) {
-        uint16_t row_offset = (uint16_t)(row * header->stride);
+        uint16_t row_offset = (uint16_t)(row * stride);
         for (coord col = 0; col < header->w; ++col) {
             uint8_t byte = bitmap[row_offset + (col >> 3)];
             uint8_t mask = (uint8_t)(0x80 >> (col & 7));

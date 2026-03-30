@@ -19,8 +19,6 @@
         .equ    BMP_SIG_ENC_MASK, 0xF0
         .equ    BMP_SIG_1BPP, 0x00
         .equ    BMP_SIG_1BPP_MASK, 0x10
-        .equ    BMP_SIG_1BPP_COMPACT, 0x20
-        .equ    BMP_SIG_1BPP_MASK_COMPACT, 0x30
 
         .area   _CODE
 
@@ -84,66 +82,29 @@ _gpx_draw_bmp::
         and     #BMP_SIG_ENC_MASK
         cp      #BMP_SIG_1BPP
         jr      z,gb_sig_unmasked_full
-        cp      #BMP_SIG_1BPP_COMPACT
-        jr      z,gb_sig_unmasked_compact
         cp      #BMP_SIG_1BPP_MASK
-        jp      z,gb_fallback
-        cp      #BMP_SIG_1BPP_MASK_COMPACT
         jp      z,gb_fallback
         jp      gb_exit
 
 gb_sig_unmasked_full:
-        xor     a
-        ld      (gb_compact),a
-        jr      gb_sig_ok
-
-gb_sig_unmasked_compact:
-        ld      a,#1
-        ld      (gb_compact),a
-
-gb_sig_ok:
-        ld      a,(gb_compact)
-        or      a
-        jr      nz,gb_sig_ok_compact
-
-        inc     hl
+        ;; stride is packed in signature low nibble as (stride-1).
         ld      a,(hl)
-        ld      (gb_bw),a
-        inc     hl
-        ld      a,(hl)
-        ld      (gb_bw_hi),a
-        inc     hl
-        ld      a,(hl)
-        ld      (gb_bh),a
-        inc     hl
-        ld      a,(hl)
-        ld      (gb_bh_hi),a
-        inc     hl
-        ld      a,(hl)
+        and     #0x0F
+        inc     a
         ld      (gb_bstride),a
-        inc     hl
-        ld      a,(hl)
+        xor     a
         ld      (gb_bstride+1),a
-        jr      gb_sig_ok_done
 
-gb_sig_ok_compact:
         inc     hl
         ld      a,(hl)
         ld      (gb_bw),a
         xor     a
         ld      (gb_bw_hi),a
-
         inc     hl
         ld      a,(hl)
         ld      (gb_bh),a
         xor     a
         ld      (gb_bh_hi),a
-
-        inc     hl
-        ld      a,(hl)
-        ld      (gb_bstride),a
-        xor     a
-        ld      (gb_bstride+1),a
 
 gb_sig_ok_done:
         ;; w/h must be non-zero.
@@ -333,14 +294,7 @@ gb_dstspan_div:
 
         ;; source row starts at bmp->bitmap
         ld      hl,(gb_bptr)
-        ld      a,(gb_compact)
-        or      a
-        jr      z,gb_srcrow_full
-        ld      de,#6
-        jr      gb_srcrow_set
-gb_srcrow_full:
-        ld      de,#9
-gb_srcrow_set:
+        ld      de,#5
         add     hl,de
         ld      (gb_srcrow),hl
 
@@ -572,8 +526,6 @@ gb_bstride:
         .ds     2
 gb_rowstride:
         .ds     2
-gb_compact:
-        .ds     1
 gb_right_limit:
         .ds     1
 gb_bottom_limit:

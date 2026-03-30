@@ -2,12 +2,11 @@
         ;;
         ;; Mouse cursor bitmaps extracted from buddy/graphics/mousecur.s.
         ;;
-        ;; FORMAT (compact masked bmp_t + hotspot trailer):
-        ;;   compact header (6 bytes):
-        ;;     signature = masked 1bpp compact (encoding 0011)
+        ;; FORMAT (masked bmp_t + hotspot trailer):
+        ;;   header (5 bytes):
+        ;;     signature = masked 1bpp + stride nibble (stride-1)
         ;;     width     = 8
         ;;     height    = 10
-        ;;     stride    = 1 (bytes per row per mask/bitmap plane)
         ;;     size      = 20 (10 rows * 2 bytes)
         ;;   payload (20 bytes): per row = AND mask byte, OR bitmap byte
         ;;   trailer (1 byte): hotspot (high nibble = y offset, low nibble = x offset)
@@ -24,10 +23,9 @@
         .area   _CODE
 
 _gpx_cur_classic::
-        .db     0x30                    ;; signature: BMP_ENC_1BPP_MASK_COMPACT
+        .db     0x10                    ;; signature: BMP_ENC_1BPP_MASK, stride=1
         .db     0x08                    ;; width
         .db     0x0A                    ;; height
-        .db     0x01                    ;; stride
         .dw     0x0014                  ;; bitmap byte size
         .db     0b00111111, 0b00000000  ;; row 0: and, or
         .db     0b00011111, 0b01000000  ;; row 1: and, or
@@ -42,10 +40,9 @@ _gpx_cur_classic::
         .db     0x11                    ;; hotspot: y=1, x=1
 
 _gpx_cur_std::
-        .db     0x30                    ;; signature: BMP_ENC_1BPP_MASK_COMPACT
+        .db     0x10                    ;; signature: BMP_ENC_1BPP_MASK, stride=1
         .db     0x08                    ;; width
         .db     0x0A                    ;; height
-        .db     0x01                    ;; stride
         .dw     0x0014                  ;; bitmap byte size
         .db     0b11111111, 0b11000000  ;; row 0: and, or
         .db     0b00011111, 0b10100000  ;; row 1: and, or
@@ -60,10 +57,9 @@ _gpx_cur_std::
         .db     0x11                    ;; hotspot: y=1, x=1
 
 _gpx_cur_hourglass::
-        .db     0x30                    ;; signature: BMP_ENC_1BPP_MASK_COMPACT
+        .db     0x10                    ;; signature: BMP_ENC_1BPP_MASK, stride=1
         .db     0x08                    ;; width
         .db     0x0A                    ;; height
-        .db     0x01                    ;; stride
         .dw     0x0014                  ;; bitmap byte size
         .db     0b00000001, 0b11111110  ;; row 0: and, or
         .db     0b10000011, 0b01000100  ;; row 1: and, or
@@ -78,10 +74,9 @@ _gpx_cur_hourglass::
         .db     0x43                    ;; hotspot: y=4, x=3
 
 _gpx_cur_caret::
-        .db     0x30                    ;; signature: BMP_ENC_1BPP_MASK_COMPACT
+        .db     0x10                    ;; signature: BMP_ENC_1BPP_MASK, stride=1
         .db     0x08                    ;; width
         .db     0x0A                    ;; height
-        .db     0x01                    ;; stride
         .dw     0x0014                  ;; bitmap byte size
         .db     0b00100111, 0b11011000  ;; row 0: and, or
         .db     0b00000111, 0b10101000  ;; row 1: and, or
@@ -96,10 +91,9 @@ _gpx_cur_caret::
         .db     0x71                    ;; hotspot: y=7, x=1
 
 _gpx_cur_hand::
-        .db     0x30                    ;; signature: BMP_ENC_1BPP_MASK_COMPACT
+        .db     0x10                    ;; signature: BMP_ENC_1BPP_MASK, stride=1
         .db     0x08                    ;; width
         .db     0x0A                    ;; height
-        .db     0x01                    ;; stride
         .dw     0x0014                  ;; bitmap byte size
         .db     0b11011111, 0b00100000  ;; row 0: and, or
         .db     0b10001111, 0b01010000  ;; row 1: and, or

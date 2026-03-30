@@ -55,34 +55,39 @@ typedef struct rect_s
 } rect_t;
 
 /* Bitmap signature byte:
- * bits 7..4 = encoding, bits 3..0 = reserved (must be 0 for now). */
+ * bits 7..4 = encoding
+ * bits 3..0 = stride encoding (stored as stride-1, valid range 0..15 => stride 1..16). */
 /* Known encoding ids (signature high nibble). */
-#define BMP_ENC_1BPP            0x0 /* 0000: standard 1bpp, 16-bit header fields */
-#define BMP_ENC_1BPP_MASK       0x1 /* 0001: masked 1bpp (AND/OR), 16-bit header */
-#define BMP_ENC_1BPP_COMPACT    0x2 /* 0010: standard 1bpp, compact 8-bit header */
-#define BMP_ENC_1BPP_MASK_COMPACT 0x3 /* 0011: masked 1bpp, compact 8-bit header */
-
-/* Backward-compatible aliases (old naming). */
-#define BMP_ENC_TINY_LINES      BMP_ENC_1BPP_COMPACT
-#define BMP_ENC_TINY_LINES_MASK BMP_ENC_1BPP_MASK_COMPACT
+#define BMP_ENC_1BPP            0x0 /* 0000: standard 1bpp */
+#define BMP_ENC_1BPP_MASK       0x1 /* 0001: masked 1bpp (AND/OR) */
+#define BMP_ENC_TINY            0x2 /* 0010: tiny move-stream bitmap */
 
 /* Helpers for signature byte handling. */
-#define BMP_SIG(enc) ((uint8_t)(((enc) & 0x0F) << 4))
+#define BMP_SIG(enc) ((uint8_t)(((enc) & 0x0F) << 4)) /* default stride=1 */
 #define BMP_ENC(sig) ((uint8_t)(((sig) >> 4) & 0x0F))
+#define BMP_STRIDE_ENC(stride) ((uint8_t)(((stride) - 1) & 0x0F))
+#define BMP_STRIDE(sig) ((uint8_t)(((sig) & 0x0F) + 1))
+#define BMP_SIG_STRIDE(enc, stride) \
+    ((uint8_t)(BMP_SIG(enc) | BMP_STRIDE_ENC(stride)))
 
 /* Backward-compatibility alias: standard 1bpp signature. */
 #define S_BMP BMP_SIG(BMP_ENC_1BPP)
 
-/* Packed 1bpp bitmap with header. */
+/* Packed 1bpp bitmap (single on-wire header format). */
 typedef struct bmp_s
 {
     uint8_t signature; /* Signature byte: encoding in high nibble. */
-    dim w;             /* Width in pixels. */
-    dim h;             /* Height in pixels. */
-    int16_t stride;    /* Bytes per scanline. */
+    uint8_t w;         /* Width in pixels. */
+    uint8_t h;         /* Height in pixels. */
     uint16_t size;     /* Total bitmap data size in bytes. */
     uint8_t bitmap[];  /* Payload per encoding (MSB-first bits). */
 } bmp_t;
+
+/* Optional trailer convention:
+ * For masked bitmaps (BMP_ENC_1BPP_MASK), two trailing bytes may follow payload:
+ *   bitmap[size + 0] = hotspot x
+ *   bitmap[size + 1] = hotspot y
+ * This is used by cursor assets; generic blitters may ignore it. */
 
 /* Forward declaration for APIs that take gpx_t* before full struct definition. */
 typedef struct gpx_s gpx_t;
@@ -90,6 +95,7 @@ typedef struct gpx_s gpx_t;
 /* Font header flags (byte 0). */
 #define FONT_FLAG_PROPORTIONAL 0x01 /* Variable-width glyphs. */
 #define FONT_FLAG_OFFSETS_BE 0x02 /* Offset table uses big-endian uint16_t. */
+#define FONT_FLAG_VECTOR 0x04 /* 1=vector font, 0=bitmap font. */
 
 /* Serialized font format:
  * [0] flags
@@ -117,7 +123,7 @@ typedef struct font_s
 /* Return platform default UI font (menus, controls, text). */
 extern const font_t *gpx_get_system_font(void);
 
-/* Return platform tiny font (icons/compact labels). */
+/* Return platform tiny font (icons/small labels). */
 extern const font_t *gpx_get_tiny_font(void);
 
 /* Stock bitmap identifiers.

@@ -2,10 +2,9 @@
 
 static const uint8_t bmp_data[] = {
     S_BMP,
-    8, 0,
+    8,
+    4,
     4, 0,
-    1, 0,
-    8, 0,
     0xF0, 0x0F, 0xAA, 0x55
 };
 

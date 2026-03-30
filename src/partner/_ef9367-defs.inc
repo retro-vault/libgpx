@@ -1,11 +1,6 @@
-		;; ef9367.inc
-        ;; 
-        ;; thompson ef9367 graphics display processor (EF9367) 
-		;;
-        ;; MIT License (see: LICENSE)
-        ;; copyright (c) 2021 tomaz stih
+        ;; _ef9367-defs.inc
         ;;
-		;; 04.04.2021   tstih
+        ;; Thomson EF9367 register and bit-mask definitions.
 
 
         ;; --- limits ---------------------------------------------------------
@@ -21,8 +16,8 @@
         .equ    EF9367_BM_XOR,          2
 
 
-        ;; --- 0x20 - W: command, R:the status register -----------------------
-        .equ    EF9367_STS,             0x20    ; status reg. (no interrupt reset)
+        ;; --- 0x20 - W: command, R: the status register ----------------------
+        .equ    EF9367_STS,             0x20    ; status reg. (read clears IRQ bits 4-7)
         .equ    EF9367_STS_LPEN,        0x01    ; light pen end
         .equ    EF9367_STS_VBLANK,      0x02    ; vertical blanking
         .equ    EF9367_STS_READY,       0x04    ; ready
@@ -64,7 +59,7 @@
 
         ;; --- 0x22 - RW: control register 2, bit 7-4 are not used ------------
         .equ    EF9367_CR2,             0x22
-        ;; bits 1 and 2 are vector type
+        ;; bits 1:0 are vector type
         .equ    EF9367_CR2_SOLID,       0b00    ; solid vector type
         .equ    EF9367_CR2_DOTTED,      0b01    ; dotted vector type
         .equ    EF9367_CR2_DASHED,      0b10    ; dashed
@@ -72,7 +67,7 @@
 
 
         ;; --- 0x23 - RW: character size --------------------------------------
-        ;; low nibble is scaling on x, high nibble is scaling on y)
+        ;; high nibble scales X, low nibble scales Y (0 means factor 16)
         .equ    EF9367_CH_SIZE,         0x23
 
 

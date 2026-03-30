@@ -111,7 +111,7 @@ void gpx_draw_bmp(
     const rect_t *cl = partner_clip_or_default(clip);
     coord w = b->w;
     coord h = b->h;
-    int16_t stride = b->stride;
+    uint8_t stride = BMP_STRIDE(b->signature);
     for (coord row = 0; row < h; ++row) {
         uint16_t row_offset = (uint16_t)(row * stride);
         for (coord col = 0; col < w; ++col) {

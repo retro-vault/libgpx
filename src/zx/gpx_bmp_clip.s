@@ -12,8 +12,6 @@
         .equ    BMP_SIG_ENC_MASK,         0xF0
         .equ    BMP_SIG_1BPP,             0x00
         .equ    BMP_SIG_1BPP_MASK,        0x10
-        .equ    BMP_SIG_1BPP_COMPACT,     0x20
-        .equ    BMP_SIG_1BPP_MASK_COMPACT,0x30
 
         .area   _CODE
 
@@ -85,33 +83,30 @@ _gpx_draw_bmp_clip::
         jr      z,.gbc_full_unmasked
         cp      #BMP_SIG_1BPP_MASK
         jr      z,.gbc_full_masked
-        cp      #BMP_SIG_1BPP_COMPACT
-        jp      z,.gbc_compact_unmasked
-        cp      #BMP_SIG_1BPP_MASK_COMPACT
-        jp      z,.gbc_compact_masked
         jp      .gbc_done
 
 .gbc_full_unmasked:
+        ;; compact header:
+        ;; +0 signature (stride in low nibble as stride-1)
+        ;; +1 width, +2 height, +3 size lo, +4 size hi, +5 bitmap
+        ld      a,(hl)
+        and     #0x0F
+        inc     a
+        ld      -15(ix),a              ;; stride lo
+        xor     a
+        ld      -16(ix),a              ;; stride hi
+
         inc     hl
         ld      a,(hl)
         ld      -11(ix),a              ;; w lo
-        inc     hl
-        ld      a,(hl)
+        xor     a
         ld      -12(ix),a              ;; w hi
 
         inc     hl
         ld      a,(hl)
         ld      -13(ix),a              ;; h lo
-        inc     hl
-        ld      a,(hl)
+        xor     a
         ld      -14(ix),a              ;; h hi
-
-        inc     hl
-        ld      a,(hl)
-        ld      -15(ix),a              ;; stride lo
-        inc     hl
-        ld      a,(hl)
-        ld      -16(ix),a              ;; stride hi
 
         inc     hl                     ;; size lo
         inc     hl                     ;; size hi
@@ -121,26 +116,24 @@ _gpx_draw_bmp_clip::
         jp      .gbc_dims_ok
 
 .gbc_full_masked:
+        ld      a,(hl)
+        and     #0x0F
+        inc     a
+        ld      -15(ix),a              ;; stride lo
+        xor     a
+        ld      -16(ix),a              ;; stride hi
+
         inc     hl
         ld      a,(hl)
         ld      -11(ix),a              ;; w lo
-        inc     hl
-        ld      a,(hl)
+        xor     a
         ld      -12(ix),a              ;; w hi
 
         inc     hl
         ld      a,(hl)
         ld      -13(ix),a              ;; h lo
-        inc     hl
-        ld      a,(hl)
+        xor     a
         ld      -14(ix),a              ;; h hi
-
-        inc     hl
-        ld      a,(hl)
-        ld      -15(ix),a              ;; stride lo
-        inc     hl
-        ld      a,(hl)
-        ld      -16(ix),a              ;; stride hi
 
         inc     hl                     ;; size lo
         inc     hl                     ;; size hi
@@ -161,70 +154,6 @@ _gpx_draw_bmp_clip::
         adc     a,-16(ix)
         ld      -16(ix),a
         jp      .gbc_dims_ok
-
-.gbc_compact_unmasked:
-        inc     hl
-        ld      a,(hl)
-        ld      -11(ix),a              ;; w lo
-        xor     a
-        ld      -12(ix),a              ;; w hi
-
-        inc     hl
-        ld      a,(hl)
-        ld      -13(ix),a              ;; h lo
-        xor     a
-        ld      -14(ix),a              ;; h hi
-
-        inc     hl
-        ld      a,(hl)
-        ld      -15(ix),a              ;; stride lo
-        xor     a
-        ld      -16(ix),a              ;; stride hi
-
-        inc     hl                     ;; size lo
-        inc     hl                     ;; size hi
-        inc     hl                     ;; bitmap
-        ld      -17(ix),l
-        ld      -18(ix),h
-        jp      .gbc_dims_ok
-
-.gbc_compact_masked:
-        inc     hl
-        ld      a,(hl)
-        ld      -11(ix),a              ;; w lo
-        xor     a
-        ld      -12(ix),a
-
-        inc     hl
-        ld      a,(hl)
-        ld      -13(ix),a              ;; h lo
-        xor     a
-        ld      -14(ix),a
-
-        inc     hl
-        ld      a,(hl)
-        ld      -15(ix),a              ;; stride lo
-        xor     a
-        ld      -16(ix),a
-
-        inc     hl                     ;; size lo
-        inc     hl                     ;; size hi
-        inc     hl                     ;; mask plane
-
-        ;; bmp plane at +stride
-        ld      e,-15(ix)
-        ld      d,#0x00
-        add     hl,de
-        ld      -17(ix),l
-        ld      -18(ix),h
-
-        ;; row step = stride*2
-        ld      a,-15(ix)
-        add     a,-15(ix)
-        ld      -15(ix),a
-        xor     a
-        adc     a,a
-        ld      -16(ix),a
 
 .gbc_dims_ok:
         ;; reject empty width/height

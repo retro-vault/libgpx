@@ -229,10 +229,9 @@ void test_screen_helpers()
     std::vector<uint8_t> bmpbuf(0x1B00, 0);
     std::vector<uint8_t> blob(sizeof(bmp_t) + 2, 0);
     bmp_t *bmp = reinterpret_cast<bmp_t *>(blob.data());
-    bmp->signature = S_BMP;
+    bmp->signature = BMP_SIG_STRIDE(BMP_ENC_1BPP, 1);
     bmp->w = 8;
     bmp->h = 2;
-    bmp->stride = 1;
     bmp->size = 2;
     bmp->bitmap[0] = 0xA0;
     bmp->bitmap[1] = 0x50;

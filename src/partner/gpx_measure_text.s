@@ -1,26 +1,32 @@
         ;; gpx_measure_text.s
         ;;
         ;; Measure text width from serialized font_t data.
-        ;; No decoded meta structure is used; the routine reads
-        ;; font header fields directly from font_t.
 
         .module gpx_measure_text
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_measure_text
 
-        .equ    FONT_FLAG_OFFSETS_BE, 0x02
-        .equ    BMP_ENC_MASK,         0xF0
-        .equ    BMP_SIG_1BPP,         0x00
-        .equ    BMP_SIG_1BPP_MASK,    0x10
+        .equ    FONT_FLAG_OFFSETS_BE,  0x02
+        .equ    BMP_ENC_MASK,          0xF0
+        .equ    BMP_SIG_1BPP,          0x00
+        .equ    BMP_SIG_1BPP_MASK,     0x10
+        .equ    BMP_SIG_TINY,          0x20
+        .equ    BMP_SIG_TINY_MASK,     0x30
 
         .area   _CODE
 
+        ;; ------------------------------------------------------------
         ;; coord gpx_measure_text(const char *text, const font_t *font)
+        ;; Input:
         ;;   HL = text
         ;;   DE = font
-        ;; Returns:
-        ;;   DE = width
+        ;;
+        ;; Output:
+        ;;   DE = measured width
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY
 _gpx_measure_text::
         ld      a,h                     ;; text != NULL ?
         or      l
@@ -53,28 +59,32 @@ _gpx_measure_text::
         cp      d                       ;; last_ascii < ch ?
         jr      c,.mt_add_empty
 
-        ld      a,d                     ;; idx = ch - first_ascii
+        ;; idx = (ch - first_ascii) * 2
+        ld      a,d
         sub     1(ix)
         ld      l,a
         ld      h,#0x00
-        add     hl,hl                   ;; idx * 2
+        add     hl,hl
+
+        ;; HL = &offset[idx] at font + 8
         ld      de,#0x0008
-        add     hl,de                   ;; + offset table start
+        add     hl,de
         push    ix
         pop     de
-        add     hl,de                   ;; HL = &offset[idx]
+        add     hl,de
 
-        ld      a,0(ix)                 ;; flags
+        ;; Read glyph offset in configured endian.
+        ld      a,0(ix)
         and     #FONT_FLAG_OFFSETS_BE
         jr      nz,.mt_read_be
 
-        ld      e,(hl)                  ;; little-endian offset
+        ld      e,(hl)                  ;; little-endian
         inc     hl
         ld      d,(hl)
         jr      .mt_have_off
 
 .mt_read_be:
-        ld      d,(hl)                  ;; big-endian offset
+        ld      d,(hl)                  ;; big-endian
         inc     hl
         ld      e,(hl)
 
@@ -83,14 +93,21 @@ _gpx_measure_text::
         or      e
         jr      z,.mt_add_empty         ;; missing glyph
 
+        ;; HL = glyph bmp_t*
         push    ix
         pop     hl
-        add     hl,de                   ;; HL = glyph bmp_t*
+        add     hl,de
+
+        ;; Accept compact 1bpp and tiny encodings.
         ld      a,(hl)
         and     #BMP_ENC_MASK
         cp      #BMP_SIG_1BPP
         jr      z,.mt_w8
         cp      #BMP_SIG_1BPP_MASK
+        jr      z,.mt_w8
+        cp      #BMP_SIG_TINY
+        jr      z,.mt_w8
+        cp      #BMP_SIG_TINY_MASK
         jr      z,.mt_w8
         jr      .mt_add_empty
 
@@ -98,8 +115,6 @@ _gpx_measure_text::
         inc     hl                      ;; +1 => width
         ld      e,(hl)
         ld      d,#0x00
-
-.mt_have_w:
 
         ld      a,d
         or      e
@@ -115,7 +130,7 @@ _gpx_measure_text::
 
         ;; sum += advance
         ld      a,c
-        add     a,6(ix)                 ;; advance
+        add     a,6(ix)
         ld      c,a
         jr      nc,.mt_loop
         inc     b

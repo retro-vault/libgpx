@@ -1,14 +1,14 @@
-        ;; _gpx_cohen_sutherland.s
+        ;; __gpx_cohen_sutherland.s
         ;;
         ;; Full Cohen-Sutherland clipping using bisection intersections.
 
-        .module _gpx_cohen_sutherland
+        .module __gpx_cohen_sutherland
         .optsdcc -mz80 sdcccall(1)
 
-        .globl  _gpx_cohen_sutherland
+        .globl  __gpx_cohen_sutherland
         .globl  __cs_compute_code
-        .globl  __rect_cmp16s_lt
-        .globl  _gpx_cs_intersection_bisect
+        .globl  __cs_rect_cmp16s_lt
+        .globl  __gpx_cs_intersection_bisect
 
         .area   _CODE
 
@@ -24,7 +24,7 @@
         ;; returns:
         ;;   A = 1 accepted (and clipped), A = 0 rejected
         ;; ------------------------------------------------------------
-_gpx_cohen_sutherland::
+__gpx_cohen_sutherland::
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -210,7 +210,7 @@ _gpx_cohen_sutherland::
         ld      h,-8(ix)               ;; ao = pyo
         ld      e,-11(ix)
         ld      d,-10(ix)              ;; bo = pxo
-        call    _gpx_cs_intersection_bisect
+        call    __gpx_cs_intersection_bisect
         jp      .cs_loop
 
 .cs_bottom:
@@ -240,7 +240,7 @@ _gpx_cohen_sutherland::
         ld      h,-8(ix)               ;; ao = pyo
         ld      e,-11(ix)
         ld      d,-10(ix)              ;; bo = pxo
-        call    _gpx_cs_intersection_bisect
+        call    __gpx_cs_intersection_bisect
         jp      .cs_loop
 
 .cs_right:
@@ -270,7 +270,7 @@ _gpx_cohen_sutherland::
         ld      h,-10(ix)              ;; ao = pxo
         ld      e,-9(ix)
         ld      d,-8(ix)               ;; bo = pyo
-        call    _gpx_cs_intersection_bisect
+        call    __gpx_cs_intersection_bisect
         jp      .cs_loop
 
 .cs_left:
@@ -298,7 +298,7 @@ _gpx_cohen_sutherland::
         ld      h,-10(ix)              ;; ao = pxo
         ld      e,-9(ix)
         ld      d,-8(ix)               ;; bo = pyo
-        call    _gpx_cs_intersection_bisect
+        call    __gpx_cs_intersection_bisect
         jp      .cs_loop
 
 .cs_accept:
@@ -328,7 +328,7 @@ __cs_compute_code:
         ;; if (x < r->x0) code |= LEFT;
         ld      e,0(iy)
         ld      d,1(iy)
-        call    __rect_cmp16s_lt
+        call    __cs_rect_cmp16s_lt
         jr      z,.cc_x_right
         set     0,c
         jr      .cc_y_enter
@@ -338,7 +338,7 @@ __cs_compute_code:
         ex      de,hl                 ;; DE = x
         ld      l,4(iy)
         ld      h,5(iy)
-        call    __rect_cmp16s_lt
+        call    __cs_rect_cmp16s_lt
         jr      z,.cc_y_enter
         set     1,c
 
@@ -348,7 +348,7 @@ __cs_compute_code:
         ;; if (y < r->y0) code |= TOP;
         ld      e,2(iy)
         ld      d,3(iy)
-        call    __rect_cmp16s_lt
+        call    __cs_rect_cmp16s_lt
         jr      z,.cc_y_bottom
         set     2,c
         jr      .cc_done
@@ -358,10 +358,46 @@ __cs_compute_code:
         ex      de,hl                 ;; DE = y
         ld      l,6(iy)
         ld      h,7(iy)
-        call    __rect_cmp16s_lt
+        call    __cs_rect_cmp16s_lt
         jr      z,.cc_done
         set     3,c
 
 .cc_done:
         ld      a,c
+        ret
+
+        ;; ------------------------------------------------------------
+        ;; uint8_t __cs_rect_cmp16s_lt(coord a, coord b)
+        ;;   HL = a
+        ;;   DE = b
+        ;; returns:
+        ;;   A = 1 if (a < b), else 0
+        ;; ------------------------------------------------------------
+__cs_rect_cmp16s_lt:
+        ;; Keep compare helper non-destructive for HL/DE.
+        ld      a,h
+        xor     d
+        jp      p,.cs_cmp_same_sign
+
+        ;; different signs: negative is smaller
+        bit     7,h
+        jr      z,.cs_cmp_false
+        ld      a,#1
+        ret
+
+.cs_cmp_same_sign:
+        ld      a,h
+        cp      d
+        jr      c,.cs_cmp_true
+        jr      nz,.cs_cmp_false
+        ld      a,l
+        cp      e
+        jr      c,.cs_cmp_true
+
+.cs_cmp_false:
+        xor     a
+        ret
+
+.cs_cmp_true:
+        ld      a,#1
         ret

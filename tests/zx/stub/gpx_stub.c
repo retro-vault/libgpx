@@ -35,8 +35,8 @@ extern const uint8_t gpx_font_envy[];
 #define ZX_FONT_TABLE_OFFSET 8
 #define ZX_FONT_TABLE_BYTES (ZX_FONT_CHAR_COUNT * 2)
 #define ZX_FONT_GLYPH_A_OFFSET (ZX_FONT_TABLE_OFFSET + ZX_FONT_TABLE_BYTES)
-#define ZX_FONT_GLYPH_B_OFFSET (ZX_FONT_GLYPH_A_OFFSET + 14)
-#define ZX_FONT_BLOB_SIZE (ZX_FONT_GLYPH_B_OFFSET + 14)
+#define ZX_FONT_GLYPH_B_OFFSET (ZX_FONT_GLYPH_A_OFFSET + 13)
+#define ZX_FONT_BLOB_SIZE (ZX_FONT_GLYPH_B_OFFSET + 13)
 static uint8_t zx_font_blob[ZX_FONT_BLOB_SIZE];
 static uint8_t zx_font_blob_ready;
 
@@ -73,59 +73,57 @@ static void zx_host_init_font_blob(void)
     zx_font_put_u16le(&zx_font_blob[ZX_FONT_TABLE_OFFSET + (('B' - ZX_FONT_FIRST_ASCII) * 2)],
         ZX_FONT_GLYPH_B_OFFSET);
 
-    /* Compact 1bpp glyph 'A' (3x8). */
+    /* 1bpp glyph 'A' (3x8), stride encoded in signature low nibble. */
     a = &zx_font_blob[ZX_FONT_GLYPH_A_OFFSET];
-    a[0] = BMP_SIG(BMP_ENC_1BPP_COMPACT);
+    a[0] = BMP_SIG_STRIDE(BMP_ENC_1BPP, 1);
     a[1] = 3;  /* width */
     a[2] = 8;  /* height */
-    a[3] = 1;  /* stride */
-    zx_font_put_u16le(&a[4], 8);
-    a[6] = 0x40;
-    a[7] = 0xA0;
-    a[8] = 0xE0;
+    zx_font_put_u16le(&a[3], 8);
+    a[5] = 0x40;
+    a[6] = 0xA0;
+    a[7] = 0xE0;
+    a[8] = 0xA0;
     a[9] = 0xA0;
-    a[10] = 0xA0;
+    a[10] = 0x00;
     a[11] = 0x00;
     a[12] = 0x00;
-    a[13] = 0x00;
 
-    /* Compact 1bpp glyph 'B' (3x8). */
+    /* 1bpp glyph 'B' (3x8), stride encoded in signature low nibble. */
     b = &zx_font_blob[ZX_FONT_GLYPH_B_OFFSET];
-    b[0] = BMP_SIG(BMP_ENC_1BPP_COMPACT);
+    b[0] = BMP_SIG_STRIDE(BMP_ENC_1BPP, 1);
     b[1] = 3;  /* width */
     b[2] = 8;  /* height */
-    b[3] = 1;  /* stride */
-    zx_font_put_u16le(&b[4], 8);
-    b[6] = 0xC0;
-    b[7] = 0xA0;
-    b[8] = 0xC0;
-    b[9] = 0xA0;
-    b[10] = 0xC0;
+    zx_font_put_u16le(&b[3], 8);
+    b[5] = 0xC0;
+    b[6] = 0xA0;
+    b[7] = 0xC0;
+    b[8] = 0xA0;
+    b[9] = 0xC0;
+    b[10] = 0x00;
     b[11] = 0x00;
     b[12] = 0x00;
-    b[13] = 0x00;
 
     zx_font_blob_ready = 1;
 }
 #endif
 
-typedef struct stock_bmp_s
-{
-    uint8_t signature;
-    uint16_t w;
-    uint16_t h;
-    int16_t stride;
-    uint16_t size;
-    uint8_t bitmap[1];
-} stock_bmp_t;
+static uint8_t zx_stock_classic[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x80
+};
+static uint8_t zx_stock_std[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x40
+};
+static uint8_t zx_stock_hourglass[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x20
+};
+static uint8_t zx_stock_caret[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x10
+};
+static uint8_t zx_stock_hand[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x08
+};
 
-static stock_bmp_t zx_stock_classic = {BMP_SIG(BMP_ENC_1BPP_MASK), 8, 1, 1, 1, {0x80}};
-static stock_bmp_t zx_stock_std = {BMP_SIG(BMP_ENC_1BPP_MASK), 8, 1, 1, 1, {0x40}};
-static stock_bmp_t zx_stock_hourglass = {BMP_SIG(BMP_ENC_1BPP_MASK), 8, 1, 1, 1, {0x20}};
-static stock_bmp_t zx_stock_caret = {BMP_SIG(BMP_ENC_1BPP_MASK), 8, 1, 1, 1, {0x10}};
-static stock_bmp_t zx_stock_hand = {BMP_SIG(BMP_ENC_1BPP_MASK), 8, 1, 1, 1, {0x08}};
-
-bmp_t *_gpx_cursor_current = (bmp_t *)&zx_stock_classic;
+bmp_t *_gpx_cursor_current = (bmp_t *)zx_stock_classic;
 
 static uint16_t zx_screen_offset(coord x, coord y)
 {
@@ -541,31 +539,11 @@ static int zx_parse_bmp(const bmp_t *b, zx_bmp_view_t *view)
     switch (sig) {
     case BMP_SIG(BMP_ENC_1BPP):
     case BMP_SIG(BMP_ENC_1BPP_MASK):
-        /* Prefer packed serialized layout, but accept aligned C structs
-         * used by host-only harness helpers. */
-        view->w = (uint16_t)(raw[1] | ((uint16_t)raw[2] << 8));
-        view->h = (uint16_t)(raw[3] | ((uint16_t)raw[4] << 8));
-        view->stride = (uint16_t)(raw[5] | ((uint16_t)raw[6] << 8));
-        view->size = (uint16_t)(raw[7] | ((uint16_t)raw[8] << 8));
-        view->bitmap = &raw[9];
-        if (view->w == 0 || view->w > 512 || view->h == 0 || view->h > 256 ||
-            view->stride == 0 || view->stride > 128) {
-            if (b->stride <= 0)
-                return 0;
-            view->w = b->w;
-            view->h = b->h;
-            view->stride = (uint16_t)b->stride;
-            view->size = b->size;
-            view->bitmap = b->bitmap;
-        }
-        break;
-    case BMP_SIG(BMP_ENC_1BPP_COMPACT):
-    case BMP_SIG(BMP_ENC_1BPP_MASK_COMPACT):
         view->w = raw[1];
         view->h = raw[2];
-        view->stride = raw[3];
-        view->size = (uint16_t)(raw[4] | ((uint16_t)raw[5] << 8));
-        view->bitmap = &raw[6];
+        view->stride = BMP_STRIDE(raw[0]);
+        view->size = (uint16_t)(raw[3] | ((uint16_t)raw[4] << 8));
+        view->bitmap = &raw[5];
         break;
     default:
         return 0;
@@ -585,9 +563,6 @@ static uint16_t zx_glyph_width(const uint8_t *glyph)
     switch (glyph[0] & 0xF0) {
     case BMP_SIG(BMP_ENC_1BPP):
     case BMP_SIG(BMP_ENC_1BPP_MASK):
-        return (uint16_t)(glyph[1] | ((uint16_t)glyph[2] << 8));
-    case BMP_SIG(BMP_ENC_1BPP_COMPACT):
-    case BMP_SIG(BMP_ENC_1BPP_MASK_COMPACT):
         return glyph[1];
     default:
         return 0;
@@ -700,15 +675,15 @@ bmp_t *gpx_get_stock_bmp(const uint8_t which)
 {
     switch (which) {
     case GPXSB_CURSOR_CLASSIC:
-        return (bmp_t *)&zx_stock_classic;
+        return (bmp_t *)zx_stock_classic;
     case GPXSB_CURSOR_STD:
-        return (bmp_t *)&zx_stock_std;
+        return (bmp_t *)zx_stock_std;
     case GPXSB_CURSOR_HOURGLASS:
-        return (bmp_t *)&zx_stock_hourglass;
+        return (bmp_t *)zx_stock_hourglass;
     case GPXSB_CURSOR_CARET:
-        return (bmp_t *)&zx_stock_caret;
+        return (bmp_t *)zx_stock_caret;
     case GPXSB_CURSOR_HAND:
-        return (bmp_t *)&zx_stock_hand;
+        return (bmp_t *)zx_stock_hand;
     default:
         return (bmp_t *)0;
     }
@@ -742,12 +717,7 @@ void gpx_cursor_set(bmp_t *cursor)
     }
 
     switch (cursor->signature & 0xF0) {
-#ifdef GPX_STUB_HOST
-    case BMP_SIG(BMP_ENC_1BPP):
-    case BMP_SIG(BMP_ENC_1BPP_COMPACT):
-#endif
     case BMP_SIG(BMP_ENC_1BPP_MASK):
-    case BMP_SIG(BMP_ENC_1BPP_MASK_COMPACT):
         _gpx_cursor_current = cursor;
         return;
     default:
