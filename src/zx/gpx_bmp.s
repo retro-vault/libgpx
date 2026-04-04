@@ -14,7 +14,8 @@
 
         .globl  _gpx_draw_bmp
         .globl  _gpx_draw_bmp_clip
-        .globl  _gpx_draw_bmp_masked_internal
+        .globl  __gpx_bmp_color
+        .globl  __gpx_bmp_mode
 
         .equ    SCRHEIGHT, 192
         .equ    BMP_SIG_ENC_MASK, 0xF0
@@ -31,6 +32,12 @@
         ;;   const rect_t *clip SP+6
         ;; )
 _gpx_draw_bmp::
+        ;; Public bitmap API uses fixed CO_FORE/BM_CPY semantics.
+        ld      a,#0x01
+        ld      (__gpx_bmp_color),a
+        xor     a
+        ld      (__gpx_bmp_mode),a
+
         ;; Preserve incoming register args in case we need fallback later.
         ld      (gb_gpx),hl
         ld      a,e
@@ -43,13 +50,13 @@ _gpx_draw_bmp::
         or      a
         jp      nz,gb_fallback
 
-        ;; Fast path handles only clip==NULL; clipped draws use fallback.
+        ;; Save clip pointer (may be NULL).
         ld      hl,#6
         add     hl,sp
-        ld      a,(hl)
+        ld      e,(hl)
         inc     hl
-        or      (hl)
-        jp      nz,gb_fallback
+        ld      d,(hl)
+        ld      (gb_clip),de
 
         ;; Load y and bmp pointer.
         ld      hl,#2
@@ -84,10 +91,19 @@ _gpx_draw_bmp::
         cp      #BMP_SIG_1BPP
         jr      z,gb_sig_unmasked_full
         cp      #BMP_SIG_1BPP_MASK
-        jp      z,gb_masked
+        jr      z,gb_sig_masked_full
         jp      gb_exit
 
 gb_sig_unmasked_full:
+        xor     a
+        ld      (gb_is_masked),a
+        jr      gb_sig_parse_full
+
+gb_sig_masked_full:
+        ld      a,#1
+        ld      (gb_is_masked),a
+
+gb_sig_parse_full:
         ;; stride is packed in signature low nibble as (stride-1).
         ld      a,(hl)
         and     #0x0F
@@ -129,6 +145,107 @@ gb_bh_nonzero:
         ld      (gb_right_limit),a
         ld      a,#(SCRHEIGHT-1)
         ld      (gb_bottom_limit),a
+
+        ;; Optional fast clip: only when clip is byte-range and does not
+        ;; trim on left/top (no source offset required).
+        ld      a,(gb_clip+1)
+        ld      b,a
+        ld      a,(gb_clip)
+        or      b
+        jr      z,gb_limits_ready
+
+        ld      hl,(gb_clip)
+
+        ;; x0 high:
+        ;; - negative => no left trim needed
+        ;; - zero     => enforce x >= x0
+        ;; - positive => left trim needed (fallback)
+        ld      c,(hl)                 ;; x0 lo
+        inc     hl
+        ld      a,(hl)                 ;; x0 hi
+        bit     7,a
+        jr      nz,gb_clip_y0
+        or      a
+        jp      nz,gb_fallback
+        ld      a,(gb_x)
+        cp      c
+        jp      c,gb_fallback
+
+gb_clip_y0:
+        ;; y0 high:
+        ;; - negative => no top trim needed
+        ;; - zero     => enforce y >= y0
+        ;; - positive => top trim needed (fallback)
+        inc     hl
+        ld      c,(hl)                 ;; y0 lo
+        inc     hl
+        ld      a,(hl)                 ;; y0 hi
+        bit     7,a
+        jr      nz,gb_clip_x1
+        or      a
+        jp      nz,gb_fallback
+        ld      a,(gb_y)
+        cp      c
+        jp      c,gb_fallback
+
+gb_clip_x1:
+        ;; x1 high:
+        ;; - negative => nothing visible for x>=0
+        ;; - zero     => right limit = x1
+        ;; - positive => right limit stays 255 (no restriction)
+        inc     hl
+        ld      a,(hl)                 ;; x1 lo
+        ld      c,a
+        inc     hl
+        ld      a,(hl)                 ;; x1 hi
+        bit     7,a
+        jp      nz,gb_exit
+        or      a
+        jr      nz,gb_clip_y1
+        ld      a,c
+        ld      (gb_right_limit),a
+
+        ;; If start x is right of clip right edge -> nothing visible.
+        ld      a,(gb_right_limit)
+        ld      c,a
+        ld      a,(gb_x)
+        cp      c
+        jr      c,gb_clip_y1
+        jr      z,gb_clip_y1
+        jp      gb_exit
+
+gb_clip_y1:
+        ;; y1 high:
+        ;; - negative => nothing visible for y>=0
+        ;; - zero     => bottom limit = min(y1,191)
+        ;; - positive => bottom limit stays 191 (no restriction)
+        inc     hl
+        ld      a,(hl)                 ;; y1 lo
+        ld      c,a
+        inc     hl
+        ld      a,(hl)                 ;; y1 hi
+        bit     7,a
+        jp      nz,gb_exit
+        or      a
+        jr      nz,gb_clip_y1_chk
+        ld      a,c
+        cp      #(SCRHEIGHT-1)
+        jr      c,gb_clip_y1_set
+        ld      a,#(SCRHEIGHT-1)
+gb_clip_y1_set:
+        ld      (gb_bottom_limit),a
+
+gb_clip_y1_chk:
+        ;; If start y is below clip bottom edge -> nothing visible.
+        ld      a,(gb_bottom_limit)
+        ld      c,a
+        ld      a,(gb_y)
+        cp      c
+        jr      c,gb_limits_ready
+        jr      z,gb_limits_ready
+        jp      gb_exit
+
+gb_limits_ready:
 
         ;; visw = min(bitmap width, right_limit - x + 1)
         ld      a,(gb_bw_hi)
@@ -296,16 +413,44 @@ gb_dstspan_div:
         dec     a
         ld      (gb_dstlast),a
 
-        ;; row stride
-        ld      hl,(gb_bstride)
-        ld      (gb_rowstride),hl
-
-        ;; source row starts at bmp->bitmap
+        ;; source row pointers + independent row strides:
+        ;; - AND row (mask plane, or synthetic 0xFF for unmasked)
+        ;; - OR row  (bitmap plane)
         ld      hl,(gb_bptr)
         ld      de,#5
         add     hl,de
+
+        ;; unmasked: AND=0xFF stream (step 0), OR=bitmap row (step stride)
+        ;; masked:   AND=mask row (step stride*2), OR=mask+stride (step stride*2)
+        ld      a,(gb_is_masked)
+        or      a
+        jr      z,gb_rows_unmasked
+
+        ;; masked rows
         ld      (gb_srcrow),hl
 
+        ld      de,(gb_bstride)
+        add     hl,de
+        ld      (gb_srcrow_or),hl
+
+        ld      hl,(gb_bstride)
+        add     hl,hl
+        ld      (gb_rowstride_and),hl
+        ld      (gb_rowstride_or),hl
+        jr      gb_rows_ready
+
+gb_rows_unmasked:
+        ld      (gb_srcrow_or),hl
+        ld      hl,#gb_ff_pad
+        ld      (gb_srcrow),hl
+        xor     a
+        ld      l,a
+        ld      h,a
+        ld      (gb_rowstride_and),hl
+        ld      hl,(gb_bstride)
+        ld      (gb_rowstride_or),hl
+
+gb_rows_ready:
         xor     a
         ld      (gb_rowcnt),a
         ld      a,(gb_y)
@@ -330,15 +475,18 @@ gb_row_loop:
 
         ld      hl,(gb_srcrow)
         ld      (gb_srcptr),hl
+        ld      hl,(gb_srcrow_or)
+        ld      (gb_srcptr_or),hl
 
         xor     a
         ld      (gb_remainder),a
+        ld      (gb_remainder_or),a
         ld      (gb_bytecnt),a
 
-        jp      gb_col_loop_unmasked
+        jp      gb_col_loop_compose
 
 
-gb_col_loop_unmasked:
+gb_col_loop_compose:
         ld      a,(gb_bytecnt)
         ld      c,a
         ld      a,(gb_dstspan)
@@ -375,12 +523,13 @@ gb_um_keep_ready:
         cpl
         ld      (gb_inside),a
 
-        ;; read source byte if c < srcspan
+        ;; read source bytes if c < srcspan
         ld      a,(gb_srcspan)
         cp      c
-        jr      z,gb_um_no_src
-        jr      c,gb_um_no_src
+        jr      z,gb_cm_no_src
+        jr      c,gb_cm_no_src
 
+        ;; AND source byte (masked row or synthetic 0xFF row for unmasked)
         ld      hl,(gb_srcptr)
         ld      a,(hl)
         inc     hl
@@ -390,39 +539,104 @@ gb_um_keep_ready:
         ;; rotate right by rshift
         ld      a,(gb_rshift)
         or      a
-        jr      z,gb_um_rot_done
+        jr      z,gb_cm_and_rot_done
         ld      b,a
         ld      a,(gb_rot)
-gb_um_rot_loop:
+gb_cm_and_rot_loop:
         rrca
-        djnz    gb_um_rot_loop
+        djnz    gb_cm_and_rot_loop
         ld      (gb_rot),a
 
-gb_um_rot_done:
+gb_cm_and_rot_done:
         ld      a,(gb_lmask)
         cpl
         ld      b,a
         ld      a,(gb_rot)
         and     b
-        ld      (gb_fore),a
-        jr      gb_um_have_src
-
-gb_um_no_src:
-        xor     a
-        ld      (gb_rot),a
-        ld      (gb_fore),a
-
-gb_um_have_src:
-        ;; draw bits = current fore + previous remainder
-        ld      a,(gb_fore)
         ld      b,a
         ld      a,(gb_remainder)
         or      b
-        ld      b,a
+        ld      (gb_fore),a
 
-        ;; keep only inside bits for this destination byte
+        ;; next AND remainder = rot & lmask
+        ld      a,(gb_rot)
+        ld      b,a
+        ld      a,(gb_lmask)
+        and     b
+        ld      (gb_remainder),a
+
+        ;; OR source byte
+        ld      hl,(gb_srcptr_or)
+        ld      a,(hl)
+        inc     hl
+        ld      (gb_srcptr_or),hl
+        ld      (gb_rot),a
+
+        ;; rotate right by rshift
+        ld      a,(gb_rshift)
+        or      a
+        jr      z,gb_cm_or_rot_done
+        ld      b,a
+        ld      a,(gb_rot)
+gb_cm_or_rot_loop:
+        rrca
+        djnz    gb_cm_or_rot_loop
+        ld      (gb_rot),a
+
+gb_cm_or_rot_done:
+        ld      a,(gb_lmask)
+        cpl
+        ld      b,a
+        ld      a,(gb_rot)
+        and     b
+        ld      b,a
+        ld      a,(gb_remainder_or)
+        or      b
+        ld      (gb_orbits),a
+
+        ;; next OR remainder = rot & lmask
+        ld      a,(gb_rot)
+        ld      b,a
+        ld      a,(gb_lmask)
+        and     b
+        ld      (gb_remainder_or),a
+        jr      gb_cm_have_src
+
+gb_cm_no_src:
+        ;; flush pending carry bits from both planes
+        ld      a,(gb_remainder)
+        ld      (gb_fore),a
+        xor     a
+        ld      (gb_remainder),a
+
+        ld      a,(gb_remainder_or)
+        ld      (gb_orbits),a
+        xor     a
+        ld      (gb_remainder_or),a
+
+gb_cm_have_src:
+        ;; and_inside = and_aligned & inside
+        ld      a,(gb_fore)
+        ld      b,a
         ld      a,(gb_inside)
         and     b
+        ld      (gb_fore),a
+
+        ;; draw = (old & and_inside) | (or_aligned & inside)
+        ld      a,(gb_old)
+        ld      b,a
+        ld      a,(gb_fore)
+        and     b
+        ld      (gb_draw),a
+
+        ld      a,(gb_orbits)
+        ld      b,a
+        ld      a,(gb_inside)
+        and     b
+        ld      b,a
+
+        ld      a,(gb_draw)
+        or      b
         ld      (gb_draw),a
 
         ;; out = (old & keep) | draw
@@ -436,13 +650,6 @@ gb_um_have_src:
         ld      hl,(gb_dstptr)
         ld      (hl),a
 
-        ;; next remainder = rot & lmask
-        ld      a,(gb_rot)
-        ld      b,a
-        ld      a,(gb_lmask)
-        and     b
-        ld      (gb_remainder),a
-
         ;; advance destination pointer + counter
         ld      hl,(gb_dstptr)
         inc     hl
@@ -451,15 +658,21 @@ gb_um_have_src:
         ld      a,(gb_bytecnt)
         inc     a
         ld      (gb_bytecnt),a
-        jp      gb_col_loop_unmasked
+        jp      gb_col_loop_compose
 
 
 gb_next_row:
-        ;; srcrow += rowstride
+        ;; AND srcrow += and_rowstride
         ld      hl,(gb_srcrow)
-        ld      de,(gb_rowstride)
+        ld      de,(gb_rowstride_and)
         add     hl,de
         ld      (gb_srcrow),hl
+
+        ;; OR srcrow += or_rowstride
+        ld      hl,(gb_srcrow_or)
+        ld      de,(gb_rowstride_or)
+        add     hl,de
+        ld      (gb_srcrow_or),hl
 
         ;; ycur++, rowcnt++
         ld      a,(gb_ycur)
@@ -479,15 +692,6 @@ gb_fallback:
         ld      a,(gb_xhi)
         ld      d,a
         jp      _gpx_draw_bmp_clip
-
-gb_masked:
-        ld      hl,(gb_gpx)
-        ld      a,(gb_x)
-        ld      e,a
-        ld      a,(gb_xhi)
-        ld      d,a
-        jp      _gpx_draw_bmp_masked_internal
-
 
 gb_exit:
         ;; callee cleanup: y(2), b(2), clip(2)
@@ -528,6 +732,8 @@ gb_xhi:
         .ds     1
 gb_y:
         .ds     1
+gb_clip:
+        .ds     2
 gb_bptr:
         .ds     2
 gb_bw:
@@ -540,7 +746,9 @@ gb_bh_hi:
         .ds     1
 gb_bstride:
         .ds     2
-gb_rowstride:
+gb_rowstride_and:
+        .ds     2
+gb_rowstride_or:
         .ds     2
 gb_right_limit:
         .ds     1
@@ -566,7 +774,11 @@ gb_dstlast:
         .ds     1
 gb_srcrow:
         .ds     2
+gb_srcrow_or:
+        .ds     2
 gb_srcptr:
+        .ds     2
+gb_srcptr_or:
         .ds     2
 gb_dstptr:
         .ds     2
@@ -590,3 +802,14 @@ gb_remainder:
         .ds     1
 gb_draw:
         .ds     1
+gb_remainder_or:
+        .ds     1
+gb_orbits:
+        .ds     1
+gb_is_masked:
+        .ds     1
+gb_ff_pad:
+        .db     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
+        .db     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
+        .db     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
+        .db     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
