@@ -151,8 +151,8 @@ extern void gpx_draw_text(
  * The actual framebuffer pointer is managed by the platform. */
 struct gpx_s
 {
-    uint16_t width;  /* Display width in pixels. */
-    uint16_t height; /* Display height in pixels. */
+    dim width;       /* Display width in pixels. */
+    dim height;      /* Display height in pixels. */
     uint8_t pages;   /* Number of framebuffer pages available. */
 };
 
