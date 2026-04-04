@@ -51,19 +51,20 @@ $(BUILD_TMP)/:
 
 $(ZX_LIB_STAMP): $(ZX_ASM_SRCS) $(ZX_C_SRCS) | $(BUILD_DIR)/zx/
 	mkdir -p $(BUILD_DIR)/zx
+	rm -f $(BUILD_DIR)/zx/*.rel
 	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_SPEC) sh -lc '\
 		set -e; \
 		for src in src/zx/*.s; do \
 			[ -e "$$src" ] || continue; \
 			base="$$(basename "$$src" .s)"; \
-			case "$$base" in gpx_rect_clip|_gpx_cohen_sutherland|_gpx_cs_intersection|_gpx_line_normalize) continue;; esac; \
+			case "$$base" in _gpx_rect_clip|_gpx_cohen_sutherland|_gpx_cs_intersection|_gpx_line_normalize) continue;; esac; \
 			dest="build/zx/$$base.rel"; \
 			/opt/sdcc/bin/sdasz80 -o "$$dest" "$$src"; \
 		done; \
 		for src in src/zx/*.c; do \
 			[ -e "$$src" ] || continue; \
 			base="$$(basename "$$src" .c)"; \
-			case "$$base" in rect_helpers|shape_ref) continue;; esac; \
+			case "$$base" in _rect_helpers|shape_ref) continue;; esac; \
 			dest="build/zx/$$base.rel"; \
 			/opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o "$$dest" "$$src"; \
 		done'

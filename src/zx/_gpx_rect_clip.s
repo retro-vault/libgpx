@@ -1,13 +1,13 @@
-        ;; gpx_rect_clip.s
+        ;; _gpx_rect_clip.s
         ;;
         ;; Rectangle helper routines in Z80 assembly.
 
-        .module gpx_rect_clip
+        .module _gpx_rect_clip
         .optsdcc -mz80 sdcccall(1)
 
-        .globl  _gpx_clip_rect_effective
-        .globl  _gpx_point_in_rect
-        .globl  _gpx_line_needs_clip
+        .globl  __gpx_clip_rect_effective
+        .globl  __gpx_point_in_rect
+        .globl  __gpx_line_needs_clip
         .globl  __rect_cmp16s_lt
 
         .area   _CODE
@@ -17,7 +17,7 @@
         ;;   HL = out
         ;;   DE = clip (or 0)
         ;; --------------------------------------------------------------
-_gpx_clip_rect_effective::
+__gpx_clip_rect_effective::
         ld      b,h
         ld      c,l                    ;; BC = out base
 
@@ -212,7 +212,7 @@ _gpx_clip_rect_effective::
         ;;   stack: r ptr (2 bytes)
         ;; callee cleans 2 bytes
         ;; --------------------------------------------------------------
-_gpx_point_in_rect::
+__gpx_point_in_rect::
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -311,7 +311,7 @@ _gpx_point_in_rect::
         ;;   stack: x1(2), y1(2), r(2)
         ;; callee cleans 6 bytes
         ;; --------------------------------------------------------------
-_gpx_line_needs_clip::
+__gpx_line_needs_clip::
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -320,7 +320,7 @@ _gpx_line_needs_clip::
         ld      c,8(ix)
         ld      b,9(ix)
         push    bc
-        call    _gpx_point_in_rect
+        call    __gpx_point_in_rect
         or      a
         jr      z,glnc_need
 
@@ -332,7 +332,7 @@ _gpx_line_needs_clip::
         ld      c,8(ix)
         ld      b,9(ix)
         push    bc
-        call    _gpx_point_in_rect
+        call    __gpx_point_in_rect
         or      a
         jr      z,glnc_need
 

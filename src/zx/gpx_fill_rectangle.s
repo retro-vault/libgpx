@@ -105,10 +105,8 @@ _gpx_fill_rectangle::
         push    hl                     ;; clip
 
         ld      a,-17(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        push    af
+        inc     sp                     ;; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -157,7 +155,7 @@ _gpx_fill_rectangle::
 .fr_store_idx:
         ld      -13(ix),a
 
-        jp      .fr_row_loop
+        jr      .fr_row_loop
 
 .fr_done:
         ld      sp,ix

@@ -1,8 +1,8 @@
-        ;; rect_helpers.s
+        ;; _rect_helpers.s
         ;;
         ;; Minimal signed 16-bit compare helper.
 
-        .module rect_helpers
+        .module _rect_helpers
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __rect_cmp16s_lt

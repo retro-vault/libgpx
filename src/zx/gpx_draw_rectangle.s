@@ -60,10 +60,8 @@ _gpx_draw_rectangle::
         push    hl                     ;; clip
 
         ld      a,6(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        push    af
+        inc     sp                     ;; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -93,10 +91,8 @@ _gpx_draw_rectangle::
         push    hl                     ;; clip
 
         ld      a,6(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        push    af
+        inc     sp                     ;; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -141,7 +137,7 @@ _gpx_draw_rectangle::
         ld      d,-12(ix)
         call    __rect_cmp16s_lt
         or      a
-        jp      nz,.dr_done
+        jr      nz,.dr_done
 
         ;; left side: vline(x0, ytop..ybot), solid
         ld      l,7(ix)
@@ -149,10 +145,8 @@ _gpx_draw_rectangle::
         push    hl                     ;; clip
 
         ld      a,#0xff
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                 ;; lpatt solid
+        push    af
+        inc     sp                     ;; lpatt solid
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -182,10 +176,8 @@ _gpx_draw_rectangle::
         push    hl                     ;; clip
 
         ld      a,#0xff
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                 ;; lpatt solid
+        push    af
+        inc     sp                     ;; lpatt solid
 
         ld      l,4(ix)
         ld      h,5(ix)

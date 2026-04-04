@@ -9,8 +9,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_text
-        .globl  _gpx_draw_bmp
-        .globl  _gpx_draw_bmp_mode_internal
+        .globl  _gpx_draw_bmp_clip
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
@@ -34,6 +33,12 @@ _gpx_draw_text::
         ld      ix,#0
         add     ix,sp
 
+        ;; keep gpx in alternate HL for draw calls
+        push    hl
+        exx
+        pop     hl
+        exx
+
         ;; text == NULL ?
         ld      a,6(ix)
         or      7(ix)
@@ -44,17 +49,15 @@ _gpx_draw_text::
         or      9(ix)
         jp      z,.dt_epilogue
 
-        ;; locals (13 bytes):
+        ;; locals (9 bytes):
         ;; -1..-2   xcur
         ;; -3..-4   text pointer
-        ;; -5..-6   font base
-        ;; -7..-8   gpx pointer
-        ;; -9       flags
-        ;; -10      first_ascii
-        ;; -11      last_ascii
-        ;; -12      empty_width
-        ;; -13      advance
-        ld      hl,#-13
+        ;; -5       flags
+        ;; -6       first_ascii
+        ;; -7       last_ascii
+        ;; -8       empty_width
+        ;; -9       advance
+        ld      hl,#-9
         add     hl,sp
         ld      sp,hl
 
@@ -68,35 +71,25 @@ _gpx_draw_text::
         ld      a,7(ix)
         ld      -4(ix),a
 
-        ;; font base
-        ld      a,8(ix)
-        ld      -5(ix),a
-        ld      a,9(ix)
-        ld      -6(ix),a
-
-        ;; gpx pointer
-        ld      -7(ix),l
-        ld      -8(ix),h
-
         ;; cached font header bytes
-        ld      l,-5(ix)
-        ld      h,-6(ix)              ;; HL = font
+        ld      l,8(ix)
+        ld      h,9(ix)               ;; HL = font
         ld      a,(hl)
-        ld      -9(ix),a              ;; flags
+        ld      -5(ix),a              ;; flags
         inc     hl
         ld      a,(hl)
-        ld      -10(ix),a             ;; first_ascii
+        ld      -6(ix),a              ;; first_ascii
         inc     hl
         ld      a,(hl)
-        ld      -11(ix),a             ;; last_ascii
+        ld      -7(ix),a              ;; last_ascii
         inc     hl
         ld      a,(hl)
-        ld      -12(ix),a             ;; empty_width
+        ld      -8(ix),a              ;; empty_width
         inc     hl
         inc     hl                    ;; skip max_glyph_width
         inc     hl                    ;; skip glyph_height
         ld      a,(hl)
-        ld      -13(ix),a             ;; advance
+        ld      -9(ix),a              ;; advance
 
 .dt_loop:
         ;; ch = *text++
@@ -111,16 +104,16 @@ _gpx_draw_text::
 
         ;; if (ch < first || ch > last) add empty width
         ld      e,a                   ;; E = ch
-        cp      -10(ix)
+        cp      -6(ix)
         jp      c,.dt_add_empty
 
-        ld      a,-11(ix)             ;; A = last
+        ld      a,-7(ix)              ;; A = last
         cp      e                     ;; last < ch ?
         jp      c,.dt_add_empty
 
         ;; idx = ch - first
         ld      a,e
-        sub     -10(ix)
+        sub     -6(ix)
         ld      l,a
         ld      h,#0x00
         add     hl,hl                 ;; idx * 2
@@ -128,12 +121,12 @@ _gpx_draw_text::
         ;; HL = font + 8 + idx*2
         ld      de,#0x0008
         add     hl,de
-        ld      e,-5(ix)
-        ld      d,-6(ix)
+        ld      e,8(ix)
+        ld      d,9(ix)
         add     hl,de
 
         ;; read glyph offset (LE/BE from flag)
-        ld      a,-9(ix)
+        ld      a,-5(ix)
         and     #FONT_FLAG_OFFSETS_BE
         jr      nz,.dt_off_be
 
@@ -150,11 +143,11 @@ _gpx_draw_text::
 .dt_have_off:
         ld      a,d
         or      e
-        jp      z,.dt_add_empty
+        jr      z,.dt_add_empty
 
         ;; HL = glyph pointer = font + offset
-        ld      l,-5(ix)
-        ld      h,-6(ix)
+        ld      l,8(ix)
+        ld      h,9(ix)
         add     hl,de
 
         ;; BC = glyph pointer (kept for draw call)
@@ -168,7 +161,7 @@ _gpx_draw_text::
         jr      z,.dt_w8
         cp      #BMP_SIG_1BPP_MASK
         jr      z,.dt_w8
-        jp      .dt_add_empty
+        jr      .dt_add_empty
 
 .dt_w8:
         inc     hl
@@ -179,69 +172,31 @@ _gpx_draw_text::
 
         ld      a,d
         or      e
-        jp      z,.dt_add_empty
+        jr      z,.dt_add_empty
 
         ;; preserve width across draw_bmp call
         push    de
 
-        ;; Use the fast bitmap blit only for normal foreground copy text.
-        ;; Other modes (for example BM_XOR) need the generic per-pixel path.
-        ld      a,10(ix)               ;; color
-        cp      #CO_FORE
-        jr      nz,.dt_draw_mode
-        ld      a,11(ix)               ;; bmode
-        cp      #BM_CPY
-        jr      nz,.dt_draw_mode
-
-        ;; gpx_draw_bmp(gpx, xcur, y, glyph, clip)
-        ;; stack args (callee-cleaned by gpx_draw_bmp): y, glyph, clip
+        ;; Call the shared bitmap core directly.
         ld      l,12(ix)
         ld      h,13(ix)
         push    hl                    ;; clip
 
-        ld      l,c
-        ld      h,b
-        push    hl                    ;; glyph bmp_t*
+        push    bc                    ;; glyph bmp_t*
 
         ld      l,4(ix)
         ld      h,5(ix)
         push    hl                    ;; y
 
-        ld      l,-7(ix)
-        ld      h,-8(ix)              ;; gpx
+        exx
+        push    hl
+        exx
+        pop     hl                    ;; gpx
         ld      e,-1(ix)
         ld      d,-2(ix)              ;; xcur
-        call    _gpx_draw_bmp
-        jr      .dt_draw_done
-
-.dt_draw_mode:
-        ;; gpx_draw_bmp_mode_internal(gpx, xcur, y, glyph, c, m, clip)
-        ;; stack args (callee-cleaned): y, glyph, c, m, clip
-        ld      l,12(ix)
-        ld      h,13(ix)
-        push    hl                    ;; clip
-
-        ld      a,11(ix)
-        push    af                    ;; m
-        inc     sp
-
-        ld      a,10(ix)
-        push    af                    ;; c
-        inc     sp
-
-        ld      l,c
-        ld      h,b
-        push    hl                    ;; glyph bmp_t*
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                    ;; y
-
-        ld      l,-7(ix)
-        ld      h,-8(ix)              ;; gpx
-        ld      e,-1(ix)
-        ld      d,-2(ix)              ;; xcur
-        call    _gpx_draw_bmp_mode_internal
+        ld      b,11(ix)              ;; bmode
+        ld      c,10(ix)              ;; color
+        call    _gpx_draw_bmp_clip
 
 .dt_draw_done:
 
@@ -258,7 +213,7 @@ _gpx_draw_text::
 
         ;; xcur += advance
         ld      a,-1(ix)
-        add     a,-13(ix)
+        add     a,-9(ix)
         ld      -1(ix),a
         jp      nc,.dt_loop
         inc     -2(ix)
@@ -266,7 +221,7 @@ _gpx_draw_text::
 
 .dt_add_empty:
         ld      a,-1(ix)
-        add     a,-12(ix)
+        add     a,-8(ix)
         ld      -1(ix),a
         jp      nc,.dt_loop
         inc     -2(ix)

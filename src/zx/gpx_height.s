@@ -13,13 +13,6 @@
         ;; dim gpx_height(void)
 _gpx_height::
         ld      hl,(__gpx_ctx)          ;; HL = active gpx_t*
-        ld      a,h
-        or      l
-        jr      nz,.have_ctx
-        ld      de,#0x0000
-        ret
-
-.have_ctx:
         inc     hl                      ;; +2 => height
         inc     hl
         ld      e,(hl)                  ;; height lo
