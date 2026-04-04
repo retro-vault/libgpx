@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "libgpx.h"
-
 extern uint8_t *gpx_stub_host_screen(void);
 
 static int failures = 0;
@@ -64,6 +63,14 @@ static uint8_t bmp_checker[] = {
     4,
     4, 0,
     0xF0, 0x0F, 0xAA, 0x55
+};
+
+static uint8_t bmp_masked_test[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1),
+    8,
+    1,
+    2, 0,
+    0x25, 0x42
 };
 
 static void test_context(void)
@@ -171,6 +178,16 @@ static void test_bitmap(void)
     gpx_clrscr();
     gpx_draw_bmp(g, -2, 190, (bmp_t *)&bmp_checker, (const rect_t *)0);
     CHECK(pixel_on(0, 190) || pixel_on(1, 190), "draw_bmp default clip with screen bounds");
+
+    gpx_clrscr();
+    rect_t clip_masked = {40, 20, 46, 20};
+    gpx_draw_pixel(g, 42, 20, CO_FORE, BM_CPY, (const rect_t *)0);
+    gpx_draw_pixel(g, 45, 20, CO_FORE, BM_CPY, (const rect_t *)0);
+    gpx_draw_bmp(g, 40, 20, (bmp_t *)&bmp_masked_test, &clip_masked);
+    CHECK(!pixel_on(40, 20), "masked draw_bmp should clear zero-masked pixel");
+    CHECK(pixel_on(41, 20), "masked draw_bmp should set OR pixel");
+    CHECK(pixel_on(42, 20) && pixel_on(45, 20), "masked draw_bmp should preserve kept pixels");
+    CHECK(pixel_on(46, 20) && !pixel_on(47, 20), "masked draw_bmp should distinguish set vs transparent");
 }
 
 static void test_fonts_text_and_measure(void)

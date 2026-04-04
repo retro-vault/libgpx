@@ -2,6 +2,10 @@
 
 # libgpx
 
+> Historical snapshot only.
+> This file documents the older archived API preserved under `archive/`.
+> The current public API lives in `include/libgpx.h`, and the current user-facing overview is the repo-root `README.md`.
+
 Welcome to **libgpx**, a multiplatform graphics library for 8bit micros. 
 
 # Compiling libgpx

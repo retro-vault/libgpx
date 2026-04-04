@@ -1,16 +1,15 @@
         ;; gpx_fill_rectangle.s
         ;;
-        ;; Rectangle fill renderer (strict semantic path):
+        ;; Rectangle fill renderer:
         ;;  - normalizes rectangle coordinates
         ;;  - pattern is applied per row, MSB-first from x0
-        ;;  - clipping is delegated to gpx_draw_pixel
+        ;;  - dispatches each row through fast __gpx_hline
 
         .module gpx_fill_rectangle
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_fill_rectangle
-        .globl  _gpx_draw_pixel
-        .globl  __rect_cmp16s_lt
+        .globl  __gpx_hline
         .globl  __rect_unpack_norm
 
         .area   _CODE
@@ -28,26 +27,28 @@ _gpx_fill_rectangle::
         ld      ix,#0
         add     ix,sp
 
-        ;; locals (20 bytes)
+        ;; preserve gpx across local stack allocation
+        ld      b,h
+        ld      c,l
+
+        ;; locals (17 bytes)
         ;; -1..-2   x0
         ;; -3..-4   x1
         ;; -5..-6   y0
         ;; -7..-8   y1
         ;; -9..-10  gpx
-        ;; -11..-12 xcur
-        ;; -13..-14 ycur
-        ;; -15      fpatt idx
-        ;; -16..-17 fpatt ptr
-        ;; -18      fpatt len
-        ;; -19      row pattern
-        ;; -20      row mask
-        ld      hl,#-20
+        ;; -11..-12 ycur
+        ;; -13      fpatt idx
+        ;; -14..-15 fpatt ptr
+        ;; -16      fpatt len
+        ;; -17      row lpatt (LSB-first for __gpx_hline)
+        ld      hl,#-17
         add     hl,sp
         ld      sp,hl
 
         ;; save gpx
-        ld      -9(ix),l
-        ld      -10(ix),h
+        ld      -9(ix),c
+        ld      -10(ix),b
 
         ;; if (r == NULL) return
         ld      a,d
@@ -61,11 +62,11 @@ _gpx_fill_rectangle::
 
         ;; save fpatt ptr + len
         ld      a,6(ix)
-        ld      -16(ix),a
+        ld      -14(ix),a
         ld      a,7(ix)
-        ld      -17(ix),a
+        ld      -15(ix),a
         ld      a,8(ix)
-        ld      -18(ix),a
+        ld      -16(ix),a
 
         ;; unpack + normalize rect into locals
         push    ix
@@ -74,106 +75,87 @@ _gpx_fill_rectangle::
 
         ;; ycur = y0, idx = 0
         ld      a,-5(ix)
-        ld      -13(ix),a
+        ld      -11(ix),a
         ld      a,-6(ix)
-        ld      -14(ix),a
+        ld      -12(ix),a
         xor     a
-        ld      -15(ix),a
+        ld      -13(ix),a
 
 .fr_row_loop:
-        ;; row pattern = fpatt[idx]
-        ld      l,-16(ix)
-        ld      h,-17(ix)
-        ld      e,-15(ix)
+        ;; row pattern = reverse_bits(fpatt[idx])
+        ;; Fill uses MSB-first from x0, while __gpx_hline consumes lpatt LSB-first.
+        ld      l,-14(ix)
+        ld      h,-15(ix)
+        ld      e,-13(ix)
         ld      d,#0x00
         add     hl,de
         ld      a,(hl)
-        ld      -19(ix),a
+        ld      c,#0x00
+        ld      b,#0x08
+.fr_rev_loop:
+        rrca
+        rl      c
+        djnz    .fr_rev_loop
+        ld      a,c
+        ld      -17(ix),a
 
-        ;; xcur = x0, mask = 0x80
-        ld      a,-1(ix)
-        ld      -11(ix),a
-        ld      a,-2(ix)
-        ld      -12(ix),a
-        ld      a,#0x80
-        ld      -20(ix),a
-
-.fr_col_loop:
-        ;; if (row_pattern & mask) draw pixel
-        ld      a,-19(ix)
-        and     -20(ix)
-        jr      z,.fr_skip_pixel
-
+        ;; __gpx_hline(gpx, x0, ycur, x1, ycur, c, m, row_lpatt, clip)
         ld      l,9(ix)
         ld      h,10(ix)
         push    hl                     ;; clip
+
+        ld      a,-17(ix)
+        dec     sp
+        ld      hl,#0
+        add     hl,sp
+        ld      (hl),a                 ;; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
         push    hl                     ;; c,m
 
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        push    hl                     ;; y
+        ld      l,-11(ix)
+        ld      h,-12(ix)
+        push    hl                     ;; y1 (unused by hline)
+
+        ld      l,-3(ix)
+        ld      h,-4(ix)
+        push    hl                     ;; x1
+
+        ld      l,-11(ix)
+        ld      h,-12(ix)
+        push    hl                     ;; y0
 
         ld      l,-9(ix)
         ld      h,-10(ix)
-        ld      e,-11(ix)
-        ld      d,-12(ix)
-        call    _gpx_draw_pixel
+        ld      e,-1(ix)
+        ld      d,-2(ix)
+        call    __gpx_hline
 
-.fr_skip_pixel:
-        ;; end of row when xcur == x1
+        ;; if (ycur == y1) complete
         ld      a,-11(ix)
-        cp      -3(ix)
-        jr      nz,.fr_step_x
+        cp      -7(ix)
+        jr      nz,.fr_next_row
         ld      a,-12(ix)
-        cp      -4(ix)
-        jr      z,.fr_row_done
+        cp      -8(ix)
+        jr      z,.fr_done
 
-.fr_step_x:
-        ;; xcur++
+.fr_next_row:
+        ;; ycur++
         ld      l,-11(ix)
         ld      h,-12(ix)
         inc     hl
         ld      -11(ix),l
         ld      -12(ix),h
 
-        ;; mask >>= 1 ; wrap to 0x80
-        ld      a,-20(ix)
-        srl     a
-        jr      nz,.fr_store_mask
-        ld      a,#0x80
-.fr_store_mask:
-        ld      -20(ix),a
-
-        jp      .fr_col_loop
-
-.fr_row_done:
-        ;; if (ycur == y1) complete
-        ld      a,-13(ix)
-        cp      -7(ix)
-        jr      nz,.fr_next_row
-        ld      a,-14(ix)
-        cp      -8(ix)
-        jr      z,.fr_done
-
-.fr_next_row:
-        ;; ycur++
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        inc     hl
-        ld      -13(ix),l
-        ld      -14(ix),h
-
         ;; idx = (idx + 1) % fpatt_len
-        ld      a,-15(ix)
+        ld      a,-13(ix)
         inc     a
-        cp      -18(ix)
+        cp      -16(ix)
         jr      c,.fr_store_idx
         xor     a
 .fr_store_idx:
-        ld      -15(ix),a
+        ld      -13(ix),a
 
         jp      .fr_row_loop
 

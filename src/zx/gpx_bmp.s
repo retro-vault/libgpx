@@ -14,6 +14,7 @@
 
         .globl  _gpx_draw_bmp
         .globl  _gpx_draw_bmp_clip
+        .globl  _gpx_draw_bmp_masked_internal
 
         .equ    SCRHEIGHT, 192
         .equ    BMP_SIG_ENC_MASK, 0xF0
@@ -83,7 +84,7 @@ _gpx_draw_bmp::
         cp      #BMP_SIG_1BPP
         jr      z,gb_sig_unmasked_full
         cp      #BMP_SIG_1BPP_MASK
-        jp      z,gb_fallback
+        jp      z,gb_masked
         jp      gb_exit
 
 gb_sig_unmasked_full:
@@ -141,6 +142,13 @@ gb_w_from_low:
 
 gb_w_have:
         ld      b,a
+
+        ;; x == 0 means the remaining visible span is 256 pixels.
+        ;; The 8-bit `right_limit - x + 1` path below would wrap to 0,
+        ;; so keep the bitmap width unchanged in that case.
+        ld      a,(gb_x)
+        or      a
+        jr      z,gb_w_clipped
 
         ld      a,(gb_right_limit)
         ld      c,a
@@ -471,6 +479,14 @@ gb_fallback:
         ld      a,(gb_xhi)
         ld      d,a
         jp      _gpx_draw_bmp_clip
+
+gb_masked:
+        ld      hl,(gb_gpx)
+        ld      a,(gb_x)
+        ld      e,a
+        ld      a,(gb_xhi)
+        ld      d,a
+        jp      _gpx_draw_bmp_masked_internal
 
 
 gb_exit:

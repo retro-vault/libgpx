@@ -1,0 +1,35 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-packages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build release packages
+        run: make release-packages VERSION="${GITHUB_REF_NAME}"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libgpx-release-packages-${{ github.ref_name }}
+          path: |
+            build/release/libgpx-zx-spectrum-${{ github.ref_name }}.tar.gz
+            build/release/libgpx-partner-${{ github.ref_name }}.tar.gz
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/release/libgpx-zx-spectrum-${{ github.ref_name }}.tar.gz
+            build/release/libgpx-partner-${{ github.ref_name }}.tar.gz

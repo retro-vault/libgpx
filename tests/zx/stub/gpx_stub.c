@@ -629,8 +629,24 @@ void gpx_draw_bmp(
         uint16_t col;
         uint16_t row_offset = (uint16_t)(row * view.stride);
         for (col = 0; col < view.w; ++col) {
-            uint8_t byte = view.bitmap[row_offset + (uint16_t)(col >> 3)];
+            uint8_t byte;
             uint8_t mask = (uint8_t)(0x80 >> (col & 7));
+            if (view.signature == BMP_SIG(BMP_ENC_1BPP_MASK)) {
+                uint16_t masked_row = (uint16_t)(row * view.stride * 2);
+                uint8_t and_byte = view.bitmap[masked_row + (uint16_t)(col >> 3)];
+                uint8_t or_byte =
+                    view.bitmap[masked_row + view.stride + (uint16_t)(col >> 3)];
+                if (!(and_byte & mask)) {
+                    gpx_draw_pixel(gpx, (coord)(x + (coord)col), (coord)(y + (coord)row),
+                        (or_byte & mask) ? CO_FORE : CO_BACK, BM_CPY, cl);
+                } else if (or_byte & mask) {
+                    gpx_draw_pixel(gpx, (coord)(x + (coord)col), (coord)(y + (coord)row),
+                        CO_FORE, BM_CPY, cl);
+                }
+                continue;
+            }
+
+            byte = view.bitmap[row_offset + (uint16_t)(col >> 3)];
             if (byte & mask) {
                 gpx_draw_pixel(gpx, (coord)(x + (coord)col), (coord)(y + (coord)row),
                     CO_FORE, BM_CPY, cl);

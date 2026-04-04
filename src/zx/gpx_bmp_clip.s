@@ -7,6 +7,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_bmp_clip
+        .globl  _gpx_draw_bmp_masked_internal
         .globl  _gpx_draw_pixel
 
         .equ    BMP_SIG_ENC_MASK,         0xF0
@@ -23,6 +24,28 @@ _gpx_draw_bmp_clip::
         push    ix
         ld      ix,#0
         add     ix,sp
+        ld      b,h                   ;; preserve gpx for early masked dispatch
+        ld      c,l
+
+        ;; Masked bitmaps use AND/OR row pairs and are easier to handle
+        ;; correctly through the generic compositor helper.
+        ld      a,6(ix)
+        or      7(ix)
+        jr      z,.gbc_setup
+        ld      l,6(ix)
+        ld      h,7(ix)
+        ld      a,(hl)
+        and     #BMP_SIG_ENC_MASK
+        cp      #BMP_SIG_1BPP_MASK
+        jr      nz,.gbc_setup
+        ld      l,c
+        ld      h,b
+        pop     ix
+        jp      _gpx_draw_bmp_masked_internal
+
+.gbc_setup:
+        ld      l,c
+        ld      h,b
 
         ;; locals (33 bytes)
         ;; -1..-2   gpx

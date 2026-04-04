@@ -10,11 +10,14 @@
 
         .globl  _gpx_draw_text
         .globl  _gpx_draw_bmp
+        .globl  _gpx_draw_bmp_mode_internal
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
         .equ    BMP_SIG_1BPP,         0x00
         .equ    BMP_SIG_1BPP_MASK,    0x10
+        .equ    CO_FORE,              0x01
+        .equ    BM_CPY,               0x00
 
         .area   _CODE
 
@@ -181,9 +184,17 @@ _gpx_draw_text::
         ;; preserve width across draw_bmp call
         push    de
 
+        ;; Use the fast bitmap blit only for normal foreground copy text.
+        ;; Other modes (for example BM_XOR) need the generic per-pixel path.
+        ld      a,10(ix)               ;; color
+        cp      #CO_FORE
+        jr      nz,.dt_draw_mode
+        ld      a,11(ix)               ;; bmode
+        cp      #BM_CPY
+        jr      nz,.dt_draw_mode
+
         ;; gpx_draw_bmp(gpx, xcur, y, glyph, clip)
-        ;; stack args (callee-cleaned by gpx_draw_bmp):
-        ;;   y, glyph, clip
+        ;; stack args (callee-cleaned by gpx_draw_bmp): y, glyph, clip
         ld      l,12(ix)
         ld      h,13(ix)
         push    hl                    ;; clip
@@ -201,6 +212,38 @@ _gpx_draw_text::
         ld      e,-1(ix)
         ld      d,-2(ix)              ;; xcur
         call    _gpx_draw_bmp
+        jr      .dt_draw_done
+
+.dt_draw_mode:
+        ;; gpx_draw_bmp_mode_internal(gpx, xcur, y, glyph, c, m, clip)
+        ;; stack args (callee-cleaned): y, glyph, c, m, clip
+        ld      l,12(ix)
+        ld      h,13(ix)
+        push    hl                    ;; clip
+
+        ld      a,11(ix)
+        push    af                    ;; m
+        inc     sp
+
+        ld      a,10(ix)
+        push    af                    ;; c
+        inc     sp
+
+        ld      l,c
+        ld      h,b
+        push    hl                    ;; glyph bmp_t*
+
+        ld      l,4(ix)
+        ld      h,5(ix)
+        push    hl                    ;; y
+
+        ld      l,-7(ix)
+        ld      h,-8(ix)              ;; gpx
+        ld      e,-1(ix)
+        ld      d,-2(ix)              ;; xcur
+        call    _gpx_draw_bmp_mode_internal
+
+.dt_draw_done:
 
         ;; restore width
         pop     de

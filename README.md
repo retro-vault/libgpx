@@ -28,8 +28,8 @@ The public API contract is defined in:
 
 ## Build And Test Commands
 
-- `make build -j1`: build library + partner sample + test binaries.
-- `make tests -j1`: run full ZX real-vs-oracle emulator tests.
+- `make build -j1`: build library plus ZX and Partner test binaries.
+- `make tests -j1`: run the host ZX emulator suite and Partner emulator tests.
 - `make stub-visuals -j1`: render stub API scene artifacts to `bin/stub-visuals/`.
 - `make lib-visuals -j1`: render stacked real-vs-oracle comparisons to `bin/lib-visuals/`.
 - `make coverage -j1`: run host coverage and write `.gcov` files to `build/coverage/`.
@@ -114,16 +114,13 @@ Derived values can be computed as `stride = width / 8` and `size = stride * heig
 Signature helpers:
 - `BMP_SIG(enc)`
 - `BMP_ENC(sig)`
+- `BMP_STRIDE(sig)`
+- `BMP_SIG_STRIDE(enc, stride)`
 
 Encodings:
 - `BMP_ENC_1BPP`
 - `BMP_ENC_1BPP_MASK`
-- `BMP_ENC_1BPP_COMPACT`
-- `BMP_ENC_1BPP_MASK_COMPACT`
-
-Backward aliases:
-- `BMP_ENC_TINY_LINES`
-- `BMP_ENC_TINY_LINES_MASK`
+- `BMP_ENC_TINY`
 - `S_BMP` (standard 1bpp signature)
 
 Bitmap structure:
@@ -131,28 +128,32 @@ Bitmap structure:
 ```c
 typedef struct bmp_s {
     uint8_t signature;
-    dim w;
-    dim h;
-    int16_t stride;
+    uint8_t w;
+    uint8_t h;
     uint16_t size;
     uint8_t bitmap[];
 } bmp_t;
 ```
+
+Notes:
+- bitmap encoding lives in the high nibble of `signature`
+- stride is encoded in the low nibble as `(stride - 1)`
+- masked 1bpp payloads store `(AND, OR)` row data in `bitmap[]`
+- some masked cursor assets append hotspot bytes after `bitmap[size]`
 
 Structure plain sample (static packed bitmap wrapper):
 
 ```c
 struct bmp8x8_s {
     uint8_t signature;
-    uint16_t w;
-    uint16_t h;
-    int16_t stride;
+    uint8_t w;
+    uint8_t h;
     uint16_t size;
     uint8_t bitmap[8];
 };
 
 static struct bmp8x8_s checker = {
-    S_BMP, 8, 8, 1, 8,
+    BMP_SIG_STRIDE(BMP_ENC_1BPP, 1), 8, 8, 8,
     {0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55}
 };
 ```
@@ -174,6 +175,7 @@ Header fields:
 Flags:
 - `FONT_FLAG_PROPORTIONAL`
 - `FONT_FLAG_OFFSETS_BE`
+- `FONT_FLAG_VECTOR`
 
 Serialized layout:
 - bytes `[0..7]`: header
@@ -251,6 +253,7 @@ Returns:
 Notes:
 - Partner supports two pages (`gpx->pages == 2`).
 - ZX backend currently treats this call as a no-op (`gpx->pages == 1`).
+- Current Partner implementation is still WIP and only some page use-cases are exercised by tests.
 
 ## Geometry/Screen
 
@@ -525,8 +528,9 @@ Returns:
 
 Special cases:
 - `b == NULL` is a no-op.
-- ZX supports standard and compact 1bpp formats, including masked variants.
+- ZX currently supports `BMP_ENC_1BPP` and `BMP_ENC_1BPP_MASK`.
 - Unclipped, in-range unmasked blits use a fast path; clipped/masked/edge cases use fallback.
+- Partner currently accepts tiny move-stream bitmaps (`BMP_ENC_TINY`) and stock tiny cursor assets; raster 1bpp payloads are ignored there.
 
 Sample:
 

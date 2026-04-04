@@ -171,9 +171,16 @@ static std::vector<uint8_t> expected_fill_rectangle()
 static std::vector<uint8_t> expected_draw_bmp()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
+    draw_expected_bmp_packed(expected, 0, 0, bmp_checker, nullptr);
     draw_expected_bmp_packed(expected, 7, 3, bmp_checker, nullptr);
     rect_t clip_a = {10, 6, 17, 13};
     draw_expected_bmp_packed(expected, 12, 8, bmp_diagonal, &clip_a);
+    set_expected_pixel(expected, 42, 20);
+    set_expected_pixel(expected, 45, 20);
+    set_expected_pixel(expected, 41, 20);
+    set_expected_pixel(expected, 42, 20);
+    set_expected_pixel(expected, 45, 20);
+    set_expected_pixel(expected, 46, 20);
     draw_expected_bmp_packed(expected, -2, 190, bmp_checker, nullptr);
     rect_t clip_b = {252, 188, 255, 191};
     draw_expected_bmp_packed(expected, 254, 189, bmp_diagonal, &clip_b);
@@ -352,6 +359,7 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum draw line (clip)", "bin/zx/test_draw_line_clip.ihx", "bin/zx-oracle/test_draw_line_clip.ihx");
     status |= run_target_against_oracle("ZX Spectrum draw rectangle", "bin/zx/test_draw_rectangle.ihx", "bin/zx-oracle/test_draw_rectangle.ihx");
     status |= run_target_against_oracle("ZX Spectrum fill rectangle", "bin/zx/test_fill_rectangle.ihx", "bin/zx-oracle/test_fill_rectangle.ihx");
+    status |= run_target("ZX Spectrum draw bitmap (expected)", "bin/zx/test_draw_bmp.ihx", expected_draw_bmp());
     status |= run_target_against_oracle("ZX Spectrum draw bitmap", "bin/zx/test_draw_bmp.ihx", "bin/zx-oracle/test_draw_bmp.ihx");
     status |= run_target_against_oracle("ZX Spectrum get fonts", "bin/zx/test_get_fonts.ihx", "bin/zx-oracle/test_get_fonts.ihx");
     status |= run_target_against_oracle("ZX Spectrum measure text", "bin/zx/test_measure_text.ihx", "bin/zx-oracle/test_measure_text.ihx");

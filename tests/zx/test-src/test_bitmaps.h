@@ -19,4 +19,12 @@ static const uint8_t bmp_diagonal[] = {
     0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
 };
 
+static const uint8_t bmp_masked_test[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1),
+    8,
+    1,
+    2, 0,
+    0x25, 0x42
+};
+
 #endif // ZX_TEST_BITMAPS_H

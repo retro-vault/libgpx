@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ZX Spectrum demo1 (Fuse)",
+      "type": "node-terminal",
+      "request": "launch",
+      "preLaunchTask": "Build demo1.tap",
+      "command": "cd \"${workspaceFolder}\" && ./scripts/run-fuse-demo1.sh \"${workspaceFolder}/bin/demo1/demo1.tap\"; exit $?"
+    }
+  ]
+}
