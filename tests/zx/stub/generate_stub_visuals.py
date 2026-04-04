@@ -63,13 +63,9 @@ SCENES = {
         "Expected: completely empty screen.",
         "Getter call only; no framebuffer write is expected.",
     ],
-    "gpx_get_cursor": [
+    "gpx_set_page": [
         "Expected: completely empty screen.",
-        "Getter call only; no framebuffer write is expected.",
-    ],
-    "gpx_cursor_set": [
-        "Expected: completely empty screen.",
-        "Cursor pointer changes only; no framebuffer write is expected.",
+        "Page-selection calls are no-ops in ZX stub and should not touch VRAM.",
     ],
     "gpx_measure_text": [
         "Expected: completely empty screen.",

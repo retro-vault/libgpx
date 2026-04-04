@@ -13,7 +13,7 @@
         .equ    BMP_ENC_TINY_MASK,     0x03
 
         .equ    CO_FORE,               0x01
-        .equ    CO_BACK,               0xFE
+        .equ    CO_BACK,               0x00
         .equ    BM_CPY,                0x00
         .equ    LPATT_SOLID,           0xFF
 

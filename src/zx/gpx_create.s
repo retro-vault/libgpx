@@ -13,8 +13,7 @@
 
         .equ    SCRWIDTH,  0x0100       ;; 256
         .equ    SCRHEIGHT, 0x00c0       ;; 192
-        .equ    SCRSTRIDE, 0x0020       ;; 32 bytes / row
-        .equ    SCRSIZE,   0x1800       ;; 6144 bytes
+        .equ    SCRPAGES,  0x01         ;; one framebuffer page
 
         .area   _CODE
 
@@ -37,5 +36,4 @@ __gpx_ctx::
 __gpx_data::
         .dw     SCRWIDTH
         .dw     SCRHEIGHT
-        .dw     SCRSTRIDE
-        .dw     SCRSIZE
+        .db     SCRPAGES

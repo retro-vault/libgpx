@@ -25,7 +25,7 @@
         .include "_ef9367-defs.inc"
 
         .equ    BM_XOR,                 0x01
-        .equ    CO_BACK,                0xFE
+        .equ    CO_BACK,                0x00
 
         .area   _CODE
 
@@ -168,7 +168,7 @@ __ef9367_set_pen:
         ;; Set EF9367 drawing mode from logical 1bpp color.
         ;;
         ;; Input:
-        ;;   A = color (0 => pen up, CO_BACK => erase, else draw)
+        ;;   A = color role (CO_BACK => erase, CO_FORE => draw)
         ;;
         ;; Output:
         ;;   none
@@ -182,13 +182,8 @@ __ef9367_set_color:
         ret     z                       ; yes, nothing to do
         ld      a,c                     ; color changed
         ld      (__ef9367_cache_color),a ; cache new color
-        or      a                       ; zero means "none"
-        jr      nz,.scolor_nonzero      ; skip pen-up path
-        call    __ef9367_set_pen         ; A is still zero -> pen up
-        ret                             ; done
-.scolor_nonzero:
-        cp      #CO_BACK                ; background/eraser color?
-        jr      z,.scolor_back          ; yes -> clear mode
+        bit     0,a                     ; CO_FORE uses bit0=1
+        jr      z,.scolor_back          ; CO_BACK -> clear mode
         ld      a,#EF9367_CMD_DMOD_SET  ; pen draw mode
         call    __ef9367_exec_cmd        ; execute mode change
         ld      a,#1                    ; non-zero -> pen down

@@ -1,7 +1,5 @@
 #include "libgpx.h"
 
-extern bmp_t *_gpx_cursor_current;
-
 static void mark(gpx_t *gpx, coord x, coord y);
 static uint8_t has_hotspot(const bmp_t *b);
 
@@ -21,18 +19,14 @@ void main(void)
     bmp_t *caret;
     bmp_t *hand;
     bmp_t *invalid;
-    bmp_t *cursor_hand;
-    bmp_t *cursor_wait;
-    bmp_t *cursor_text;
-    bmp_t *cursor_arrow;
-    uint8_t bad_sig[2] = {0xF0, 0x00};
 
     gpx = gpx_create((gmode)0);
     if (gpx &&
         gpx->width == 1024 &&
         gpx->height == 256 &&
-        gpx->stride == 128 &&
-        gpx->size == 32768u &&
+        gpx->pages == 2 &&
+        (gpx->width >> 3) == 128 &&
+        (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 32768u &&
         gpx_width() == 1024 &&
         gpx_height() == 256) {
         mode0_ok = 1;
@@ -44,8 +38,9 @@ void main(void)
     if (gpx &&
         gpx->width == 1024 &&
         gpx->height == 256 &&
-        gpx->stride == 128 &&
-        gpx->size == 32768u &&
+        gpx->pages == 2 &&
+        (gpx->width >> 3) == 128 &&
+        (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 32768u &&
         gpx_height() == 256) {
         mode2_ok = 1;
     } else {
@@ -56,8 +51,9 @@ void main(void)
     if (gpx &&
         gpx->width == 1024 &&
         gpx->height == 512 &&
-        gpx->stride == 128 &&
-        gpx->size == 65536u &&
+        gpx->pages == 2 &&
+        (gpx->width >> 3) == 128 &&
+        (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 65536u &&
         gpx_width() == 1024 &&
         gpx_height() == 512) {
         mode1_ok = 1;
@@ -94,43 +90,23 @@ void main(void)
     hand = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
     invalid = gpx_get_stock_bmp(0xFF);
 
-    cursor_arrow = gpx_get_cursor(GPX_CURSOR_ARROW);
-    cursor_hand = gpx_get_cursor(GPX_CURSOR_HAND);
-    cursor_wait = gpx_get_cursor(GPX_CURSOR_WAIT);
-    cursor_text = gpx_get_cursor(GPX_CURSOR_TEXT);
-
     if (classic && std && hourglass && caret && hand && !invalid &&
         has_hotspot(classic) &&
         has_hotspot(std) &&
         has_hotspot(hourglass) &&
         has_hotspot(caret) &&
-        has_hotspot(hand) &&
-        cursor_arrow == classic &&
-        cursor_hand == hand &&
-        cursor_wait == hourglass &&
-        cursor_text == caret) {
+        has_hotspot(hand)) {
         mark(gpx, 6, 0);
     } else {
         ok = 0;
     }
 
-    gpx_cursor_set(hand);
-    if (_gpx_cursor_current == hand)
-        mark(gpx, 7, 0);
-    else
-        ok = 0;
-
-    gpx_cursor_set((bmp_t *)bad_sig);
-    if (_gpx_cursor_current == classic)
-        mark(gpx, 8, 0);
-    else
-        ok = 0;
-
-    gpx_cursor_set((bmp_t *)0);
-    if (_gpx_cursor_current == classic)
-        mark(gpx, 9, 0);
-    else
-        ok = 0;
+    gpx_set_page(PG_WRITE, 1);
+    mark(gpx, 7, 0);
+    gpx_set_page(PG_DISPLAY, 0);
+    mark(gpx, 8, 0);
+    gpx_set_page(PG_DISPLAY | PG_WRITE, 0);
+    mark(gpx, 9, 0);
 
     if (ok)
         mark(gpx, 10, 0);

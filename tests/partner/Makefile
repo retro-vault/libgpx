@@ -29,6 +29,7 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/gpx_height.s \
 	$(ROOT_DIR)/src/partner/gpx_create.s \
 	$(ROOT_DIR)/src/partner/gpx_destroy.s \
+	$(ROOT_DIR)/src/partner/gpx_set_page.s \
 	$(ROOT_DIR)/src/partner/gpx_clrscr.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_pixel.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_bmp.s \
@@ -40,8 +41,6 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/_gpx_get_system_font.s \
 	$(ROOT_DIR)/src/partner/_gpx_get_tiny_font.s \
 	$(ROOT_DIR)/src/partner/_gpx_get_stock_bmp.s \
-	$(ROOT_DIR)/src/partner/_gpx_get_cursor.s \
-	$(ROOT_DIR)/src/partner/_gpx_cursor_set.s \
 	$(ROOT_DIR)/src/partner/_gpx_cursors_tiny.s \
 	$(ROOT_DIR)/src/partner/_gpx_bresenham_line.s \
 	$(ROOT_DIR)/src/partner/_gpx_cohen_sutherland.s \

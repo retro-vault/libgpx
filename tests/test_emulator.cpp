@@ -357,8 +357,8 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum measure text", "bin/zx/test_measure_text.ihx", "bin/zx-oracle/test_measure_text.ihx");
     status |= run_target_against_oracle("ZX Spectrum draw text", "bin/zx/test_draw_text.ihx", "bin/zx-oracle/test_draw_text.ihx");
     status |= run_target_against_oracle("ZX Spectrum get stock bmp", "bin/zx/test_get_stock_bmp.ihx", "bin/zx-oracle/test_get_stock_bmp.ihx");
-    status |= run_target_against_oracle("ZX Spectrum get cursor", "bin/zx/test_get_cursor.ihx", "bin/zx-oracle/test_get_cursor.ihx");
-    status |= run_target_against_oracle("ZX Spectrum cursor set", "bin/zx/test_cursor_set.ihx", "bin/zx-oracle/test_cursor_set.ihx");
+    status |= run_target_against_oracle("ZX Spectrum stock cursors", "bin/zx/test_get_cursor.ihx", "bin/zx-oracle/test_get_cursor.ihx");
+    status |= run_target_against_oracle("ZX Spectrum set page API", "bin/zx/test_cursor_set.ihx", "bin/zx-oracle/test_cursor_set.ihx");
     if (status == 0)
         std::cout << "All emulator tests passed." << std::endl;
     return status;

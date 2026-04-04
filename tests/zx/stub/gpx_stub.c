@@ -123,8 +123,6 @@ static uint8_t zx_stock_hand[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x08
 };
 
-bmp_t *_gpx_cursor_current = (bmp_t *)zx_stock_classic;
-
 static uint16_t zx_screen_offset(coord x, coord y)
 {
     return (uint16_t)(((y & 0x07) << 8)
@@ -201,8 +199,7 @@ gpx_t *gpx_create(gmode mode)
     (void)mode;
     zx_gpx.width = ZX_WIDTH;
     zx_gpx.height = ZX_HEIGHT;
-    zx_gpx.stride = ZX_STRIDE;
-    zx_gpx.size = ZX_SIZE;
+    zx_gpx.pages = 1;
     gpx_clrscr();
     return &zx_gpx;
 }
@@ -210,6 +207,12 @@ gpx_t *gpx_create(gmode mode)
 void gpx_destroy(gpx_t *gpx)
 {
     (void)gpx;
+}
+
+void gpx_set_page(uint8_t op, uint8_t page)
+{
+    (void)op;
+    (void)page;
 }
 
 dim gpx_width(void)
@@ -686,43 +689,6 @@ bmp_t *gpx_get_stock_bmp(const uint8_t which)
         return (bmp_t *)zx_stock_hand;
     default:
         return (bmp_t *)0;
-    }
-}
-
-bmp_t *gpx_get_cursor(uint8_t type)
-{
-    switch (type) {
-    case GPX_CURSOR_HAND:
-        return gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
-    case GPX_CURSOR_WAIT:
-        return gpx_get_stock_bmp(GPXSB_CURSOR_HOURGLASS);
-    case GPX_CURSOR_TEXT:
-        return gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
-    case GPX_CURSOR_ARROW:
-    default:
-        return gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
-    }
-}
-
-void gpx_cursor_set(bmp_t *cursor)
-{
-    if (cursor == (bmp_t *)0) {
-        _gpx_cursor_current = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
-        return;
-    }
-
-    if (cursor == gpx_get_stock_bmp(GPXSB_CURSOR_HAND)) {
-        _gpx_cursor_current = cursor;
-        return;
-    }
-
-    switch (cursor->signature & 0xF0) {
-    case BMP_SIG(BMP_ENC_1BPP_MASK):
-        _gpx_cursor_current = cursor;
-        return;
-    default:
-        _gpx_cursor_current = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
-        return;
     }
 }
 

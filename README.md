@@ -64,7 +64,7 @@ The public API contract is defined in:
 ## Color And Blit Constants
 
 - `CO_FORE = 0x01`
-- `CO_BACK = 0xFE`
+- `CO_BACK = 0x00`
 - `BM_CPY = 0x00`
 - `BM_XOR = 0x01`
 
@@ -97,18 +97,17 @@ rect_t clip = { .x0 = 10, .y0 = 10, .x1 = 100, .y1 = 80 };
 struct gpx_s {
     uint16_t width;
     uint16_t height;
-    uint16_t stride;
-    uint32_t size;
+    uint8_t pages;
 };
 ```
 
 Meaning:
 - `width`: pixel width.
 - `height`: pixel height.
-- `stride`: bytes per row.
-- `size`: total framebuffer byte count.
+- `pages`: number of framebuffer pages available.
 
-On ZX this is `256, 192, 32, 6144`.
+On ZX this is `256, 192, 1`.
+Derived values can be computed as `stride = width / 8` and `size = stride * height`.
 
 ## Bitmap Encoding Constants
 
@@ -189,12 +188,6 @@ Stock bitmap IDs:
 - `GPXSB_CURSOR_CARET`
 - `GPXSB_CURSOR_HAND`
 
-Generic cursor IDs:
-- `GPX_CURSOR_ARROW`
-- `GPX_CURSOR_HAND`
-- `GPX_CURSOR_WAIT`
-- `GPX_CURSOR_TEXT`
-
 ## Public API Reference (`include/libgpx.h`)
 
 ## Lifecycle
@@ -242,6 +235,22 @@ Sample:
 gpx_destroy(g);
 gpx_destroy(NULL);
 ```
+
+### `void gpx_set_page(uint8_t op, uint8_t page)`
+
+Purpose:
+- Select display page and/or write page on paged backends.
+
+Parameters:
+- `op`: bitmask of `PG_DISPLAY`, `PG_WRITE`, or both.
+- `page`: target page id (`0` or `1` on Partner).
+
+Returns:
+- no return value.
+
+Notes:
+- Partner supports two pages (`gpx->pages == 2`).
+- ZX backend currently treats this call as a no-op (`gpx->pages == 1`).
 
 ## Geometry/Screen
 
@@ -304,48 +313,6 @@ Sample:
 
 ```c
 bmp_t *caret = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
-```
-
-### `bmp_t *gpx_get_cursor(uint8_t type)`
-
-Purpose:
-- Map generic cursor type to bitmap.
-
-Parameters:
-- `type`: one of `GPX_CURSOR_*`.
-
-Returns:
-- cursor bitmap pointer.
-
-Special cases:
-- ZX maps unknown values to default/classic cursor.
-
-Sample:
-
-```c
-bmp_t *cursor = gpx_get_cursor(GPX_CURSOR_HAND);
-```
-
-### `void gpx_cursor_set(bmp_t *cursor)`
-
-Purpose:
-- Set active software cursor bitmap.
-
-Parameters:
-- `cursor`: pointer to bitmap.
-
-Returns:
-- no return value.
-
-Special cases:
-- Passing `NULL` selects platform default cursor.
-- ZX validates cursor signature and falls back to default for unsupported formats.
-
-Sample:
-
-```c
-gpx_cursor_set(gpx_get_cursor(GPX_CURSOR_TEXT));
-gpx_cursor_set(NULL); // fallback/default
 ```
 
 ## Fonts/Text

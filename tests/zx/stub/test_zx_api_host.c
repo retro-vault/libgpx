@@ -5,7 +5,6 @@
 #include "libgpx.h"
 
 extern uint8_t *gpx_stub_host_screen(void);
-extern bmp_t *_gpx_cursor_current;
 
 static int failures = 0;
 
@@ -75,7 +74,10 @@ static void test_context(void)
     CHECK(gpx0 != 0, "gpx_create should return context");
     CHECK(gpx0 == gpx1, "gpx_create should return singleton context");
     CHECK(gpx0->width == 256 && gpx0->height == 192, "context dimensions");
-    CHECK(gpx0->stride == 32 && gpx0->size == 6144, "context stride/size");
+    CHECK(gpx0->pages == 1 &&
+        (gpx0->width >> 3) == 32 &&
+        (uint32_t)(gpx0->width >> 3) * (uint32_t)gpx0->height == 6144,
+        "context pages/derived stride-size");
     CHECK(gpx_width() == 256 && gpx_height() == 192, "gpx_width/gpx_height values");
 
     gpx_destroy(gpx0);
@@ -212,7 +214,7 @@ static void test_fonts_text_and_measure(void)
     CHECK(!pixel_on(1, 0) && !pixel_on(0, 1), "draw_text XOR toggles glyph");
 }
 
-static void test_cursors(void)
+static void test_stock_bitmaps_and_pages(void)
 {
     gpx_t *g = gpx_create(GPXM_DEFAULT);
     (void)g;
@@ -227,34 +229,11 @@ static void test_cursors(void)
           "stock bitmap ids should resolve");
     CHECK(gpx_get_stock_bmp(0xFF) == 0, "stock bitmap invalid id should return null");
 
-    CHECK(gpx_get_cursor(GPX_CURSOR_ARROW) == classic, "cursor arrow mapping");
-    CHECK(gpx_get_cursor(GPX_CURSOR_HAND) == hand, "cursor hand mapping");
-    CHECK(gpx_get_cursor(GPX_CURSOR_WAIT) == hourglass, "cursor wait mapping");
-    CHECK(gpx_get_cursor(GPX_CURSOR_TEXT) == caret, "cursor text mapping");
-    CHECK(gpx_get_cursor(0xFF) == classic, "cursor default mapping");
-
-    uint8_t s0[2] = {BMP_SIG(BMP_ENC_1BPP), 0};
-    uint8_t s1[2] = {BMP_SIG(BMP_ENC_1BPP_MASK), 0};
-    uint8_t s2[2] = {BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 4), 0};
-    uint8_t bad[2] = {0xF0, 0};
-
-    gpx_cursor_set(hand);
-    CHECK(_gpx_cursor_current == hand, "cursor_set stock pointer");
-
-    gpx_cursor_set((bmp_t *)s0);
-    CHECK(_gpx_cursor_current == classic, "cursor_set 1bpp falls back");
-
-    gpx_cursor_set((bmp_t *)s1);
-    CHECK(_gpx_cursor_current == (bmp_t *)s1, "cursor_set 1bpp mask sig");
-
-    gpx_cursor_set((bmp_t *)s2);
-    CHECK(_gpx_cursor_current == (bmp_t *)s2, "cursor_set masked stride sig");
-
-    gpx_cursor_set((bmp_t *)bad);
-    CHECK(_gpx_cursor_current == classic, "cursor_set invalid falls back");
-
-    gpx_cursor_set((bmp_t *)0);
-    CHECK(_gpx_cursor_current == classic, "cursor_set null falls back");
+    int before = pixel_count();
+    gpx_set_page(PG_DISPLAY, 0);
+    gpx_set_page(PG_WRITE, 1);
+    gpx_set_page(PG_DISPLAY | PG_WRITE, 0);
+    CHECK(pixel_count() == before, "set_page should not touch VRAM in ZX stub");
 }
 
 int main(void)
@@ -265,7 +244,7 @@ int main(void)
     test_rectangle_and_fill();
     test_bitmap();
     test_fonts_text_and_measure();
-    test_cursors();
+    test_stock_bitmaps_and_pages();
 
     if (failures == 0) {
         printf("All host API coverage tests passed.\n");

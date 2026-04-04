@@ -26,11 +26,7 @@
         .equ    SCRWIDTH,               0x0400   ;; 1024
         .equ    SCRHEIGHT_LO,           0x0100   ;; 256
         .equ    SCRHEIGHT_HI,           0x0200   ;; 512
-        .equ    SCRSTRIDE,              0x0080   ;; 128 bytes / row
-        .equ    SCRSIZE_LO_LOWORD,      0x8000   ;; 32768 = 0x00008000
-        .equ    SCRSIZE_LO_HIWORD,      0x0000
-        .equ    SCRSIZE_HI_LOWORD,      0x0000   ;; 65536 = 0x00010000
-        .equ    SCRSIZE_HI_HIWORD,      0x0001
+        .equ    SCRPAGES,               0x02     ;; Partner has two pages
 
         .area   _CODE
 
@@ -77,8 +73,8 @@ _gpx_create::
         ;; Fill shared gpx_t descriptor.
         ld      hl,#SCRWIDTH
         ld      (__gdata+0),hl
-        ld      hl,#SCRSTRIDE
-        ld      (__gdata+4),hl
+        ld      a,#SCRPAGES
+        ld      (__gdata+4),a
 
         ld      a,c
         cp      #1
@@ -87,20 +83,12 @@ _gpx_create::
         ;; 1024x256 context
         ld      hl,#SCRHEIGHT_LO
         ld      (__gdata+2),hl
-        ld      hl,#SCRSIZE_LO_LOWORD
-        ld      (__gdata+6),hl
-        ld      hl,#SCRSIZE_LO_HIWORD
-        ld      (__gdata+8),hl
         jr      .gcr_defaults
 
 .gcr_hires_ctx:
         ;; 1024x512 context
         ld      hl,#SCRHEIGHT_HI
         ld      (__gdata+2),hl
-        ld      hl,#SCRSIZE_HI_LOWORD
-        ld      (__gdata+6),hl
-        ld      hl,#SCRSIZE_HI_HIWORD
-        ld      (__gdata+8),hl
 
 .gcr_defaults:
         ;; Invalidate helper caches after direct register writes above.
@@ -136,6 +124,4 @@ __gpx_ctx::
 __gdata::
         .dw     SCRWIDTH
         .dw     SCRHEIGHT_LO
-        .dw     SCRSTRIDE
-        .dw     SCRSIZE_LO_LOWORD
-        .dw     SCRSIZE_LO_HIWORD
+        .db     SCRPAGES

@@ -26,8 +26,8 @@
 typedef int16_t coord;
 
 /* Colors in a 1bpp world. */
-#define CO_FORE 0x01 /* 00000001 — foreground (black) */
-#define CO_BACK 0xfe /* 11111110 — background (white/green) */
+#define CO_FORE 0x01 /* set pixel bit */
+#define CO_BACK 0x00 /* clear pixel bit */
 typedef uint8_t color;
 
 /* Blit mode: copy or XOR. */
@@ -153,8 +153,7 @@ struct gpx_s
 {
     uint16_t width;  /* Display width in pixels. */
     uint16_t height; /* Display height in pixels. */
-    uint16_t stride; /* Bytes per scanline (= width / 8). */
-    uint32_t size;   /* Total framebuffer size (= stride * height). */
+    uint8_t pages;   /* Number of framebuffer pages available. */
 };
 
 /* Graphics initialisation mode. */
@@ -167,6 +166,14 @@ extern gpx_t *gpx_create(gmode mode);
 /* Tear down the graphics subsystem and free the gpx_t. */
 extern void gpx_destroy(gpx_t *gpx);
 
+/* Page-selection operation flags for gpx_set_page(). */
+#define PG_DISPLAY 0x01
+#define PG_WRITE   0x02
+
+/* Set active display and/or write page when the platform supports paging.
+ * op may combine PG_DISPLAY and PG_WRITE; page is usually 0 or 1. */
+extern void gpx_set_page(uint8_t op, uint8_t page);
+
 /* Return the current display width in pixels. */
 extern dim gpx_width(void);
 
@@ -175,20 +182,6 @@ extern dim gpx_height(void);
 
 /* Clear the active framebuffer/screen. */
 extern void gpx_clrscr(void);
-
-/* Platform-independent cursor type ids. */
-#define GPX_CURSOR_ARROW 0
-#define GPX_CURSOR_HAND  1
-#define GPX_CURSOR_WAIT  2
-#define GPX_CURSOR_TEXT  3
-
-/* Return a stock cursor bitmap for a cursor type id.
- * Returns NULL when the cursor type is not supported. */
-extern bmp_t *gpx_get_cursor(uint8_t type);
-
-/* Set the active software cursor bitmap.
- * Passing NULL should select a sensible platform default cursor. */
-extern void gpx_cursor_set(bmp_t *cursor);
 
 /* Plot a single pixel at (x, y) with color c and blit mode m.
  * Clipped to clip if non-NULL. */

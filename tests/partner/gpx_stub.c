@@ -63,10 +63,10 @@ static const rect_t *partner_clip_or_default(const rect_t *clip)
 
 gpx_t *gpx_create(gmode mode)
 {
+    (void)mode;
     partner_gpx.width = PARTNER_WIDTH;
     partner_gpx.height = PARTNER_HEIGHT;
-    partner_gpx.stride = PARTNER_STRIDE;
-    partner_gpx.size = PARTNER_SIZE;
+    partner_gpx.pages = 2;
     gpx_clrscr();
     return &partner_gpx;
 }
@@ -74,6 +74,12 @@ gpx_t *gpx_create(gmode mode)
 void gpx_destroy(gpx_t *gpx)
 {
     (void)gpx;
+}
+
+void gpx_set_page(uint8_t op, uint8_t page)
+{
+    (void)op;
+    (void)page;
 }
 
 dim gpx_width(void)

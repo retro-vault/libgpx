@@ -13,7 +13,6 @@
 extern uint8_t *gpx_stub_host_screen(void);
 extern void gpx_stub_host_reset_vram_writes(void);
 extern uint32_t gpx_stub_host_get_vram_writes(void);
-extern bmp_t *_gpx_cursor_current;
 
 static uint8_t bmp_checker[] = {
     S_BMP,
@@ -71,7 +70,7 @@ static void sc_gpx_create(void)
 {
     begin_scene();
     (void)gpx_create(GPXM_DEFAULT);
-    meta_set("context width=256 height=192 stride=32 size=6144",
+    meta_set("context width=256 height=192 pages=1 (derived stride=32 size=6144)",
              "gpx_create called (also clears VRAM by design)",
              1);
 }
@@ -211,58 +210,15 @@ static void sc_gpx_get_stock_bmp(void)
     meta_set("classic=80 std=40 hourglass=20 caret=10 hand=08 bad=null", actual, pass);
 }
 
-static void sc_gpx_get_cursor(void)
+static void sc_gpx_set_page(void)
 {
     begin_scene();
-    bmp_t *classic = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
-    bmp_t *hand = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
-    bmp_t *hourglass = gpx_get_stock_bmp(GPXSB_CURSOR_HOURGLASS);
-    bmp_t *caret = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
-
-    bmp_t *a = gpx_get_cursor(GPX_CURSOR_ARROW);
-    bmp_t *h = gpx_get_cursor(GPX_CURSOR_HAND);
-    bmp_t *w = gpx_get_cursor(GPX_CURSOR_WAIT);
-    bmp_t *t = gpx_get_cursor(GPX_CURSOR_TEXT);
-    bmp_t *u = gpx_get_cursor(0xFF);
-    int pass = (a == classic && h == hand && w == hourglass && t == caret && u == classic);
-    char actual[220];
-    snprintf(actual, sizeof(actual),
-             "arrow=%s hand=%s wait=%s text=%s invalid=%s",
-             (a == classic) ? "classic" : "other",
-             (h == hand) ? "hand" : "other",
-             (w == hourglass) ? "hourglass" : "other",
-             (t == caret) ? "caret" : "other",
-             (u == classic) ? "classic" : "other");
-    meta_set("arrow->classic hand->hand wait->hourglass text->caret invalid->classic",
-             actual, pass);
-}
-
-static void sc_gpx_cursor_set(void)
-{
-    begin_scene();
-    bmp_t *classic = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
-    bmp_t *hand = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
-    uint8_t sig_ok[2] = {BMP_SIG(BMP_ENC_1BPP_MASK), 0};
-    uint8_t bad_sig[2] = {0xF0, 0};
-    int p1, p2, p3, p4;
-    char actual[220];
-
-    gpx_cursor_set(hand);
-    p1 = (_gpx_cursor_current == hand);
-
-    gpx_cursor_set((bmp_t *)sig_ok);
-    p2 = (_gpx_cursor_current == (bmp_t *)sig_ok);
-
-    gpx_cursor_set((bmp_t *)bad_sig);
-    p3 = (_gpx_cursor_current == classic);
-
-    gpx_cursor_set((bmp_t *)0);
-    p4 = (_gpx_cursor_current == classic);
-
-    snprintf(actual, sizeof(actual), "hand=%s sig_ok=%s bad=%s null=%s",
-             p1 ? "ok" : "fail", p2 ? "ok" : "fail", p3 ? "ok" : "fail", p4 ? "ok" : "fail");
-    meta_set("set hand; accept MASK signature; invalid->classic; null->classic",
-             actual, p1 && p2 && p3 && p4);
+    gpx_set_page(PG_DISPLAY, 0);
+    gpx_set_page(PG_WRITE, 1);
+    gpx_set_page(PG_DISPLAY | PG_WRITE, 0);
+    meta_set("set_page calls do not write VRAM in ZX stub",
+             "PG_DISPLAY(0), PG_WRITE(1), PG_DISPLAY|PG_WRITE(0)",
+             1);
 }
 
 static void sc_gpx_measure_text(void)
@@ -306,8 +262,7 @@ static const struct scene_s scenes[] = {
     {"gpx_get_system_font", sc_gpx_get_system_font},
     {"gpx_get_tiny_font", sc_gpx_get_tiny_font},
     {"gpx_get_stock_bmp", sc_gpx_get_stock_bmp},
-    {"gpx_get_cursor", sc_gpx_get_cursor},
-    {"gpx_cursor_set", sc_gpx_cursor_set},
+    {"gpx_set_page", sc_gpx_set_page},
     {"gpx_measure_text", sc_gpx_measure_text},
     {"gpx_draw_text", sc_gpx_draw_text},
 };

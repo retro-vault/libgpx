@@ -10,7 +10,9 @@ void main(void)
 
     if (gpx0 && gpx1 && gpx0 == gpx1 &&
         gpx0->width == 256 && gpx0->height == 192 &&
-        gpx0->stride == 32 && gpx0->size == 6144 &&
+        gpx0->pages == 1 &&
+        (gpx0->width >> 3) == 32 &&
+        (uint32_t)(gpx0->width >> 3) * (uint32_t)gpx0->height == 6144 &&
         w == 256 && h == 192) {
         gpx_draw_pixel(gpx0, w - 1, h - 1, CO_FORE, BM_CPY, &full);
     }

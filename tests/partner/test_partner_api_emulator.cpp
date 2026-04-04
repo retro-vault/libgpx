@@ -61,10 +61,10 @@ int main()
     check(pixel_on(screen, 3, 0, width, height), "mode1 marker missing", failures);
     check(pixel_on(screen, 4, 0, width, height), "font getter marker missing", failures);
     check(pixel_on(screen, 5, 0, width, height), "measure_text marker missing", failures);
-    check(pixel_on(screen, 6, 0, width, height), "cursor map marker missing", failures);
-    check(pixel_on(screen, 7, 0, width, height), "cursor_set(hand) marker missing", failures);
-    check(pixel_on(screen, 8, 0, width, height), "cursor_set(bad) marker missing", failures);
-    check(pixel_on(screen, 9, 0, width, height), "cursor_set(null) marker missing", failures);
+    check(pixel_on(screen, 6, 0, width, height), "stock bitmap marker missing", failures);
+    check(pixel_on(screen, 7, 0, width, height), "set_page(PG_WRITE,1) marker missing", failures);
+    check(pixel_on(screen, 8, 0, width, height), "set_page(PG_DISPLAY,0) marker missing", failures);
+    check(pixel_on(screen, 9, 0, width, height), "set_page(PG_DISPLAY|PG_WRITE,0) marker missing", failures);
     check(pixel_on(screen, 10, 0, width, height), "overall pass marker missing", failures);
 
     check(pixel_on(screen, 10, 400, width, height), "mode1 y>255 pixel missing", failures);
