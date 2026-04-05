@@ -11,6 +11,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_hline
+        .globl  __gpx_hline_raw8
         .globl  __rect_cmp16s_lt
         .globl  __vid_rowaddr
 
@@ -18,6 +19,10 @@
 
         ;; ------------------------------------------------------------
         ;; __gpx_hline
+        ;;
+        ;; Clipped wrapper:
+        ;;  - optional clip reject/clamp against clip rectangle
+        ;;  - then enters shared draw core
         ;;
         ;; Signature is identical to gpx_draw_line():
         ;;   HL = gpx
@@ -58,7 +63,45 @@ __gpx_hline::
         ld      a,13(ix)
         or      14(ix)
         jr      nz,ghl_clip_checks
-        jp      ghl_draw
+        jp      ghl_draw_core
+
+        ;; ------------------------------------------------------------
+        ;; __gpx_hline_raw8
+        ;;
+        ;; Raw draw entry:
+        ;;  - no clip checks at all
+        ;;  - expects x0<=x1 and on-screen 8-bit coordinates
+        ;;  - same calling convention / return value as __gpx_hline
+        ;; ------------------------------------------------------------
+__gpx_hline_raw8::
+        push    ix
+        ld      ix,#0
+        add     ix,sp
+
+        ;; locals (11 bytes):
+        ;; -1..-2  x0
+        ;; -3..-4  x1
+        ;; -5      x0 original low
+        ;; -6      patt_start
+        ;; -7      patt_byte
+        ;; -8      mask_first
+        ;; -9      mask_last
+        ;; -10     byte_lo
+        ;; -11     byte_hi
+        ld      hl,#-11
+        add     hl,sp
+        ld      sp,hl
+
+        ;; cache x0/x1
+        ld      -2(ix),e               ;; x0 lo
+        ld      -1(ix),d               ;; x0 hi
+        ld      -5(ix),e               ;; x0 original lo
+        ld      a,6(ix)
+        ld      -4(ix),a               ;; x1 lo
+        ld      a,7(ix)
+        ld      -3(ix),a               ;; x1 hi
+
+        jp      ghl_draw_core
 
 ghl_clip_checks:
         ;; BC = clip pointer
@@ -148,11 +191,11 @@ ghl_no_clip_left:
         ld      e,-4(ix)
         ld      d,-3(ix)               ;; DE = x1
         call    __rect_cmp16s_lt
-        jr      z,ghl_draw
+        jr      z,ghl_draw_core
         ld      -4(ix),l
         ld      -3(ix),h
 
-ghl_draw:
+ghl_draw_core:
         ;; patt_start = ror(lpatt, (x0 - x0_orig) & 7)
         ld      a,-2(ix)
         sub     -5(ix)
@@ -248,40 +291,97 @@ ghl_mlast_store:
         jr      nc,ghl_row_ptr_ok
         inc     h
 ghl_row_ptr_ok:
+        ;; color transform once: CO_BACK uses inverted pattern
+        ld      a,10(ix)               ;; color
+        bit     0,a
+        jr      nz,ghl_mode_select
+        ld      a,-7(ix)
+        cpl
+        ld      -7(ix),a
+
+ghl_mode_select:
+        ;; mode dispatch once
+        ld      a,11(ix)               ;; mode
+        bit     0,a
+        jr      nz,ghl_draw_xor
+
+ghl_draw_cpy:
         ;; single-byte span?
         ld      a,-10(ix)
         cp      -11(ix)
-        jr      nz,ghl_multi_byte
+        jr      nz,ghl_cpy_multi_byte
 
         ld      a,-8(ix)
         and     -9(ix)
-        and     -7(ix)
-        call    ghl_apply_mask
+        ld      c,a
+        ld      a,-7(ix)
+        call    ghl_apply_cpy_mask
         jr      ghl_ret_pattern
 
-ghl_multi_byte:
+ghl_cpy_multi_byte:
         ;; first byte
+        ld      c,-8(ix)
         ld      a,-7(ix)
-        and     -8(ix)
-        call    ghl_apply_mask
+        call    ghl_apply_cpy_mask
 
         ;; middle full bytes count = byte_hi - byte_lo - 1
         ld      a,-11(ix)
         sub     -10(ix)
         dec     a
-        jr      z,ghl_last_byte
+        jr      z,ghl_cpy_last_byte
         ld      b,a
-ghl_mid_loop:
+        ld      e,-7(ix)
+ghl_cpy_mid_loop:
         inc     hl
-        ld      a,-7(ix)
-        call    ghl_apply_mask
-        djnz    ghl_mid_loop
+        ld      a,e
+        ld      (hl),a
+        djnz    ghl_cpy_mid_loop
 
-ghl_last_byte:
+ghl_cpy_last_byte:
         inc     hl
+        ld      c,-9(ix)
         ld      a,-7(ix)
+        call    ghl_apply_cpy_mask
+        jr      ghl_ret_pattern
+
+ghl_draw_xor:
+        ;; single-byte span?
+        ld      a,-10(ix)
+        cp      -11(ix)
+        jr      nz,ghl_xor_multi_byte
+
+        ld      a,-8(ix)
         and     -9(ix)
-        call    ghl_apply_mask
+        ld      c,a
+        ld      a,-7(ix)
+        call    ghl_apply_xor_mask
+        jr      ghl_ret_pattern
+
+ghl_xor_multi_byte:
+        ;; first byte
+        ld      c,-8(ix)
+        ld      a,-7(ix)
+        call    ghl_apply_xor_mask
+
+        ;; middle full bytes count = byte_hi - byte_lo - 1
+        ld      a,-11(ix)
+        sub     -10(ix)
+        dec     a
+        jr      z,ghl_xor_last_byte
+        ld      b,a
+        ld      e,-7(ix)
+ghl_xor_mid_loop:
+        inc     hl
+        ld      a,e
+        xor     (hl)
+        ld      (hl),a
+        djnz    ghl_xor_mid_loop
+
+ghl_xor_last_byte:
+        inc     hl
+        ld      c,-9(ix)
+        ld      a,-7(ix)
+        call    ghl_apply_xor_mask
 
 ghl_ret_pattern:
         ;; return patt = ror(patt_start, (x1-x0) & 7)
@@ -315,37 +415,28 @@ ghl_return:
         jp      (hl)
 
         ;; ------------------------------------------------------------
-        ;; Apply masked byte in A to (HL) using mode/color arguments.
+        ;; Apply pattern byte in A to (HL), limited by coverage mask in C.
         ;; ------------------------------------------------------------
-ghl_apply_mask:
+ghl_apply_cpy_mask:
         push    bc
+        ;; BM_CPY: merge selected bits from pattern, preserve others
         ld      e,a
-        ld      a,11(ix)               ;; mode
-        bit     0,a
-        jr      nz,ghl_apply_xor
-        ld      a,10(ix)               ;; color
-        bit     0,a
-        jr      nz,ghl_apply_set
-
-        ;; clear selected bits
-        ld      a,e
+        ld      a,c
         cpl
         and     (hl)
-        ld      (hl),a
-        jr      ghl_apply_done
-
-ghl_apply_set:
-        ;; set selected bits
+        ld      d,a
         ld      a,e
-        or      (hl)
+        and     c
+        or      d
         ld      (hl),a
-        jr      ghl_apply_done
+        pop     bc
+        ret
 
-ghl_apply_xor:
-        ;; xor selected bits
-        ld      a,e
+ghl_apply_xor_mask:
+        push    bc
+        ;; BM_XOR: toggle selected bits only
+        and     c
         xor     (hl)
         ld      (hl),a
-ghl_apply_done:
         pop     bc
         ret

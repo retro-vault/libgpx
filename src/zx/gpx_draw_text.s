@@ -10,6 +10,7 @@
 
         .globl  _gpx_draw_text
         .globl  _gpx_draw_bmp_clip
+        .globl  _gpx_fill_rectangle
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
@@ -49,7 +50,7 @@ _gpx_draw_text::
         or      9(ix)
         jp      z,.dt_epilogue
 
-        ;; locals (9 bytes):
+        ;; locals (18 bytes):
         ;; -1..-2   xcur
         ;; -3..-4   text pointer
         ;; -5       flags
@@ -57,7 +58,9 @@ _gpx_draw_text::
         ;; -7       last_ascii
         ;; -8       empty_width
         ;; -9       advance
-        ld      hl,#-9
+        ;; -10      glyph_height
+        ;; -11..-18 spacing rect (x0,y0,x1,y1)
+        ld      hl,#-18
         add     hl,sp
         ld      sp,hl
 
@@ -87,7 +90,9 @@ _gpx_draw_text::
         ld      -8(ix),a              ;; empty_width
         inc     hl
         inc     hl                    ;; skip max_glyph_width
-        inc     hl                    ;; skip glyph_height
+        ld      a,(hl)
+        ld      -10(ix),a             ;; glyph_height
+        inc     hl
         ld      a,(hl)
         ld      -9(ix),a              ;; advance
 
@@ -143,7 +148,7 @@ _gpx_draw_text::
 .dt_have_off:
         ld      a,d
         or      e
-        jr      z,.dt_add_empty
+        jp      z,.dt_add_empty
 
         ;; HL = glyph pointer = font + offset
         ld      l,8(ix)
@@ -161,7 +166,7 @@ _gpx_draw_text::
         jr      z,.dt_w8
         cp      #BMP_SIG_1BPP_MASK
         jr      z,.dt_w8
-        jr      .dt_add_empty
+        jp      .dt_add_empty
 
 .dt_w8:
         inc     hl
@@ -172,7 +177,7 @@ _gpx_draw_text::
 
         ld      a,d
         or      e
-        jr      z,.dt_add_empty
+        jp      z,.dt_add_empty
 
         ;; preserve width across draw_bmp call
         push    de
@@ -211,6 +216,11 @@ _gpx_draw_text::
         adc     a,d
         ld      -2(ix),a
 
+.dt_advance_xcur:
+        ;; Fill inter-character advance gap with inverse color.
+        ld      a,-9(ix)              ;; advance
+        call    .dt_fill_inv_span
+
         ;; xcur += advance
         ld      a,-1(ix)
         add     a,-9(ix)
@@ -220,6 +230,10 @@ _gpx_draw_text::
         jp      .dt_loop
 
 .dt_add_empty:
+        ;; Fill missing/empty glyph span with inverse color.
+        ld      a,-8(ix)              ;; empty_width
+        call    .dt_fill_inv_span
+
         ld      a,-1(ix)
         add     a,-8(ix)
         ld      -1(ix),a
@@ -241,3 +255,85 @@ _gpx_draw_text::
         ld      sp,hl
         push    de
         ret
+
+.dt_fill_inv_span:
+        ;; A = span width in pixels
+        or      a
+        ret     z
+        ld      b,a
+        ld      a,-10(ix)             ;; glyph_height
+        or      a
+        ret     z
+
+        ;; rect.x0 = xcur  (packed at -18..-17)
+        ld      a,-1(ix)
+        ld      -18(ix),a
+        ld      a,-2(ix)
+        ld      -17(ix),a
+
+        ;; rect.y0 = y argument  (packed at -16..-15)
+        ld      a,4(ix)
+        ld      -16(ix),a
+        ld      a,5(ix)
+        ld      -15(ix),a
+
+        ;; rect.x1 = xcur + (width - 1)  (packed at -14..-13)
+        ld      a,b
+        dec     a
+        ld      b,a
+        ld      a,-1(ix)
+        add     a,b
+        ld      -14(ix),a
+        ld      a,-2(ix)
+        adc     a,#0x00
+        ld      -13(ix),a
+
+        ;; rect.y1 = y + (glyph_height - 1)  (packed at -12..-11)
+        ld      a,-10(ix)
+        dec     a
+        ld      b,a
+        ld      a,4(ix)
+        add     a,b
+        ld      -12(ix),a
+        ld      a,5(ix)
+        adc     a,#0x00
+        ld      -11(ix),a
+
+        ;; gpx_fill_rectangle(gpx, &rect, inv_color, BM_CPY, {0xFF}, 1, clip)
+        ld      l,12(ix)
+        ld      h,13(ix)
+        push    hl                    ;; clip
+
+        ld      a,#0x01
+        push    af
+        inc     sp                    ;; fpatt_len
+
+        ld      hl,#.dt_solid_fpatt
+        push    hl                    ;; fpatt*
+
+        ld      a,10(ix)              ;; inverse color of text color
+        xor     #0x01
+        and     #0x01
+        ld      l,a
+        ld      h,#BM_CPY
+        push    hl                    ;; c,m
+
+        exx
+        push    hl
+        exx
+        pop     hl                    ;; gpx
+
+        push    ix
+        pop     de
+        ld      hl,#-18
+        add     hl,de
+        ex      de,hl                 ;; DE = &rect
+        exx
+        push    hl
+        exx
+        pop     hl                    ;; HL = gpx
+        call    _gpx_fill_rectangle
+        ret
+
+.dt_solid_fpatt:
+        .db     0xff

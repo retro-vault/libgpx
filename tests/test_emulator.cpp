@@ -204,8 +204,24 @@ static std::vector<uint8_t> expected_measure_text()
 static std::vector<uint8_t> expected_draw_text_api()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
+    auto clear_expected_pixel = [&](int px, int py) {
+        if (!in_clip(px, py, nullptr))
+            return;
+        uint16_t off = zx_screen_offset(px, py);
+        uint8_t mask = (uint8_t)(0x80 >> (px & 7));
+        expected[off] &= (uint8_t)~mask;
+    };
     auto draw_stub_glyph_expected = [&](int x, int y, char ch, bmode m, const rect_t *clip) {
         uint8_t seed = (uint8_t)ch;
+        for (coord row = 0; row < 5; ++row) {
+            for (coord col = 0; col < 4; ++col) {
+                int px = x + col;
+                int py = y + row;
+                if (!in_clip(px, py, clip))
+                    continue;
+                clear_expected_pixel(px, py);
+            }
+        }
         for (coord row = 0; row < 5; ++row) {
             uint8_t pattern = (uint8_t)((seed << row) | (seed >> (8 - row)));
             for (coord col = 0; col < 3; ++col) {
@@ -229,6 +245,13 @@ static std::vector<uint8_t> expected_draw_text_api()
     draw_stub_glyph_expected(8, 8, 'Z', BM_CPY, &clip);
     draw_stub_glyph_expected(0, 0, 'A', BM_XOR, nullptr);
     draw_stub_glyph_expected(252, 190, 'A', BM_CPY, nullptr);
+    return expected;
+}
+
+static std::vector<uint8_t> expected_draw_text_gapfill()
+{
+    std::vector<uint8_t> expected(0x1B00, 0);
+    set_expected_pixel(expected, 6, 191);
     return expected;
 }
 
@@ -363,7 +386,7 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum draw bitmap", "bin/zx/test_draw_bmp.ihx", "bin/zx-oracle/test_draw_bmp.ihx");
     status |= run_target_against_oracle("ZX Spectrum get fonts", "bin/zx/test_get_fonts.ihx", "bin/zx-oracle/test_get_fonts.ihx");
     status |= run_target_against_oracle("ZX Spectrum measure text", "bin/zx/test_measure_text.ihx", "bin/zx-oracle/test_measure_text.ihx");
-    status |= run_target_against_oracle("ZX Spectrum draw text", "bin/zx/test_draw_text.ihx", "bin/zx-oracle/test_draw_text.ihx");
+    status |= run_target("ZX Spectrum draw text gap fill", "bin/zx/test_draw_text_gapfill.ihx", expected_draw_text_gapfill());
     status |= run_target_against_oracle("ZX Spectrum get stock bmp", "bin/zx/test_get_stock_bmp.ihx", "bin/zx-oracle/test_get_stock_bmp.ihx");
     status |= run_target_against_oracle("ZX Spectrum stock cursors", "bin/zx/test_get_cursor.ihx", "bin/zx-oracle/test_get_cursor.ihx");
     status |= run_target_against_oracle("ZX Spectrum set page API", "bin/zx/test_cursor_set.ihx", "bin/zx-oracle/test_cursor_set.ihx");

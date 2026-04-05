@@ -104,7 +104,7 @@ _gpx_draw_bmp::
         ;; Public API semantics:
         ;; - unmasked: draw 1 bits, skip 0 bits
         ;; - masked:   apply AND/OR pair
-        ld      b,#0x00               ;; mode = BM_CPY
+        ld      b,#0x80               ;; internal mode tag: keep legacy semantics
         ld      c,#0x01               ;; color = CO_FORE
         jr      gb_core
 
@@ -125,17 +125,19 @@ gb_core:
         add     iy,sp
 
         ;; Precompute compositor behaviour once per call.
+        ;; DRAWMODE:
+        ;;   0 = legacy public gpx_draw_bmp semantics (skip source zero bits)
+        ;;   1 = BM_CPY + CO_FORE (copy source bits)
+        ;;   2 = BM_CPY + CO_BACK (copy inverted source bits)
+        ;;   3 = BM_XOR
         ld      a,b
-        or      a
-        jr      nz,gb_mode_select
-        ld      a,c
-        cp      #0x01
-        jr      nz,gb_mode_select
-        xor     a                      ;; default masked/unmasked semantics
+        bit     7,a
+        jr      z,gb_mode_select
+        xor     a
         ld      L_DRAWMODE(iy),a
         jr      gb_mode_done
 
- gb_mode_select:
+gb_mode_select:
         ld      a,b
         bit     0,a
         jr      nz,gb_mode_xor_sel
@@ -848,7 +850,7 @@ gb_core:
         jr      gb_store_out
 
  gb_mode_compose:
-        ;; Mode-aware semantics operate on OR bits only.
+        ;; Mode-aware semantics operate on source bits (OR plane) only.
         ld      a,L_ORBITS(iy)
         ld      b,a
         ld      a,L_INSIDE(iy)
@@ -861,21 +863,15 @@ gb_core:
         cp      #2
         jr      z,gb_mode_back
 
-        ;; FORE copy: set OR bits, skip zero bits.
-        ld      a,L_OLD(iy)
-        ld      b,a
+        ;; FORE copy: write source bits directly.
         ld      a,L_ORBITS(iy)
-        or      b
         ld      L_DRAW(iy),a
         jr      gb_store_out
 
  gb_mode_back:
-        ;; BACK copy: clear OR bits, skip zero bits.
+        ;; BACK copy: write inverted source bits directly.
         ld      a,L_ORBITS(iy)
         cpl
-        ld      b,a
-        ld      a,L_OLD(iy)
-        and     b
         ld      L_DRAW(iy),a
         jr      gb_store_out
 
