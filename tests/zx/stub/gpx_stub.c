@@ -108,19 +108,74 @@ static void zx_host_init_font_blob(void)
 #endif
 
 static uint8_t zx_stock_classic[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x80
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
+    0b00111111, 0b00000000,
+    0b00011111, 0b01000000,
+    0b00001111, 0b01100000,
+    0b00000111, 0b01110000,
+    0b00000011, 0b01111000,
+    0b00000001, 0b01111100,
+    0b00000011, 0b01110000,
+    0b00000011, 0b01011000,
+    0b00100011, 0b00001000,
+    0b11110111, 0b00000000,
+    0x01, 0x01
 };
 static uint8_t zx_stock_std[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x40
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
+    0b11111111, 0b11000000,
+    0b00011111, 0b10100000,
+    0b00001111, 0b10010000,
+    0b00000111, 0b10001000,
+    0b00000011, 0b10000100,
+    0b00000001, 0b10000010,
+    0b00000011, 0b10001100,
+    0b00000011, 0b10100100,
+    0b10000011, 0b01100100,
+    0b11100111, 0b00011000,
+    0x01, 0x01
 };
 static uint8_t zx_stock_hourglass[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x20
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
+    0b00000001, 0b11111110,
+    0b10000011, 0b01000100,
+    0b10000011, 0b01010100,
+    0b11000111, 0b00101000,
+    0b11101111, 0b00010000,
+    0b11000111, 0b00101000,
+    0b10000011, 0b01000100,
+    0b10000011, 0b01010100,
+    0b00000001, 0b11111110,
+    0b11111111, 0b00000000,
+    0x03, 0x04
 };
 static uint8_t zx_stock_caret[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x10
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
+    0b00100111, 0b11011000,
+    0b00000111, 0b10101000,
+    0b00000111, 0b11011000,
+    0b10001111, 0b01010000,
+    0b10001111, 0b01010000,
+    0b10001111, 0b01010000,
+    0b10001111, 0b01010000,
+    0b00000111, 0b11011000,
+    0b00000111, 0b10101000,
+    0b00100111, 0b11011000,
+    0x01, 0x07
 };
 static uint8_t zx_stock_hand[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 1, 1, 0, 0x08
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
+    0b11011111, 0b00100000,
+    0b10001111, 0b01010000,
+    0b10000011, 0b01011100,
+    0b10000001, 0b01010110,
+    0b00000000, 0b11010101,
+    0b00000000, 0b10010101,
+    0b00000000, 0b10000001,
+    0b00000000, 0b10000001,
+    0b10000001, 0b01000010,
+    0b11000011, 0b00111100,
+    0x02, 0x00
 };
 
 static uint16_t zx_screen_offset(coord x, coord y)
@@ -678,6 +733,103 @@ static void zx_draw_bmp_mode(
             }
         }
     }
+}
+
+static void zx_capture_sprite_background(sprite_t *sprite, uint8_t w, uint8_t h)
+{
+    uint8_t x = (uint8_t)sprite->x;
+    uint8_t y = (uint8_t)sprite->y;
+    uint8_t *bg = (uint8_t *)sprite->background;
+    uint8_t *screen = zx_screen();
+    uint16_t row;
+
+    for (row = 0; row < h; ++row) {
+        uint16_t col;
+        uint16_t bg_row = (uint16_t)row << 1;
+        for (col = 0; col < w; ++col) {
+            uint16_t off = zx_screen_offset((coord)(x + (uint8_t)col), (coord)(y + (uint8_t)row));
+            uint8_t src_mask = (uint8_t)(0x80 >> ((x + (uint8_t)col) & 7));
+            uint8_t dst_mask = (uint8_t)(0x80 >> (col & 7));
+            if (screen[off] & src_mask)
+                bg[5 + bg_row + (uint16_t)(col >> 3)] |= dst_mask;
+        }
+    }
+}
+
+static void zx_restore_sprite_background(sprite_t *sprite)
+{
+    const uint8_t *bg = (const uint8_t *)sprite->background;
+    uint16_t row;
+    uint8_t w;
+    uint8_t h;
+
+    if (!sprite || !sprite->background)
+        return;
+
+    w = bg[1];
+    h = bg[2];
+
+    for (row = 0; row < h; ++row) {
+        uint16_t col;
+        uint16_t bg_row = (uint16_t)row << 1;
+        coord py = (coord)(sprite->y + (coord)row);
+        if (py >= ZX_HEIGHT)
+            break;
+        for (col = 0; col < w; ++col) {
+            coord px = (coord)(sprite->x + (coord)col);
+            uint8_t byte;
+            uint8_t mask = (uint8_t)(0x80 >> (col & 7));
+            if (px >= ZX_WIDTH)
+                break;
+            byte = bg[5 + bg_row + (uint16_t)(col >> 3)];
+            zx_set_pixel(
+                px,
+                py,
+                (byte & mask) ? CO_FORE : CO_BACK,
+                BM_CPY);
+        }
+    }
+}
+
+void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite)
+{
+    zx_bmp_view_t view;
+    uint16_t i;
+    uint8_t visw;
+    uint8_t vish;
+
+    if (!sprite || !sprite->bitmap || !sprite->background)
+        return;
+    if (!zx_parse_bmp(sprite->bitmap, &view))
+        return;
+    if (view.w == 0 || view.h == 0 || view.w > 16 || view.h > 16 || view.stride > 2)
+        return;
+    if (sprite->x < 0 || sprite->y < 0 || sprite->x >= ZX_WIDTH || sprite->y >= ZX_HEIGHT)
+        return;
+
+    visw = (uint8_t)view.w;
+    if ((int)sprite->x + (int)view.w > ZX_WIDTH)
+        visw = (uint8_t)(ZX_WIDTH - (int)sprite->x);
+
+    vish = (uint8_t)view.h;
+    if ((int)sprite->y + (int)view.h > ZX_HEIGHT)
+        vish = (uint8_t)(ZX_HEIGHT - (int)sprite->y);
+
+    sprite->background->signature = BMP_SIG_STRIDE(BMP_ENC_1BPP, 2);
+    sprite->background->w = (uint8_t)view.w;
+    sprite->background->h = (uint8_t)view.h;
+    sprite->background->size = (uint16_t)(view.h << 1);
+    for (i = GPX_SPRITE_BG_HEADER_SIZE; i < GPX_SPRITE_BG_SIZE; ++i)
+        ((uint8_t *)sprite->background)[i] = 0;
+
+    zx_capture_sprite_background(sprite, visw, vish);
+    gpx_draw_bmp(gpx, sprite->x, sprite->y, sprite->bitmap, (const rect_t *)0);
+}
+
+void gpx_hide_sprite(gpx_t *gpx, sprite_t *sprite)
+{
+    (void)gpx;
+    zx_restore_sprite_background(sprite);
 }
 
 const font_t *gpx_get_system_font(void)

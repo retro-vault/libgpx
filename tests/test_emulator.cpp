@@ -26,6 +26,18 @@ static bool in_clip(int x, int y, const rect_t *clip)
     return true;
 }
 
+static void clear_expected_pixel_local(
+    std::vector<uint8_t> &expected,
+    int x,
+    int y)
+{
+    if (!in_clip(x, y, nullptr))
+        return;
+    uint16_t off = zx_screen_offset(x, y);
+    uint8_t mask = (uint8_t)(0x80 >> (x & 7));
+    expected[off] &= (uint8_t)~mask;
+}
+
 static void draw_expected_bmp_packed(
     std::vector<uint8_t> &expected,
     int x,
@@ -51,6 +63,56 @@ static void draw_expected_bmp_packed(
         }
     }
 }
+
+static void draw_expected_masked_bmp_packed(
+    std::vector<uint8_t> &expected,
+    int x,
+    int y,
+    const uint8_t *raw,
+    const rect_t *clip)
+{
+    const packed_bmp_header_t *header =
+        reinterpret_cast<const packed_bmp_header_t *>(raw);
+    const uint8_t *bitmap = raw + sizeof(packed_bmp_header_t);
+    uint8_t stride = BMP_STRIDE(header->signature);
+    for (coord row = 0; row < header->h; ++row) {
+        uint16_t row_offset = (uint16_t)(row * stride * 2);
+        for (coord col = 0; col < header->w; ++col) {
+            int px = x + col;
+            int py = y + row;
+            uint8_t mask = (uint8_t)(0x80 >> (col & 7));
+            uint8_t and_byte = bitmap[row_offset + (col >> 3)];
+            uint8_t or_byte = bitmap[row_offset + stride + (col >> 3)];
+            if (!in_clip(px, py, clip))
+                continue;
+            if (!(and_byte & mask)) {
+                if (or_byte & mask)
+                    set_expected_pixel(expected, px, py);
+                else
+                    clear_expected_pixel_local(expected, px, py);
+            } else if (or_byte & mask) {
+                set_expected_pixel(expected, px, py);
+            }
+        }
+    }
+}
+
+static const uint8_t stock_hand_cursor[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1),
+    8,
+    10,
+    20, 0,
+    0b11011111, 0b00100000,
+    0b10001111, 0b01010000,
+    0b10000011, 0b01011100,
+    0b10000001, 0b01010110,
+    0b00000000, 0b11010101,
+    0b00000000, 0b10010101,
+    0b00000000, 0b10000001,
+    0b00000000, 0b10000001,
+    0b10000001, 0b01000010,
+    0b11000011, 0b00111100
+};
 
 static bool compare_screen(
     const std::vector<uint8_t> &actual,
@@ -255,6 +317,21 @@ static std::vector<uint8_t> expected_draw_text_gapfill()
     return expected;
 }
 
+static std::vector<uint8_t> expected_show_sprite()
+{
+    std::vector<uint8_t> expected(0x1B00, 0);
+    uint8_t fpatt[2] = {0xAA, 0x55};
+    rect_t center_bg = {36, 18, 63, 39};
+    rect_t right_bg = {244, 12, 255, 31};
+    rect_t edge_bg = {248, 184, 255, 191};
+
+    fill_expected_rectangle(expected, &center_bg, fpatt, 2, nullptr);
+    fill_expected_rectangle(expected, &right_bg, fpatt, 2, nullptr);
+    fill_expected_rectangle(expected, &edge_bg, fpatt, 2, nullptr);
+    draw_expected_masked_bmp_packed(expected, 46, 22, stock_hand_cursor, nullptr);
+    return expected;
+}
+
 static std::vector<uint8_t> expected_get_stock_bmp()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
@@ -389,6 +466,7 @@ int main()
     status |= run_target("ZX Spectrum draw text gap fill", "bin/zx/test_draw_text_gapfill.ihx", expected_draw_text_gapfill());
     status |= run_target_against_oracle("ZX Spectrum get stock bmp", "bin/zx/test_get_stock_bmp.ihx", "bin/zx-oracle/test_get_stock_bmp.ihx");
     status |= run_target_against_oracle("ZX Spectrum stock cursors", "bin/zx/test_get_cursor.ihx", "bin/zx-oracle/test_get_cursor.ihx");
+    status |= run_target("ZX Spectrum show/hide sprite", "bin/zx/test_show_sprite.ihx", expected_show_sprite());
     status |= run_target_against_oracle("ZX Spectrum set page API", "bin/zx/test_cursor_set.ihx", "bin/zx-oracle/test_cursor_set.ihx");
     if (status == 0)
         std::cout << "All emulator tests passed." << std::endl;

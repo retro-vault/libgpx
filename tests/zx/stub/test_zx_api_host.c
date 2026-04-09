@@ -253,6 +253,63 @@ static void test_stock_bitmaps_and_pages(void)
     CHECK(pixel_count() == before, "set_page should not touch VRAM in ZX stub");
 }
 
+static void test_sprite_show_hide(void)
+{
+    gpx_t *g = gpx_create(GPXM_DEFAULT);
+    static uint8_t std_sprite[] = {
+        BMP_SIG_STRIDE(BMP_ENC_1BPP, 2), 12, 6, 12, 0,
+        0xFF, 0xF0,
+        0x80, 0x10,
+        0xBF, 0xD0,
+        0xA0, 0x50,
+        0xBF, 0xD0,
+        0x80, 0x10
+    };
+    uint8_t fpatt[2] = {0xAA, 0x55};
+    rect_t center_bg = {36, 18, 63, 39};
+    rect_t right_bg = {244, 12, 255, 31};
+    rect_t edge_bg = {248, 184, 255, 191};
+    uint8_t before[0x1800];
+    uint8_t classic_bg[GPX_SPRITE_BG_SIZE];
+    uint8_t std_bg[GPX_SPRITE_BG_SIZE];
+    uint8_t hourglass_bg[GPX_SPRITE_BG_SIZE];
+    uint8_t hand_bg[GPX_SPRITE_BG_SIZE];
+    sprite_t classic = {40, 20, gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC), (bmp_t *)classic_bg};
+    sprite_t standard = {250, 14, (bmp_t *)std_sprite, (bmp_t *)std_bg};
+    sprite_t hourglass = {252, 186, gpx_get_stock_bmp(GPXSB_CURSOR_HOURGLASS), (bmp_t *)hourglass_bg};
+    sprite_t hand = {46, 22, gpx_get_stock_bmp(GPXSB_CURSOR_HAND), (bmp_t *)hand_bg};
+
+    CHECK(classic.bitmap != 0 && hourglass.bitmap != 0 && hand.bitmap != 0,
+          "sprite tests require stock cursor bitmaps");
+
+    gpx_clrscr();
+    gpx_fill_rectangle(g, &center_bg, CO_FORE, BM_CPY, fpatt, 2, (const rect_t *)0);
+    gpx_fill_rectangle(g, &right_bg, CO_FORE, BM_CPY, fpatt, 2, (const rect_t *)0);
+    gpx_fill_rectangle(g, &edge_bg, CO_FORE, BM_CPY, fpatt, 2, (const rect_t *)0);
+    memcpy(before, gpx_stub_host_screen(), sizeof(before));
+
+    gpx_show_sprite(g, &classic);
+    CHECK(memcmp(gpx_stub_host_screen(), before, sizeof(before)) != 0,
+          "show_sprite should modify VRAM");
+    gpx_hide_sprite(g, &classic);
+    CHECK(memcmp(gpx_stub_host_screen(), before, sizeof(before)) == 0,
+          "hide_sprite should restore fully visible cursor background");
+
+    gpx_show_sprite(g, &standard);
+    gpx_hide_sprite(g, &standard);
+    CHECK(memcmp(gpx_stub_host_screen(), before, sizeof(before)) == 0,
+          "hide_sprite should restore right-clipped standard sprite background");
+
+    gpx_show_sprite(g, &hourglass);
+    gpx_hide_sprite(g, &hourglass);
+    CHECK(memcmp(gpx_stub_host_screen(), before, sizeof(before)) == 0,
+          "hide_sprite should restore right/bottom-clipped cursor background");
+
+    gpx_show_sprite(g, &hand);
+    CHECK(memcmp(gpx_stub_host_screen(), before, sizeof(before)) != 0,
+          "show_sprite should leave final cursor visible");
+}
+
 int main(void)
 {
     test_context();
@@ -262,6 +319,7 @@ int main(void)
     test_bitmap();
     test_fonts_text_and_measure();
     test_stock_bitmaps_and_pages();
+    test_sprite_show_hide();
 
     if (failures == 0) {
         printf("All host API coverage tests passed.\n");

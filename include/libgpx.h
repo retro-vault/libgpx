@@ -92,6 +92,23 @@ typedef struct bmp_s
 /* Forward declaration for APIs that take gpx_t* before full struct definition. */
 typedef struct gpx_s gpx_t;
 
+/* Sprite background storage is always a standard 1bpp bitmap with a
+ * fixed 2-byte stride and room for the worst-case 16x16 capture. */
+#define GPX_SPRITE_BG_HEADER_SIZE  5
+#define GPX_SPRITE_BG_PAYLOAD_SIZE 32
+#define GPX_SPRITE_BG_SIZE         (GPX_SPRITE_BG_HEADER_SIZE + GPX_SPRITE_BG_PAYLOAD_SIZE)
+
+/* Save-under sprite descriptor. The bitmap pointer is the source image;
+ * the background pointer must reference writable storage of at least
+ * GPX_SPRITE_BG_SIZE bytes. */
+typedef struct sprite_s
+{
+    coord x;
+    coord y;
+    bmp_t *bitmap;
+    bmp_t *background;
+} sprite_t;
+
 /* Font header flags (byte 0). */
 #define FONT_FLAG_PROPORTIONAL 0x01 /* Variable-width glyphs. */
 #define FONT_FLAG_OFFSETS_BE 0x02 /* Offset table uses big-endian uint16_t. */
@@ -204,6 +221,14 @@ extern uint8_t gpx_draw_line(
 extern void gpx_draw_bmp(
     gpx_t *gpx, coord x, coord y,
     bmp_t *b, const rect_t *clip);
+
+/* Show a sprite at sprite->x, sprite->y. The sprite origin must already be
+ * on-screen; only right/bottom clipping is applied. */
+extern void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite);
+
+/* Restore the background currently stored in sprite->background at
+ * sprite->x, sprite->y. */
+extern void gpx_hide_sprite(gpx_t *gpx, sprite_t *sprite);
 
 /* Draw the outline of rectangle r with line pattern lpatt. */
 extern void gpx_draw_rectangle(
