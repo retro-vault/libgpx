@@ -40,8 +40,9 @@ _gpx_hide_sprite::
         cp      #192
         ret     nc
 
-        inc     hl                    ;; skip bitmap pointer
-        inc     hl
+        inc     hl                    ;; skip bitmap pointer low
+        inc     hl                    ;; skip bitmap pointer high
+        inc     hl                    ;; advance to background pointer low
         ld      e,(hl)                ;; background pointer
         inc     hl
         ld      d,(hl)

@@ -43,6 +43,7 @@
         .area   _CODE
 
 __gpx_store_background:
+        push    hl
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -65,6 +66,8 @@ __gpx_store_background:
         srl     a
         ld      B_XBYTE(ix),a
 
+        ld      l,2(ix)
+        ld      h,3(ix)
         ld      de,#BG_HEADER_SIZE
         add     hl,de
         push    hl
@@ -182,4 +185,5 @@ __gpx_store_background:
 .gsb_done:
         ld      sp,ix
         pop     ix
+        pop     hl
         ret
