@@ -344,7 +344,6 @@ __gpx_sprite_blit_raw:
         ld      a,P_SHIFT(ix)
         or      a
         jr      z,.gbr_and_shift_done
-        ld      a,P_SHIFT(ix)
 .gbr_and_shift_loop:
         srl     d
         rr      e
@@ -363,7 +362,6 @@ __gpx_sprite_blit_raw:
         ld      a,P_SHIFT(ix)
         or      a
         jr      z,.gbr_or_shift_done
-        ld      a,P_SHIFT(ix)
         ld      e,a
 .gbr_or_shift_loop:
         srl     b
@@ -381,10 +379,11 @@ __gpx_sprite_blit_raw:
         and     P_AND0(ix)
         or      P_OR0(ix)
         ld      d,a
-        ld      a,P_INS0(ix)
+        ld      c,P_INS0(ix)           ;; cache INS0 (C is free here)
+        ld      a,c
         and     d
         ld      d,a
-        ld      a,P_INS0(ix)
+        ld      a,c
         cpl
         and     e
         or      d
@@ -400,10 +399,11 @@ __gpx_sprite_blit_raw:
         and     P_AND1(ix)
         or      P_OR1(ix)
         ld      d,a
-        ld      a,P_INS1(ix)
+        ld      c,P_INS1(ix)           ;; cache INS1 (C is free here)
+        ld      a,c
         and     d
         ld      d,a
-        ld      a,P_INS1(ix)
+        ld      a,c
         cpl
         and     e
         or      d
@@ -419,10 +419,11 @@ __gpx_sprite_blit_raw:
         and     P_AND2(ix)
         or      P_OR2(ix)
         ld      d,a
-        ld      a,P_INS2(ix)
+        ld      c,P_INS2(ix)           ;; cache INS2 (C is free here)
+        ld      a,c
         and     d
         ld      d,a
-        ld      a,P_INS2(ix)
+        ld      a,c
         cpl
         and     e
         or      d
