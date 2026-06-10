@@ -379,76 +379,45 @@ gb_mode_select:
         or      a
         jp      nz,gb_exit
 
+        ;; vis rect = draw rect clamped to effective clip, via shared
+        ;; gb_max16 / gb_min16 (HL=result; cmp preserves HL/DE).
         ;; visx0 = max(draw_x0, clip_x0)
         LD16HL  L_X
-        ST16HL  L_VISX0
         LD16DE  L_CLIP_X0
-        call    __rect_cmp16s_lt       ;; draw_x0 < clip_x0 ?
-        or      a
-        jr      z,gb_visy0_prep
-        LD16HL  L_CLIP_X0
+        call    gb_max16
         ST16HL  L_VISX0
 
- gb_visy0_prep:
         ;; visy0 = max(draw_y0, clip_y0)
         LD16HL  L_Y
-        ST16HL  L_VISY0
         LD16DE  L_CLIP_Y0
-        call    __rect_cmp16s_lt       ;; draw_y0 < clip_y0 ?
-        or      a
-        jr      z,gb_visx1_prep
-        LD16HL  L_CLIP_Y0
+        call    gb_max16
         ST16HL  L_VISY0
 
- gb_visx1_prep:
         ;; visx1 = min(draw_x1, clip_x1)
         LD16HL  L_XEND
-        ST16HL  L_VISX1
-        LD16DE  L_XEND
-        LD16HL  L_CLIP_X1
-        call    __rect_cmp16s_lt       ;; clip_x1 < draw_x1 ?
-        or      a
-        jr      z,gb_visy1_prep
-        LD16HL  L_CLIP_X1
+        LD16DE  L_CLIP_X1
+        call    gb_min16
         ST16HL  L_VISX1
 
- gb_visy1_prep:
         ;; visy1 = min(draw_y1, clip_y1)
         LD16HL  L_YEND
-        ST16HL  L_VISY1
-        LD16DE  L_YEND
-        LD16HL  L_CLIP_Y1
-        call    __rect_cmp16s_lt       ;; clip_y1 < draw_y1 ?
-        or      a
-        jr      z,gb_skips
-        LD16HL  L_CLIP_Y1
+        LD16DE  L_CLIP_Y1
+        call    gb_min16
         ST16HL  L_VISY1
 
  gb_skips:
         ;; Source skip is the clipped-away left/top part.
-        ld      a,L_VISX0(iy)
-        ld      b,a
-        ld      a,L_X(iy)
-        cpl
-        inc     a
-        add     a,b
+        ld      a,L_VISX0(iy)          ;; srcx = visx0 - x
+        sub     L_X(iy)
         ld      L_SRCX(iy),a
 
-        ld      a,L_VISY0(iy)
-        ld      b,a
-        ld      a,L_Y(iy)
-        cpl
-        inc     a
-        add     a,b
+        ld      a,L_VISY0(iy)          ;; srcy = visy0 - y
+        sub     L_Y(iy)
         ld      L_SRCY(iy),a
 
         ;; visw = visx1 - visx0 + 1
         ld      a,L_VISX1(iy)
-        ld      b,a
-        ld      a,L_VISX0(iy)
-        cpl
-        inc     a
-        add     a,b
+        sub     L_VISX0(iy)
         inc     a
         ld      L_VISW(iy),a
         or      a
@@ -456,11 +425,7 @@ gb_mode_select:
 
         ;; vish = visy1 - visy0 + 1
         ld      a,L_VISY1(iy)
-        ld      b,a
-        ld      a,L_VISY0(iy)
-        cpl
-        inc     a
-        add     a,b
+        sub     L_VISY0(iy)
         inc     a
         ld      L_VISH(iy),a
         or      a
@@ -921,6 +886,21 @@ gb_mode_select:
         ret
 
         ;; Row address (y in B -> HL) is shared with _video.s (__vid_rowaddr).
+
+        ;; gb_max16 / gb_min16: HL = signed max/min(HL, DE).
+        ;; __rect_cmp16s_lt preserves HL/DE (writes only A); A=1 when HL<DE.
+ gb_max16:
+        call    __rect_cmp16s_lt
+        or      a
+        ret     z                      ;; HL >= DE -> HL is the max
+        ex      de,hl
+        ret
+ gb_min16:
+        call    __rect_cmp16s_lt
+        or      a
+        ret     nz                     ;; HL < DE -> HL is the min
+        ex      de,hl
+        ret
 
         ;; gb_win: A=prev, C=cur -> A = high byte of (prev:cur) << SUB.
         ;; Uses D,E,B; leaves HL (DSTPTR) and C (cur) intact. Used by the cold
