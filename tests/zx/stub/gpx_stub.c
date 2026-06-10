@@ -886,6 +886,26 @@ coord gpx_measure_text(const char *text, const font_t *font)
     return (coord)width;
 }
 
+/* Fill the inter-character / missing-glyph gap with the inverse text color,
+ * opaque (BM_CPY) — matches the real backend's .dt_fill_inv_span. The gap is
+ * NOT left transparent. */
+static void zx_text_gap(
+    gpx_t *gpx, coord x, coord y, uint8_t w, uint8_t h,
+    color c, const rect_t *clip)
+{
+    rect_t r;
+    uint8_t solid = 0xFF;
+    color inv = (color)((c ^ 1) & 1);
+
+    if (w == 0 || h == 0)
+        return;
+    r.x0 = x;
+    r.y0 = y;
+    r.x1 = (coord)(x + (coord)w - 1);
+    r.y1 = (coord)(y + (coord)h - 1);
+    gpx_fill_rectangle(gpx, &r, inv, BM_CPY, &solid, 1, clip);
+}
+
 void gpx_draw_text(
     gpx_t *gpx, coord x, coord y,
     const char *text, const font_t *font,
@@ -895,11 +915,13 @@ void gpx_draw_text(
     coord xcur = x;
     uint8_t empty_width;
     uint8_t advance;
+    uint8_t glyph_height;
 
     if (text == (const char *)0 || font == (const font_t *)0)
         return;
 
     empty_width = fraw[3];
+    glyph_height = fraw[5];
     advance = fraw[6];
 
     while (*text) {
@@ -908,13 +930,16 @@ void gpx_draw_text(
         uint16_t gw = zx_glyph_width(glyph);
 
         if (gw == 0) {
+            zx_text_gap(gpx, xcur, y, empty_width, glyph_height, c, clip);
             xcur = (coord)(xcur + empty_width);
             ++text;
             continue;
         }
 
         zx_draw_bmp_mode(gpx, xcur, y, (bmp_t *)glyph, c, m, clip);
-        xcur = (coord)(xcur + (coord)gw + advance);
+        xcur = (coord)(xcur + (coord)gw);
+        zx_text_gap(gpx, xcur, y, advance, glyph_height, c, clip);
+        xcur = (coord)(xcur + advance);
         ++text;
     }
 }
