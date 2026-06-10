@@ -111,6 +111,13 @@ This module is the place where a 10-20% size reduction in the whole library is m
 
 **Constraints**: All work here must operate strictly on the existing frozen `font_t` serialized format (see top-level Constraints section). No changes to header layout, offset table, glyph encoding, or flags are permitted. The current aliasing of system and tiny font to the same Envy blob is intentional for footprint.
 
+> **STATUS**: gap-fill behavior is now codified in the oracle stub and covered by
+> `test_text_gaps.c` (gaps are filled with opaque inverse color, not transparent;
+> validated over a solid band + under a clip). Also fixed a latent stub divergence:
+> glyphs render OPAQUE (mode-aware CPY) on the real backend, now matched in the stub
+> + tested over a background. The gap-fill FAST PATH below is still TODO but is now
+> safely testable.
+
 **Proposals**
 - Gap-fill (the inter-character advance + empty glyph "inverse color" fill) currently builds a `rect_t` on the stack and calls `_gpx_fill_rectangle` (which itself does heavy normalization + hline dispatch). For the common case of small advance (often 1) this is extremely heavy.
   - Provide a fast internal "fill horizontal span with solid pattern" (or a height-bounded horizontal fill primitive) that the text drawer can call directly. This must still respect the current font's `advance` and `empty_width` values read from the serialized header.
