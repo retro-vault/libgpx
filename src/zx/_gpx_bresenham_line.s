@@ -203,18 +203,22 @@ __gpx_draw_line_raw_local::
         jp      z,.gbl_done
 
 .gbl_step:
-        ;; e2 = err * 2
+        ;; e2 = err * 2.  Hybrid register use: e2 is a per-pixel transient,
+        ;; so keep it in BC across both compares instead of an IX local
+        ;; (__rect_cmp16s_lt preserves BC, and neither the err-=dy nor the
+        ;; x-step block touches BC).  All the interleaved Bresenham state
+        ;; (x0,y0,x1,y1,dx,dy,neg_dy,err,sx,sy,lpatt) stays in IX.
         ld      l,-20(ix)
         ld      h,-21(ix)
         add     hl,hl
-        ld      -22(ix),l
-        ld      -23(ix),h
+        ld      b,h
+        ld      c,l                    ;; BC = e2
 
         ;; if (e2 > -dy) => if (-dy < e2)  (neg_dy precomputed before loop)
         ld      l,-24(ix)
         ld      h,-25(ix)              ;; HL=-dy
-        ld      e,-22(ix)
-        ld      d,-23(ix)              ;; DE=e2
+        ld      e,c
+        ld      d,b                    ;; DE=e2
         call    __rect_cmp16s_lt
         or      a
         jr      z,.gbl_skip_x
@@ -248,9 +252,9 @@ __gpx_draw_line_raw_local::
         ld      -4(ix),h
 
 .gbl_skip_x:
-        ;; if (e2 < dx)
-        ld      l,-22(ix)
-        ld      h,-23(ix)              ;; HL=e2
+        ;; if (e2 < dx)   (e2 still in BC from above)
+        ld      l,c
+        ld      h,b                    ;; HL=e2
         ld      e,-16(ix)
         ld      d,-17(ix)              ;; DE=dx
         call    __rect_cmp16s_lt
