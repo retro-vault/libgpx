@@ -40,10 +40,14 @@ void main(void)
 
     /* gap fill visible: missing-glyph gaps clear columns out of a solid band */
     gpx_fill_rectangle(gpx, &band, CO_FORE, BM_CPY, &fp, 1, (const rect_t *)0);
-    gpx_draw_text(gpx, 8, 84, miss, font, CO_FORE, BM_CPY, (const rect_t *)0);
+    gpx_draw_text(gpx, 8, 82, miss, font, CO_FORE, BM_CPY, (const rect_t *)0);
+
+    /* real glyphs over the solid band: opaque CPY render must knock out the
+     * background (glyph zero-bits cleared), and gaps cleared too */
+    gpx_draw_text(gpx, 8, 92, "Opaque!", font, CO_FORE, BM_CPY, (const rect_t *)0);
 
     /* clipped gap fill must respect the clip rect */
-    gpx_draw_text(gpx, 8, 92, miss, font, CO_FORE, BM_CPY, &clip);
+    gpx_draw_text(gpx, 8, 100, miss, font, CO_FORE, BM_CPY, &clip);
 
     __asm
         halt

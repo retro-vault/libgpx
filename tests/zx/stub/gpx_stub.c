@@ -727,9 +727,20 @@ static void zx_draw_bmp_mode(
         for (col = 0; col < view.w; ++col) {
             uint8_t byte = view.bitmap[row_offset + (uint16_t)(col >> 3)];
             uint8_t mask = (uint8_t)(0x80 >> (col & 7));
-            if (byte & mask) {
-                gpx_draw_pixel(gpx, (coord)(x + (coord)col), (coord)(y + (coord)row),
-                    c, m, cl);
+            int bit = (byte & mask) != 0;
+            coord px = (coord)(x + (coord)col);
+            coord py = (coord)(y + (coord)row);
+            if (m & 1) {
+                /* BM_XOR: flip only the source set bits (DRAWMODE 3). */
+                if (bit)
+                    gpx_draw_pixel(gpx, px, py, c, m, cl);
+            } else {
+                /* BM_CPY mode-aware (DRAWMODE 1/2): OPAQUE copy of the source
+                 * bits over the glyph width -- zero bits are written too, not
+                 * left transparent. CO_FORE => pixel = bit; CO_BACK => !bit. */
+                int setpix = (c & 1) ? bit : !bit;
+                gpx_draw_pixel(gpx, px, py,
+                    (color)(setpix ? CO_FORE : CO_BACK), BM_CPY, cl);
             }
         }
     }
