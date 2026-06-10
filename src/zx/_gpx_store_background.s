@@ -43,6 +43,7 @@
         .area   _CODE
 
 __gpx_store_background:
+        push    iy                     ;; preserve caller IY (used as dest ptr)
         push    hl
         push    ix
         ld      ix,#0
@@ -78,7 +79,11 @@ __gpx_store_background:
         ld      (hl),#0x00
         ldir
         pop     hl
-        ST16HL  B_BG_LO
+        ;; Pin the payload write pointer in IY for the whole row loop
+        ;; (linear, +2/row). Survives __vid_rowaddr/__vid_nextrow, so no
+        ;; per-row IX round-trip of the dest pointer.
+        push    hl
+        pop     iy
 
 .gsb_row_loop:
         ld      a,B_ROWCNT(ix)
@@ -166,12 +171,10 @@ __gpx_store_background:
         ld      e,a
 
 .gsb_store_row:
-        LD16HL  B_BG_LO
-        ld      (hl),d
-        inc     hl
-        ld      (hl),e
-        inc     hl
-        ST16HL  B_BG_LO
+        ld      0(iy),d
+        ld      1(iy),e
+        inc     iy
+        inc     iy
 
         ld      a,B_YCUR(ix)
         inc     a
@@ -186,4 +189,5 @@ __gpx_store_background:
         ld      sp,ix
         pop     ix
         pop     hl
+        pop     iy                     ;; restore caller IY
         ret
