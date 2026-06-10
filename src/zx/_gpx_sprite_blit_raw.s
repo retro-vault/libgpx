@@ -80,6 +80,7 @@
 __gpx_sprite_blit_raw:
         ld      d,h
         ld      e,l
+        push    iy                     ;; preserve caller IY (pinned OR src ptr)
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -201,6 +202,14 @@ __gpx_sprite_blit_raw:
         ST16DE  P_ROWADV_LO
 
 .gbr_ptrs_done:
+        ;; Pin the OR-plane source pointer in IY for the row loop (linear,
+        ;; advanced by ROWADV/row). Survives __vid_rowaddr; no per-row IX
+        ;; round-trip of this pointer. (AND plane stays in IX, masked-only.)
+        ld      l,P_SRCOR_LO(ix)
+        ld      h,P_SRCOR_HI(ix)
+        push    hl
+        pop     iy
+
         xor     a
         ld      P_INS0(ix),a
         ld      P_INS1(ix),a
@@ -292,14 +301,11 @@ __gpx_sprite_blit_raw:
 .gbr_dst_ptr_ok:
         push    hl
 
-        LD16DE  P_SRCOR_LO
-        ex      de,hl
-        ld      b,(hl)
+        ld      b,0(iy)                ;; OR byte 0 (IY = pinned OR src ptr)
         ld      a,P_STRIDE(ix)
         cp      #2
         jr      nz,.gbr_or_second_zero
-        inc     hl
-        ld      c,(hl)
+        ld      c,1(iy)                ;; OR byte 1 (stride 2)
         jr      .gbr_or_ready
 .gbr_or_second_zero:
         xor     a
@@ -430,10 +436,10 @@ __gpx_sprite_blit_raw:
         ld      (hl),a
 
 .gbr_next_row:
-        LD16HL  P_SRCOR_LO
-        LD16DE  P_ROWADV_LO
-        add     hl,de
-        ST16HL  P_SRCOR_LO
+        ;; advance pinned OR src pointer (IY += ROWADV)
+        ld      e,P_ROWADV_LO(ix)
+        ld      d,P_ROWADV_HI(ix)
+        add     iy,de
 
         ld      a,P_MASKED(ix)
         or      a
@@ -456,4 +462,5 @@ __gpx_sprite_blit_raw:
 .gbr_done:
         ld      sp,ix
         pop     ix
+        pop     iy                     ;; restore caller IY
         ret
