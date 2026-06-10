@@ -219,11 +219,16 @@ _gpx_draw_text::
 .dt_advance_xcur:
         ;; Fill inter-character advance gap with inverse color.
         ld      a,-9(ix)              ;; advance
+.dt_fill_and_advance:
+        ;; A = span width; fill the gap, then xcur += width.
+        ;; .dt_fill_inv_span calls fill_rectangle (trashes regs), so the width
+        ;; is carried across the call on the stack rather than in a register.
+        push    af
         call    .dt_fill_inv_span
-
-        ;; xcur += advance
+        pop     af
+        ld      b,a
         ld      a,-1(ix)
-        add     a,-9(ix)
+        add     a,b
         ld      -1(ix),a
         jp      nc,.dt_loop
         inc     -2(ix)
@@ -232,14 +237,7 @@ _gpx_draw_text::
 .dt_add_empty:
         ;; Fill missing/empty glyph span with inverse color.
         ld      a,-8(ix)              ;; empty_width
-        call    .dt_fill_inv_span
-
-        ld      a,-1(ix)
-        add     a,-8(ix)
-        ld      -1(ix),a
-        jp      nc,.dt_loop
-        inc     -2(ix)
-        jp      .dt_loop
+        jr      .dt_fill_and_advance
 
 .dt_done:
         ld      sp,ix

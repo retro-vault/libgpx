@@ -112,10 +112,10 @@ __gpx_store_background:
         ld      c,(hl)
 .gsb_src_ready:
 
-        ld      a,B_SHIFT(ix)
+        ;; B still holds B_SHIFT (set above, untouched through src gather).
+        ld      a,b
         or      a
         jr      z,.gsb_shift_done
-        ld      b,a
 .gsb_shift_loop:
         and     a
         rl      c
