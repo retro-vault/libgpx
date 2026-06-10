@@ -486,6 +486,7 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum bmp mask", "bin/zx/test_bmp_mask2.ihx", "bin/zx-oracle/test_bmp_mask2.ihx");
     status |= run_target_against_oracle("ZX Spectrum bmp clip", "bin/zx/test_bmp_clip.ihx", "bin/zx-oracle/test_bmp_clip.ihx");
     status |= run_target_against_oracle("ZX Spectrum bmp left clip", "bin/zx/test_bmp_leftclip.ihx", "bin/zx-oracle/test_bmp_leftclip.ihx");
+    status |= run_target_against_oracle("ZX Spectrum bmp gather", "bin/zx/test_bmp_gather.ihx", "bin/zx-oracle/test_bmp_gather.ihx");
     status |= run_target_against_oracle("ZX Spectrum measure widths", "bin/zx/test_measure2.ihx", "bin/zx-oracle/test_measure2.ihx");
     if (status == 0)
         std::cout << "All emulator tests passed." << std::endl;

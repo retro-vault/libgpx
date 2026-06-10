@@ -741,7 +741,19 @@ gb_mode_select:
         exx
         ld      c,a                    ;; curA
         ld      a,L_REMAINDER(iy)      ;; prevA
-        call    gb_win                 ;; A = FORE
+        ;; inline gb_win: A=(prevA:curA)<<SUB hi  (FORE)
+        ld      d,a
+        ld      e,c
+        ld      a,L_SUB(iy)
+        or      a
+        jr      z,gbw1_done
+        ld      b,a
+ gbw1_lp:
+        sla     e
+        rl      d
+        djnz    gbw1_lp
+ gbw1_done:
+        ld      a,d
         ld      L_FORE(iy),a
         ld      a,c
         ld      L_REMAINDER(iy),a      ;; prevA = curA
@@ -752,7 +764,19 @@ gb_mode_select:
         exx
         ld      c,a                    ;; curO
         ld      a,L_REMAINDER_OR(iy)   ;; prevO
-        call    gb_win                 ;; A = ORBITS
+        ;; inline gb_win: A=(prevO:curO)<<SUB hi  (ORBITS)
+        ld      d,a
+        ld      e,c
+        ld      a,L_SUB(iy)
+        or      a
+        jr      z,gbw2_done
+        ld      b,a
+ gbw2_lp:
+        sla     e
+        rl      d
+        djnz    gbw2_lp
+ gbw2_done:
+        ld      a,d
         ld      L_ORBITS(iy),a
         ld      a,c
         ld      L_REMAINDER_OR(iy),a   ;; prevO = curO
@@ -763,6 +787,8 @@ gb_mode_select:
         jr      gb_have_src
 
  gb_cur_default:
+        ;; Cold path (only trailing transparent bytes past the source span):
+        ;; keep gb_win as a call here to avoid bloating for ~no speed gain.
         ld      c,#0xff                ;; curA default (transparent)
         ld      a,L_REMAINDER(iy)
         call    gb_win
@@ -897,7 +923,8 @@ gb_mode_select:
         ;; Row address (y in B -> HL) is shared with _video.s (__vid_rowaddr).
 
         ;; gb_win: A=prev, C=cur -> A = high byte of (prev:cur) << SUB.
-        ;; Uses D,E,B; leaves HL (DSTPTR) and C (cur) intact.
+        ;; Uses D,E,B; leaves HL (DSTPTR) and C (cur) intact. Used by the cold
+        ;; trailing-transparent path; the hot SRCREMAIN path inlines this body.
  gb_win:
         ld      d,a
         ld      e,c
