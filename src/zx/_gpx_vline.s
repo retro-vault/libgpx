@@ -150,49 +150,52 @@ gvl_mask_ready:
         jr      nc,gvl_ptr_ok
         inc     h
 gvl_ptr_ok:
-        ;; preserve row pointer while computing count
+        ;; preserve row pointer (dest) while computing count
         push    hl
-        ;; count = (y1 - y0 + 1)
+        ;; count = (y1 - y0 + 1) -> DE
         ld      l,-3(ix)
         ld      h,-4(ix)               ;; HL = y1
         ld      e,-1(ix)
         ld      d,-2(ix)               ;; DE = y0
         or      a
         sbc     hl,de
-        inc     hl
-        ld      -8(ix),l
-        ld      -9(ix),h
-        pop     hl
+        inc     hl                     ;; HL = count
+        ex      de,hl                  ;; DE = count
+        pop     hl                     ;; HL = dest row pointer
+
+        ;; --- hot loop state held in registers ---
+        ;;   B  = patt (rotates per row)
+        ;;   C  = mask (invariant)
+        ;;   DE = remaining row count
+        ;;   HL = dest VRAM pointer
+        ;; __vid_nextrow preserves BC/DE; gvl_apply_mask clobbers only A and E
+        ;; (count lo), so DE is pushed around it. No (ix) access in the loop.
+        ld      b,-6(ix)               ;; B = patt
+        ld      c,-7(ix)               ;; C = mask
 
 gvl_loop:
         ;; draw current point if pattern LSB set
-        ld      a,-6(ix)
+        ld      a,b
         and     #0x01
         jr      z,gvl_after_plot
-        ld      a,-7(ix)
+        ld      a,c                    ;; A = mask byte
+        push    de                     ;; protect count (apply clobbers E)
         call    gvl_apply_mask
+        pop     de
 
 gvl_after_plot:
-        ;; remaining--
-        ld      e,-8(ix)
-        ld      d,-9(ix)
-        dec     de
-        ld      -8(ix),e
-        ld      -9(ix),d
+        dec     de                     ;; remaining--
         ld      a,e
         or      d
         jr      z,gvl_done
 
-        ;; pattern rotate + next row
-        ld      a,-6(ix)
-        rrca
-        ld      -6(ix),a
+        rrc     b                      ;; patt = ror(patt)
         call    __vid_nextrow
-        jp      gvl_loop
+        jr      gvl_loop
 
 gvl_done:
         ;; return current pattern (already used for last pixel)
-        ld      a,-6(ix)
+        ld      a,b
         jr      gvl_return
 
 gvl_reject:
