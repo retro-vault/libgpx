@@ -140,19 +140,19 @@ static bool compare_screen(
     return true;
 }
 
-static std::vector<uint8_t> expected_clrscr()
+[[maybe_unused]] static std::vector<uint8_t> expected_clrscr()
 {
     return std::vector<uint8_t>(0x1B00, 0);
 }
 
-static std::vector<uint8_t> expected_width_height()
+[[maybe_unused]] static std::vector<uint8_t> expected_width_height()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 255, 191);
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_pixel()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_pixel()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 0, 0);
@@ -161,7 +161,7 @@ static std::vector<uint8_t> expected_draw_pixel()
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_line()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_line()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     draw_expected_line(expected, 0, 0, 7, 0, 0x81, nullptr);
@@ -172,7 +172,7 @@ static std::vector<uint8_t> expected_draw_line()
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_line_clip()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_line_clip()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     rect_t clipA = {4, 4, 11, 11};
@@ -191,7 +191,7 @@ static std::vector<uint8_t> expected_draw_line_clip()
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_rectangle()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_rectangle()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     rect_t outer = {2, 2, 10, 6};
@@ -210,7 +210,7 @@ static std::vector<uint8_t> expected_draw_rectangle()
     return expected;
 }
 
-static std::vector<uint8_t> expected_fill_rectangle()
+[[maybe_unused]] static std::vector<uint8_t> expected_fill_rectangle()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     rect_t a = {3, 3, 12, 9};
@@ -230,7 +230,7 @@ static std::vector<uint8_t> expected_fill_rectangle()
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_bmp()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_bmp()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     draw_expected_bmp_packed(expected, 0, 0, bmp_checker, nullptr);
@@ -249,21 +249,21 @@ static std::vector<uint8_t> expected_draw_bmp()
     return expected;
 }
 
-static std::vector<uint8_t> expected_public_api()
+[[maybe_unused]] static std::vector<uint8_t> expected_public_api()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 0, 191);
     return expected;
 }
 
-static std::vector<uint8_t> expected_measure_text()
+[[maybe_unused]] static std::vector<uint8_t> expected_measure_text()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 1, 191);
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_text_api()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_text_api()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     auto clear_expected_pixel = [&](int px, int py) {
@@ -310,14 +310,14 @@ static std::vector<uint8_t> expected_draw_text_api()
     return expected;
 }
 
-static std::vector<uint8_t> expected_draw_text_gapfill()
+[[maybe_unused]] static std::vector<uint8_t> expected_draw_text_gapfill()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 6, 191);
     return expected;
 }
 
-static std::vector<uint8_t> expected_show_sprite()
+[[maybe_unused]] static std::vector<uint8_t> expected_show_sprite()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     uint8_t fpatt[2] = {0xAA, 0x55};
@@ -332,7 +332,7 @@ static std::vector<uint8_t> expected_show_sprite()
     return expected;
 }
 
-static std::vector<uint8_t> expected_get_stock_bmp()
+[[maybe_unused]] static std::vector<uint8_t> expected_get_stock_bmp()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 3, 191);
@@ -344,14 +344,14 @@ static std::vector<uint8_t> expected_get_stock_bmp()
     return expected;
 }
 
-static std::vector<uint8_t> expected_get_cursor()
+[[maybe_unused]] static std::vector<uint8_t> expected_get_cursor()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 4, 191);
     return expected;
 }
 
-static std::vector<uint8_t> expected_cursor_set()
+[[maybe_unused]] static std::vector<uint8_t> expected_cursor_set()
 {
     std::vector<uint8_t> expected(0x1B00, 0);
     set_expected_pixel(expected, 5, 191);

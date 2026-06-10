@@ -3,8 +3,17 @@ BUILD_DIR ?= $(ROOT_DIR)/build
 TEST_BUILD_DIR ?= $(BUILD_DIR)/tests
 PARTNER_BUILD_DIR ?= $(BUILD_DIR)/partner-tests
 
-SDCC ?= sdcc
-SDASZ80 ?= sdasz80
+DOCKER_PARTNER ?= wischner/sdcc-z80-idp
+DOCKER_USER ?= $(shell id -u):$(shell id -g)
+SDCC ?= /opt/sdcc/bin/sdcc
+SDASZ80 ?= /opt/sdcc/bin/sdasz80
+
+# Run a toolchain command inside the partner SDCC image (paths are made
+# repo-relative since the container mounts the repo root at /work).
+DRUN := docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_PARTNER) sh -lc
+REL = $(patsubst $(ROOT_DIR)/%,%,$@)
+SRC = $(patsubst $(ROOT_DIR)/%,%,$<)
+INS = $(patsubst $(ROOT_DIR)/%,%,$^)
 
 PARTNER_TEST_SRCS := \
 	$(ROOT_DIR)/tests/partner/test_partner_bmp.c \
@@ -74,16 +83,16 @@ $(TEST_BUILD_DIR)/:
 	mkdir -p $@
 
 $(PARTNER_BUILD_DIR)/%.rel: $(ROOT_DIR)/src/partner/%.s | $(PARTNER_BUILD_DIR)/
-	$(SDASZ80) -o $@ $<
+	$(DRUN) '$(SDASZ80) -o "$(REL)" "$(SRC)"'
 
 $(PARTNER_BUILD_DIR)/%.rel: $(ROOT_DIR)/src/partner/%.c | $(PARTNER_BUILD_DIR)/
-	$(SDCC) -mz80 --no-std-crt0 -I$(ROOT_DIR)/include -c -o $@ $<
+	$(DRUN) '$(SDCC) -mz80 --no-std-crt0 -Iinclude -c -o "$(REL)" "$(SRC)"'
 
 $(PARTNER_BUILD_DIR)/test_%.rel: $(ROOT_DIR)/tests/partner/test_%.c | $(PARTNER_BUILD_DIR)/
-	$(SDCC) -mz80 --no-std-crt0 -I$(ROOT_DIR)/include -c -o $@ $<
+	$(DRUN) '$(SDCC) -mz80 --no-std-crt0 -Iinclude -c -o "$(REL)" "$(SRC)"'
 
 $(PARTNER_TEST_IHXS): $(PARTNER_BUILD_DIR)/%.ihx: $(PARTNER_BUILD_DIR)/%.rel $(PARTNER_COMMON_RELS) | $(PARTNER_BUILD_DIR)/
-	$(SDCC) -mz80 --no-std-crt0 -o $@ $^
+	$(DRUN) '$(SDCC) -mz80 --no-std-crt0 -o "$(REL)" $(INS)'
 
 $(TEST_BUILD_DIR)/test_%_emulator: $(ROOT_DIR)/tests/partner/test_%_emulator.cpp $(ROOT_DIR)/tests/emulator.cpp $(ROOT_DIR)/tests/emulator.hpp $(ROOT_DIR)/tests/z80.hpp | $(TEST_BUILD_DIR)/
 	g++ -std=c++17 -I$(ROOT_DIR)/include -I$(ROOT_DIR)/tests -O2 -Wall -Wextra -o $@ $< $(ROOT_DIR)/tests/emulator.cpp
