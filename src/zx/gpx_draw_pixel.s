@@ -122,13 +122,12 @@ _gpx_draw_pixel::
         ;; E = mask = 0x80 >> (x & 7)
         ld      a,c
         and     #0x07
-        ld      d,a                    ;; shift count
+        ld      b,a                    ;; shift count
         ld      a,#0x80
         jr      z,.dpx_mask_ready
 .dpx_mask_loop:
         srl     a
-        dec     d
-        jr      nz,.dpx_mask_loop
+        djnz    .dpx_mask_loop
 .dpx_mask_ready:
         ld      e,a
 

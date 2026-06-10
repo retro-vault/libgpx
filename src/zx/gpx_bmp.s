@@ -14,6 +14,7 @@
         .globl  _gpx_draw_bmp
         .globl  _gpx_draw_bmp_clip
         .globl  __rect_cmp16s_lt
+        .globl  __vid_rowaddr
 
         .equ    SCRHEIGHT, 192
         .equ    BMP_SIG_ENC_MASK, 0xF0
@@ -75,7 +76,13 @@
         .equ    L_ORBITS,           71
         .equ    L_IS_MASKED,        72
         .equ    L_DRAWMODE,         73
-        .equ    L_SIZE,             74
+        ;; 2-byte source window state (replaces the old rotate+remainder carry):
+        ;;   SUB      = (8 - rshift) & 7   sub-byte left shift for the window
+        ;;   SRCREMAIN= source bytes left to read this row (else default)
+        ;;   REMAINDER/REMAINDER_OR are reused as prevA/prevO (previous src byte)
+        .equ    L_SUB,              74
+        .equ    L_SRCREMAIN,        75
+        .equ    L_SIZE,             76
 
         .macro  LD16HL off
         ld      l,off(iy)
@@ -491,6 +498,11 @@ gb_mode_select:
         and     #0x07
         ld      L_RSHIFT(iy),a
 
+        ;; sub = (8 - rshift) & 7  (left shift used by the 2-byte src window)
+        neg
+        and     #0x07
+        ld      L_SUB(iy),a
+
         ;; lmask = ~(0xff >> dbit)
         ld      a,L_DBIT(iy)
         or      a
@@ -529,60 +541,12 @@ gb_mode_select:
         ld      L_RMASK(iy),a
 
  gb_rmask_done:
-        ;; srcspan = (srcbit + visw + 7) >> 3
-        xor     a
-        ld      h,a
+        ;; srcspan = (srcbit + visw + 7) >> 3 ; dstspan = (dbit + visw + 7) >> 3
         ld      a,L_SRCBIT(iy)
-        ld      l,a
-        ld      a,L_VISW(iy)
-        add     a,l
-        ld      l,a
-        jr      nc,gb_srcspan_add7
-        inc     h
-
- gb_srcspan_add7:
-        ld      a,l
-        add     a,#7
-        ld      l,a
-        jr      nc,gb_srcspan_div
-        inc     h
-
- gb_srcspan_div:
-        srl     h
-        rr      l
-        srl     h
-        rr      l
-        srl     h
-        rr      l
-        ld      a,l
+        call    gb_span
         ld      L_SRCSPAN(iy),a
-
-        ;; dstspan = (dbit + visw + 7) >> 3
-        xor     a
-        ld      h,a
         ld      a,L_DBIT(iy)
-        ld      l,a
-        ld      a,L_VISW(iy)
-        add     a,l
-        ld      l,a
-        jr      nc,gb_dstspan_add7
-        inc     h
-
- gb_dstspan_add7:
-        ld      a,l
-        add     a,#7
-        ld      l,a
-        jr      nc,gb_dstspan_div
-        inc     h
-
- gb_dstspan_div:
-        srl     h
-        rr      l
-        srl     h
-        rr      l
-        srl     h
-        rr      l
-        ld      a,l
+        call    gb_span
         ld      L_DSTSPAN(iy),a
         dec     a
         ld      L_DSTLAST(iy),a
@@ -678,21 +642,56 @@ gb_mode_select:
         ;; row destination base + xbyte
         ld      a,L_YCUR(iy)
         ld      b,a
-        call    gb_rowaddr
+        call    __vid_rowaddr
         ld      a,L_XBYTE(iy)
         add     a,l
         ld      l,a
         ST16HL  L_DSTPTR
 
+        ;; Source row pointers live in the alternate bank: HL'=AND, DE'=OR.
+        ;; (IY is not swapped by exx, so IY-relative loads still work here.)
+        exx
         LD16HL  L_SRCROW
-        ST16HL  L_SRCPTR
-        LD16HL  L_SRCROW_OR
-        ST16HL  L_SRCPTR_OR
+        LD16DE  L_SRCROW_OR
+        exx
 
+        ;; per-row: reset bytecnt + source counter, prime window prev bytes
         xor     a
-        ld      L_REMAINDER(iy),a
-        ld      L_REMAINDER_OR(iy),a
         ld      L_BYTECNT(iy),a
+        ld      a,L_SRCSPAN(iy)
+        ld      L_SRCREMAIN(iy),a
+
+        ;; hb0 = (dbit > srcbit) ? -1 : 0
+        ld      a,L_DBIT(iy)
+        ld      b,a
+        ld      a,L_SRCBIT(iy)
+        cp      b                      ;; C if srcbit < dbit => dbit>srcbit => hb0=-1
+        jr      c,gb_prime_default
+
+        ;; hb0 = 0: prev = first source byte (consume one from each plane)
+        exx
+        ld      a,(hl)                 ;; AND plane (HL')
+        inc     hl
+        ld      L_REMAINDER(iy),a      ;; prevA  (IY works inside exx)
+        ld      a,(de)                 ;; OR plane (DE')
+        inc     de
+        ld      L_REMAINDER_OR(iy),a   ;; prevO
+        exx
+        ld      a,L_SRCREMAIN(iy)
+        dec     a
+        ld      L_SRCREMAIN(iy),a
+        jr      gb_dst_init
+
+ gb_prime_default:
+        ;; hb0 = -1: prevA = 0xFF (transparent AND), prevO = 0x00
+        ld      a,#0xff
+        ld      L_REMAINDER(iy),a
+        xor     a
+        ld      L_REMAINDER_OR(iy),a
+
+ gb_dst_init:
+        ;; Pin DSTPTR in HL for the whole byte loop (no per-byte IY load/store).
+        LD16HL  L_DSTPTR
 
  gb_col_loop_compose:
         ld      a,L_BYTECNT(iy)
@@ -701,8 +700,7 @@ gb_mode_select:
         cp      c
         jp      z,gb_next_row
 
-        ;; old destination byte
-        LD16HL  L_DSTPTR
+        ;; old destination byte (HL = DSTPTR)
         ld      a,(hl)
         ld      L_OLD(iy),a
 
@@ -731,93 +729,51 @@ gb_mode_select:
         cpl
         ld      L_INSIDE(iy),a
 
-        ;; read source bytes if bytecnt < srcspan
-        ld      a,L_SRCSPAN(iy)
-        cp      c
-        jr      z,gb_no_src
-        jr      c,gb_no_src
-
-        ;; AND source byte (mask plane or synthetic 0xFF row)
-        LD16HL  L_SRCPTR
-        ld      a,(hl)
-        inc     hl
-        ST16HL  L_SRCPTR
-        ld      L_ROT(iy),a
-
-        ld      a,L_RSHIFT(iy)
+        ;; --- 2-byte source window (HL holds DSTPTR; source ptrs read via DE) ---
+        ;; gb_win does the (prev:curA)<<sub gather in D:E so HL is never touched.
+        ld      a,L_SRCREMAIN(iy)
         or      a
-        jr      z,gb_and_rot_done
-        ld      b,a
-        ld      a,L_ROT(iy)
- gb_and_rot_loop:
-        rrca
-        djnz    gb_and_rot_loop
-        ld      L_ROT(iy),a
+        jr      z,gb_cur_default
 
- gb_and_rot_done:
-        ld      a,L_LMASK(iy)
-        cpl
-        ld      b,a
-        ld      a,L_ROT(iy)
-        and     b
-        ld      b,a
-        ld      a,L_REMAINDER(iy)
-        or      b
+        exx
+        ld      a,(hl)                 ;; curA from alt HL' (AND ptr)
+        inc     hl
+        exx
+        ld      c,a                    ;; curA
+        ld      a,L_REMAINDER(iy)      ;; prevA
+        call    gb_win                 ;; A = FORE
         ld      L_FORE(iy),a
+        ld      a,c
+        ld      L_REMAINDER(iy),a      ;; prevA = curA
 
-        ;; next AND remainder = rot & lmask
-        ld      a,L_ROT(iy)
-        ld      b,a
-        ld      a,L_LMASK(iy)
-        and     b
-        ld      L_REMAINDER(iy),a
-
-        ;; OR source byte
-        LD16HL  L_SRCPTR_OR
-        ld      a,(hl)
-        inc     hl
-        ST16HL  L_SRCPTR_OR
-        ld      L_ROT(iy),a
-
-        ld      a,L_RSHIFT(iy)
-        or      a
-        jr      z,gb_or_rot_done
-        ld      b,a
-        ld      a,L_ROT(iy)
- gb_or_rot_loop:
-        rrca
-        djnz    gb_or_rot_loop
-        ld      L_ROT(iy),a
-
- gb_or_rot_done:
-        ld      a,L_LMASK(iy)
-        cpl
-        ld      b,a
-        ld      a,L_ROT(iy)
-        and     b
-        ld      b,a
-        ld      a,L_REMAINDER_OR(iy)
-        or      b
+        exx
+        ld      a,(de)                 ;; curO from alt DE' (OR ptr)
+        inc     de
+        exx
+        ld      c,a                    ;; curO
+        ld      a,L_REMAINDER_OR(iy)   ;; prevO
+        call    gb_win                 ;; A = ORBITS
         ld      L_ORBITS(iy),a
+        ld      a,c
+        ld      L_REMAINDER_OR(iy),a   ;; prevO = curO
 
-        ;; next OR remainder = rot & lmask
-        ld      a,L_ROT(iy)
-        ld      b,a
-        ld      a,L_LMASK(iy)
-        and     b
-        ld      L_REMAINDER_OR(iy),a
+        ld      a,L_SRCREMAIN(iy)
+        dec     a
+        ld      L_SRCREMAIN(iy),a
         jr      gb_have_src
 
- gb_no_src:
-        ;; flush pending carry bits from both planes
+ gb_cur_default:
+        ld      c,#0xff                ;; curA default (transparent)
         ld      a,L_REMAINDER(iy)
+        call    gb_win
         ld      L_FORE(iy),a
-        xor     a
+        ld      a,c
         ld      L_REMAINDER(iy),a
-
+        ld      c,#0x00                ;; curO default
         ld      a,L_REMAINDER_OR(iy)
+        call    gb_win
         ld      L_ORBITS(iy),a
-        xor     a
+        ld      a,c
         ld      L_REMAINDER_OR(iy),a
 
  gb_have_src:
@@ -896,13 +852,8 @@ gb_mode_select:
         ld      a,L_KEEP(iy)
         and     c
         or      b
-        LD16HL  L_DSTPTR
-        ld      (hl),a
-
-        ;; advance destination pointer + counter
-        LD16HL  L_DSTPTR
-        inc     hl
-        ST16HL  L_DSTPTR
+        ld      (hl),a                 ;; HL = DSTPTR
+        inc     hl                     ;; advance DSTPTR (kept in HL)
 
         ld      a,L_BYTECNT(iy)
         inc     a
@@ -943,24 +894,48 @@ gb_mode_select:
         push    de
         ret
 
-        ;; Given y in b (0..191), return row address in hl.
- gb_rowaddr:
-        ld      a,b
-        and     #0x07
-        or      #0x40
-        ld      h,a
-        ld      a,b
-        rrca
-        rrca
-        rrca
-        and     #0x18
-        or      h
-        ld      h,a
-        ld      a,b
-        rla
-        rla
-        and     #0xe0
+        ;; Row address (y in B -> HL) is shared with _video.s (__vid_rowaddr).
+
+        ;; gb_win: A=prev, C=cur -> A = high byte of (prev:cur) << SUB.
+        ;; Uses D,E,B; leaves HL (DSTPTR) and C (cur) intact.
+ gb_win:
+        ld      d,a
+        ld      e,c
+        ld      a,L_SUB(iy)
+        or      a
+        jr      z,gb_win_done
+        ld      b,a
+ gb_win_lp:
+        sla     e
+        rl      d
+        djnz    gb_win_lp
+ gb_win_done:
+        ld      a,d
+        ret
+
+        ;; gb_span: A = bit (0..7) -> A = (bit + L_VISW + 7) >> 3
+ gb_span:
+        ld      h,#0
         ld      l,a
+        ld      a,L_VISW(iy)
+        add     a,l
+        ld      l,a
+        jr      nc,gb_span_add7
+        inc     h
+ gb_span_add7:
+        ld      a,l
+        add     a,#7
+        ld      l,a
+        jr      nc,gb_span_div
+        inc     h
+ gb_span_div:
+        srl     h
+        rr      l
+        srl     h
+        rr      l
+        srl     h
+        rr      l
+        ld      a,l
         ret
 
  gb_ff_pad:

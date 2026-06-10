@@ -150,6 +150,19 @@ __gpx_draw_line_raw_local::
         ld      -20(ix),l
         ld      -21(ix),h
 
+        ;; neg_dy = -dy (loop invariant: hoisted out of the per-pixel step)
+        ld      l,-18(ix)
+        ld      h,-19(ix)
+        ld      a,l
+        cpl
+        ld      l,a
+        ld      a,h
+        cpl
+        ld      h,a
+        inc     hl
+        ld      -24(ix),l
+        ld      -25(ix),h
+
 .gbl_loop:
         ;; if (lpatt & 1) draw pixel
         ld      a,-11(ix)
@@ -197,20 +210,7 @@ __gpx_draw_line_raw_local::
         ld      -22(ix),l
         ld      -23(ix),h
 
-        ;; neg_dy = -dy
-        ld      l,-18(ix)
-        ld      h,-19(ix)
-        ld      a,l
-        cpl
-        ld      l,a
-        ld      a,h
-        cpl
-        ld      h,a
-        inc     hl
-        ld      -24(ix),l
-        ld      -25(ix),h
-
-        ;; if (e2 > -dy) => if (-dy < e2)
+        ;; if (e2 > -dy) => if (-dy < e2)  (neg_dy precomputed before loop)
         ld      l,-24(ix)
         ld      h,-25(ix)              ;; HL=-dy
         ld      e,-22(ix)

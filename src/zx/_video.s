@@ -7,8 +7,6 @@
 
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
-        .globl  vid_rowaddr
-        .globl  vid_nextrow
 
         .area   _CODE
 
@@ -36,9 +34,6 @@ __vid_rowaddr::
         ld      l,a
         ret
 
-vid_rowaddr::
-        jp      __vid_rowaddr
-
         ;; __vid_nextrow
         ;;   HL = current row base
         ;;   HL = next row base
@@ -59,6 +54,3 @@ __vid_nextrow::
 
 .vn_done:
         ret
-
-vid_nextrow::
-        jp      __vid_nextrow

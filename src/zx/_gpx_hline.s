@@ -199,11 +199,9 @@ ghl_draw_core:
         ;; patt_start = ror(lpatt, (x0 - x0_orig) & 7)
         ld      a,-2(ix)
         sub     -5(ix)
-        and     #0x07
-        ld      b,a
-        ld      a,b
-        or      a
-        ld      a,12(ix)
+        and     #0x07                  ;; Z set when shift==0, A=shift
+        ld      b,a                    ;; B = rotate count
+        ld      a,12(ix)               ;; A = lpatt
         jr      z,ghl_pstart_store
 ghl_pstart_rot:
         rrca
@@ -387,11 +385,9 @@ ghl_ret_pattern:
         ;; return patt = ror(patt_start, (x1-x0) & 7)
         ld      a,-4(ix)
         sub     -2(ix)
-        and     #0x07
-        ld      b,a
-        ld      a,b
-        or      a
-        ld      a,-6(ix)
+        and     #0x07                  ;; Z set when shift==0, A=shift
+        ld      b,a                    ;; B = rotate count
+        ld      a,-6(ix)               ;; A = patt_start
         jr      z,ghl_return
 ghl_pret_rot:
         rrca

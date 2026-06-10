@@ -377,8 +377,7 @@ __gpx_sprite_blit_raw:
         ld      P_OR2(ix),d
 
         ld      a,(hl)
-        ld      e,a
-        ld      a,e
+        ld      e,a                    ;; E = old byte (A already holds it)
         and     P_AND0(ix)
         or      P_OR0(ix)
         ld      d,a
@@ -397,8 +396,7 @@ __gpx_sprite_blit_raw:
 
         inc     hl
         ld      a,(hl)
-        ld      e,a
-        ld      a,e
+        ld      e,a                    ;; E = old byte (A already holds it)
         and     P_AND1(ix)
         or      P_OR1(ix)
         ld      d,a
@@ -417,8 +415,7 @@ __gpx_sprite_blit_raw:
 
         inc     hl
         ld      a,(hl)
-        ld      e,a
-        ld      a,e
+        ld      e,a                    ;; E = old byte (A already holds it)
         and     P_AND2(ix)
         or      P_OR2(ix)
         ld      d,a

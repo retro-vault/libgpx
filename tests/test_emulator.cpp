@@ -468,6 +468,25 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum stock cursors", "bin/zx/test_get_cursor.ihx", "bin/zx-oracle/test_get_cursor.ihx");
     status |= run_target("ZX Spectrum show/hide sprite", "bin/zx/test_show_sprite.ihx", expected_show_sprite());
     status |= run_target_against_oracle("ZX Spectrum set page API", "bin/zx/test_cursor_set.ihx", "bin/zx-oracle/test_cursor_set.ihx");
+    status |= run_target_against_oracle("ZX Spectrum pixel grid", "bin/zx/test_pixel_grid.ihx", "bin/zx-oracle/test_pixel_grid.ihx");
+    status |= run_target_against_oracle("ZX Spectrum pixel clip edges", "bin/zx/test_pixel_clip_edges.ihx", "bin/zx-oracle/test_pixel_clip_edges.ihx");
+    status |= run_target_against_oracle("ZX Spectrum line octants", "bin/zx/test_line_octants.ihx", "bin/zx-oracle/test_line_octants.ihx");
+    status |= run_target_against_oracle("ZX Spectrum line patterns", "bin/zx/test_line_patterns.ihx", "bin/zx-oracle/test_line_patterns.ihx");
+    status |= run_target_against_oracle("ZX Spectrum hline spans", "bin/zx/test_hline_spans.ihx", "bin/zx-oracle/test_hline_spans.ihx");
+    status |= run_target_against_oracle("ZX Spectrum vline spans", "bin/zx/test_vline_spans.ihx", "bin/zx-oracle/test_vline_spans.ihx");
+    status |= run_target_against_oracle("ZX Spectrum line clip cross", "bin/zx/test_line_clip_cross.ihx", "bin/zx-oracle/test_line_clip_cross.ihx");
+    status |= run_target_against_oracle("ZX Spectrum line xor", "bin/zx/test_line_xor.ihx", "bin/zx-oracle/test_line_xor.ihx");
+    status |= run_target_against_oracle("ZX Spectrum rect grid", "bin/zx/test_rect_grid.ihx", "bin/zx-oracle/test_rect_grid.ihx");
+    status |= run_target_against_oracle("ZX Spectrum rect clip", "bin/zx/test_rect_clip2.ihx", "bin/zx-oracle/test_rect_clip2.ihx");
+    status |= run_target_against_oracle("ZX Spectrum fill patterns", "bin/zx/test_fill_patterns2.ihx", "bin/zx-oracle/test_fill_patterns2.ihx");
+    status |= run_target_against_oracle("ZX Spectrum fill xor", "bin/zx/test_fill_xor.ihx", "bin/zx-oracle/test_fill_xor.ihx");
+    status |= run_target_against_oracle("ZX Spectrum fill spans", "bin/zx/test_fill_spans.ihx", "bin/zx-oracle/test_fill_spans.ihx");
+    status |= run_target_against_oracle("ZX Spectrum fill offscreen", "bin/zx/test_fill_offscreen.ihx", "bin/zx-oracle/test_fill_offscreen.ihx");
+    status |= run_target_against_oracle("ZX Spectrum bmp widths", "bin/zx/test_bmp_widths.ihx", "bin/zx-oracle/test_bmp_widths.ihx");
+    status |= run_target_against_oracle("ZX Spectrum bmp mask", "bin/zx/test_bmp_mask2.ihx", "bin/zx-oracle/test_bmp_mask2.ihx");
+    status |= run_target_against_oracle("ZX Spectrum bmp clip", "bin/zx/test_bmp_clip.ihx", "bin/zx-oracle/test_bmp_clip.ihx");
+    status |= run_target_against_oracle("ZX Spectrum bmp left clip", "bin/zx/test_bmp_leftclip.ihx", "bin/zx-oracle/test_bmp_leftclip.ihx");
+    status |= run_target_against_oracle("ZX Spectrum measure widths", "bin/zx/test_measure2.ihx", "bin/zx-oracle/test_measure2.ihx");
     if (status == 0)
         std::cout << "All emulator tests passed." << std::endl;
     return status;

@@ -84,31 +84,21 @@ _gpx_fill_rectangle::
         ld      a,-1(ix)
         ld      -18(ix),a
 
-        ;; clamp X to screen first:
-        ;;   [x0..x1] ∩ [0..(gpx->width - 1)]
+        ;; clamp X to screen [0..255] (ZX width is a constant 256).
+        ;; x is signed 16-bit; on-screen low byte fits 8 bits.
         ;;
         ;; if (x1 < 0) return
-        ld      l,-3(ix)
-        ld      h,-4(ix)               ;; HL = x1
-        ld      de,#0x0000             ;; DE = 0
-        call    __rect_cmp16s_lt
+        ld      a,-4(ix)               ;; x1 hi
+        bit     7,a
         jp      nz,.fr_done
 
-        ;; if ((gpx->width - 1) < x0) return
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL = gpx
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                 ;; DE = gpx->width
-        dec     de                     ;; DE = gpx->width - 1
-        push    de
-        ld      l,e
-        ld      h,d                    ;; HL = width-1
-        ld      e,-1(ix)
-        ld      d,-2(ix)               ;; DE = x0
-        call    __rect_cmp16s_lt
-        pop     de
-        jp      nz,.fr_done
+        ;; if (x0 > 255) return  (x0 >= 0 and hi != 0 => >= 256)
+        ld      a,-2(ix)               ;; x0 hi
+        or      a
+        jr      z,.fr_x0_le255
+        bit     7,a
+        jp      z,.fr_done
+.fr_x0_le255:
 
         ;; if (x0 < 0) x0 = 0
         ld      a,-2(ix)
@@ -119,49 +109,35 @@ _gpx_fill_rectangle::
         ld      -2(ix),a
 
 .fr_no_screen_clip_left:
-        ;; if ((gpx->width - 1) < x1) x1 = gpx->width - 1
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL = gpx
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                 ;; DE = gpx->width
-        dec     de                     ;; DE = gpx->width - 1
-        push    de
-        ld      l,e
-        ld      h,d                    ;; HL = width-1
-        ld      e,-3(ix)
-        ld      d,-4(ix)               ;; DE = x1
-        call    __rect_cmp16s_lt
-        pop     de
+        ;; if (x1 > 255) x1 = 255  (x1 >= 0 here, so hi != 0 => >= 256)
+        ld      a,-4(ix)
+        or      a
         jr      z,.fr_screen_clip_x_done
-        ld      -3(ix),l
-        ld      -4(ix),h
+        ld      a,#0xff
+        ld      -3(ix),a
+        xor     a
+        ld      -4(ix),a
 
 .fr_screen_clip_x_done:
-        ;; clamp Y to screen:
-        ;;   [y0..y1] ∩ [0..(gpx->height - 1)]
+        ;; clamp Y to screen [0..191] (ZX height is a constant 192).
         ;;
         ;; if (y1 < 0) return
-        ld      l,-7(ix)
-        ld      h,-8(ix)               ;; HL = y1
-        ld      de,#0x0000             ;; DE = 0
-        call    __rect_cmp16s_lt
+        ld      a,-8(ix)               ;; y1 hi
+        bit     7,a
         jp      nz,.fr_done
 
-        ;; if ((gpx->height - 1) < y0) return
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL = gpx
-        inc     hl
-        inc     hl                     ;; &gpx->height
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = gpx->height
-        dec     hl                     ;; HL = gpx->height - 1
-        ld      e,-5(ix)
-        ld      d,-6(ix)               ;; DE = y0
-        call    __rect_cmp16s_lt
-        jp      nz,.fr_done
+        ;; if (y0 > 191) return
+        ld      a,-6(ix)               ;; y0 hi
+        or      a
+        jr      z,.fr_y0_hi0
+        bit     7,a
+        jp      z,.fr_done             ;; hi>0 positive => y0 >= 256
+        jr      .fr_y0_chk_done        ;; hi<0 negative => not > 191
+.fr_y0_hi0:
+        ld      a,-5(ix)               ;; y0 lo
+        cp      #192
+        jp      nc,.fr_done            ;; 192..255 > 191
+.fr_y0_chk_done:
 
         ;; if (y0 < 0) y0 = 0
         ld      a,-6(ix)
@@ -172,22 +148,18 @@ _gpx_fill_rectangle::
         ld      -6(ix),a
 
 .fr_no_screen_clip_top:
-        ;; if ((gpx->height - 1) < y1) y1 = gpx->height - 1
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL = gpx
-        inc     hl
-        inc     hl                     ;; &gpx->height
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = gpx->height
-        dec     hl                     ;; HL = gpx->height - 1
-        ld      e,-7(ix)
-        ld      d,-8(ix)               ;; DE = y1
-        call    __rect_cmp16s_lt
-        jr      z,.fr_screen_clip_done
-        ld      -7(ix),l
-        ld      -8(ix),h
+        ;; if (y1 > 191) y1 = 191  (y1 >= 0 here)
+        ld      a,-8(ix)
+        or      a
+        jr      nz,.fr_clamp_y1        ;; hi != 0 => y1 >= 256
+        ld      a,-7(ix)
+        cp      #192
+        jr      c,.fr_screen_clip_done ;; y1 <= 191
+.fr_clamp_y1:
+        ld      a,#191
+        ld      -7(ix),a
+        xor     a
+        ld      -8(ix),a
 
 .fr_screen_clip_done:
         ;; optional clip visible range once:

@@ -164,13 +164,9 @@ gvl_draw:
         ;; patt = ror(lpatt, (y0 - y0_orig) & 7)
         ld      a,-1(ix)
         sub     -5(ix)
-        and     #0x07
-        ld      b,a
-        ld      a,12(ix)
-        ld      c,b
-        ld      a,c
-        or      a
-        ld      a,12(ix)
+        and     #0x07                  ;; Z set when shift==0, A=shift
+        ld      b,a                    ;; B = rotate count
+        ld      a,12(ix)               ;; A = lpatt
         jr      z,gvl_patt_ready
 gvl_patt_rot:
         rrca
