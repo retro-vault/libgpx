@@ -11,6 +11,7 @@
         .globl  _gpx_draw_text
         .globl  _gpx_draw_bmp_clip
         .globl  _gpx_fill_rectangle
+        .globl  __gpx_glyph_lookup
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
@@ -53,13 +54,12 @@ _gpx_draw_text::
         ;; locals (18 bytes):
         ;; -1..-2   xcur
         ;; -3..-4   text pointer
-        ;; -5       flags
-        ;; -6       first_ascii
-        ;; -7       last_ascii
         ;; -8       empty_width
         ;; -9       advance
         ;; -10      glyph_height
         ;; -11..-18 spacing rect (x0,y0,x1,y1)
+        ;; (-5..-7 no longer used: __gpx_glyph_lookup reads flags/first/last
+        ;;  straight from the font.)
         ld      hl,#-18
         add     hl,sp
         ld      sp,hl
@@ -74,22 +74,17 @@ _gpx_draw_text::
         ld      a,7(ix)
         ld      -4(ix),a
 
-        ;; cached font header bytes
+        ;; cache only the header fields the drawer itself needs (gap fill):
+        ;; empty_width (font[3]), glyph_height (font[5]), advance (font[6]).
         ld      l,8(ix)
         ld      h,9(ix)               ;; HL = font
-        ld      a,(hl)
-        ld      -5(ix),a              ;; flags
         inc     hl
-        ld      a,(hl)
-        ld      -6(ix),a              ;; first_ascii
         inc     hl
-        ld      a,(hl)
-        ld      -7(ix),a              ;; last_ascii
-        inc     hl
+        inc     hl                    ;; -> font[3]
         ld      a,(hl)
         ld      -8(ix),a              ;; empty_width
         inc     hl
-        inc     hl                    ;; skip max_glyph_width
+        inc     hl                    ;; -> font[5]
         ld      a,(hl)
         ld      -10(ix),a             ;; glyph_height
         inc     hl
@@ -107,80 +102,20 @@ _gpx_draw_text::
         ld      -3(ix),l
         ld      -4(ix),h
 
-        ;; if (ch < first || ch > last) add empty width
-        ld      e,a                   ;; E = ch
-        cp      -6(ix)
-        jp      c,.dt_add_empty
-
-        ld      a,-7(ix)              ;; A = last
-        cp      e                     ;; last < ch ?
-        jp      c,.dt_add_empty
-
-        ;; idx = ch - first
-        ld      a,e
-        sub     -6(ix)
-        ld      l,a
-        ld      h,#0x00
-        add     hl,hl                 ;; idx * 2
-
-        ;; HL = font + 8 + idx*2
-        ld      de,#0x0008
-        add     hl,de
+        ;; width = __gpx_glyph_lookup(ch, font).  A = ch already; font in DE.
+        ;; The helper does the range / offset-table / encoding work itself
+        ;; (shared with gpx_measure_text), preserves IX (our frame), and
+        ;; returns A = width (0 => missing/empty) and HL = glyph bmp_t*.
         ld      e,8(ix)
-        ld      d,9(ix)
-        add     hl,de
-
-        ;; read glyph offset (LE/BE from flag)
-        ld      a,-5(ix)
-        and     #FONT_FLAG_OFFSETS_BE
-        jr      nz,.dt_off_be
-
-        ld      e,(hl)                ;; LE
-        inc     hl
-        ld      d,(hl)
-        jr      .dt_have_off
-
-.dt_off_be:
-        ld      d,(hl)                ;; BE
-        inc     hl
-        ld      e,(hl)
-
-.dt_have_off:
-        ld      a,d
-        or      e
+        ld      d,9(ix)               ;; DE = font
+        call    __gpx_glyph_lookup
+        or      a
         jp      z,.dt_add_empty
-
-        ;; HL = glyph pointer = font + offset
-        ld      l,8(ix)
-        ld      h,9(ix)
-        add     hl,de
-
-        ;; BC = glyph pointer (kept for draw call)
         ld      c,l
-        ld      b,h
+        ld      b,h                   ;; BC = glyph bmp_t*
 
-        ;; DE = glyph width
-        ld      a,(hl)
-        and     #BMP_ENC_MASK
-        cp      #BMP_SIG_1BPP
-        jr      z,.dt_w8
-        cp      #BMP_SIG_1BPP_MASK
-        jr      z,.dt_w8
-        jp      .dt_add_empty
-
-.dt_w8:
-        inc     hl
-        ld      e,(hl)
-        ld      d,#0x00
-
-.dt_w_ok:
-
-        ld      a,d
-        or      e
-        jp      z,.dt_add_empty
-
-        ;; preserve width across draw_bmp call
-        push    de
+        ;; preserve width across draw_bmp call (width in A)
+        push    af
 
         ;; Call the shared bitmap core directly.
         ld      l,12(ix)
@@ -203,18 +138,12 @@ _gpx_draw_text::
         ld      c,10(ix)              ;; color
         call    _gpx_draw_bmp_clip
 
-.dt_draw_done:
-
-        ;; restore width
-        pop     de
-
         ;; xcur += glyph_width
-        ld      a,-1(ix)
-        add     a,e
+        pop     af                    ;; A = width
+        add     a,-1(ix)
         ld      -1(ix),a
-        ld      a,-2(ix)
-        adc     a,d
-        ld      -2(ix),a
+        jr      nc,.dt_advance_xcur
+        inc     -2(ix)
 
 .dt_advance_xcur:
         ;; Fill inter-character advance gap with inverse color.

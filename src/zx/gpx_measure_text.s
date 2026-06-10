@@ -8,6 +8,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_measure_text
+        .globl  __gpx_glyph_lookup
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
@@ -45,75 +46,23 @@ _gpx_measure_text::
         jr      z,.mt_done
         inc     iy
 
-        cp      1(ix)                   ;; ch < first_ascii ?
-        jr      c,.mt_add_empty
-
-        ld      d,a                     ;; D = ch
-        ld      a,2(ix)                 ;; last_ascii
-        cp      d                       ;; last_ascii < ch ?
-        jr      c,.mt_add_empty
-
-        ld      a,d                     ;; idx = ch - first_ascii
-        sub     1(ix)
-        ld      l,a
-        ld      h,#0x00
-        add     hl,hl                   ;; idx * 2
-        ld      de,#0x0008
-        add     hl,de                   ;; + offset table start
+        ;; width = __gpx_glyph_lookup(ch, font).  IX = font here, so pass
+        ;; font in DE; the helper preserves IX and clobbers BC (the width
+        ;; accumulator), so save it across the call.
         push    ix
-        pop     de
-        add     hl,de                   ;; HL = &offset[idx]
-
-        ld      a,0(ix)                 ;; flags
-        and     #FONT_FLAG_OFFSETS_BE
-        jr      nz,.mt_read_be
-
-        ld      e,(hl)                  ;; little-endian offset
-        inc     hl
-        ld      d,(hl)
-        jr      .mt_have_off
-
-.mt_read_be:
-        ld      d,(hl)                  ;; big-endian offset
-        inc     hl
-        ld      e,(hl)
-
-.mt_have_off:
-        ld      a,d
-        or      e
-        jr      z,.mt_add_empty         ;; missing glyph
-
-        push    ix
-        pop     hl
-        add     hl,de                   ;; HL = glyph bmp_t*
-        ld      a,(hl)
-        and     #BMP_ENC_MASK
-        cp      #BMP_SIG_1BPP
-        jr      z,.mt_w8
-        cp      #BMP_SIG_1BPP_MASK
-        jr      z,.mt_w8
-        jr      .mt_add_empty
-
-.mt_w8:
-        inc     hl                      ;; +1 => width
-        ld      e,(hl)
-        ld      d,#0x00
-
-.mt_have_w:
-
-        ld      a,d
-        or      e
+        pop     de                      ;; DE = font
+        push    bc
+        call    __gpx_glyph_lookup      ;; A = width (0 => empty), HL = glyph
+        pop     bc
+        or      a
         jr      z,.mt_add_empty
 
-        ;; sum += glyph_width
-        ld      a,c
-        add     a,e
+        ;; sum += glyph_width + advance
+        add     a,c
         ld      c,a
-        ld      a,b
-        adc     a,d
-        ld      b,a
-
-        ;; sum += advance
+        jr      nc,.mt_adv
+        inc     b
+.mt_adv:
         ld      a,c
         add     a,6(ix)                 ;; advance
         ld      c,a
@@ -138,4 +87,85 @@ _gpx_measure_text::
 
 .mt_zero:
         ld      de,#0x0000
+        ret
+
+        ;; ------------------------------------------------------------
+        ;; __gpx_glyph_lookup  (shared by gpx_measure_text + gpx_draw_text)
+        ;;
+        ;; Resolve a character to its glyph in the serialized (frozen) font.
+        ;;   IN:  A  = character
+        ;;        DE = font base pointer
+        ;;   OUT: A  = glyph width in pixels (0 => missing/empty: use empty_width)
+        ;;        HL = glyph bmp_t* (valid only when A != 0)
+        ;; Reads the same header fields + offset table (incl FONT_FLAG_OFFSETS_BE)
+        ;; as the old inline code. Clobbers AF, BC, DE, HL. Preserves IX, IY.
+        ;; ------------------------------------------------------------
+__gpx_glyph_lookup:
+        push    ix
+        push    de
+        pop     ix                     ;; IX = font
+
+        ;; range: first <= ch <= last ?
+        cp      1(ix)                  ;; ch < first ?
+        jr      c,.gl_empty
+        ld      b,a                    ;; B = ch
+        ld      a,2(ix)                ;; last
+        cp      b                      ;; last < ch ?
+        jr      c,.gl_empty
+
+        ;; HL = &offset[ch-first] = font + 8 + (ch-first)*2
+        ld      a,b
+        sub     1(ix)
+        ld      l,a
+        ld      h,#0x00
+        add     hl,hl
+        ld      de,#0x0008
+        add     hl,de
+        push    ix
+        pop     de
+        add     hl,de                  ;; HL = &offset[idx]
+
+        ;; read glyph offset (LE/BE per flag)
+        ld      a,0(ix)
+        and     #FONT_FLAG_OFFSETS_BE
+        jr      nz,.gl_be
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        jr      .gl_have_off
+.gl_be:
+        ld      d,(hl)
+        inc     hl
+        ld      e,(hl)
+.gl_have_off:
+        ld      a,d
+        or      e
+        jr      z,.gl_empty            ;; offset 0 => missing
+
+        ;; HL = glyph base = font + offset
+        push    ix
+        pop     hl
+        add     hl,de
+
+        ;; validate encoding (1bpp or masked 1bpp)
+        ld      a,(hl)
+        and     #BMP_ENC_MASK
+        cp      #BMP_SIG_1BPP
+        jr      z,.gl_width
+        cp      #BMP_SIG_1BPP_MASK
+        jr      z,.gl_width
+        jr      .gl_empty
+
+.gl_width:
+        inc     hl
+        ld      a,(hl)                 ;; width byte
+        dec     hl                     ;; HL = glyph base
+        or      a
+        jr      z,.gl_empty
+        pop     ix                     ;; A = width (!=0), HL = glyph base
+        ret
+
+.gl_empty:
+        xor     a                      ;; A = 0 => use empty_width
+        pop     ix
         ret
