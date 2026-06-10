@@ -12,6 +12,7 @@
 
         .globl  __gpx_vline
         .globl  __rect_cmp16s_lt
+        .globl  __clip_seg
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
 
@@ -96,69 +97,20 @@ gvl_clip_checks:
         call    __rect_cmp16s_lt
         jp      nz,gvl_reject
 
-        ;; if (clip->y1 < y0) reject
-        ld      l,c
-        ld      h,b
-        ld      de,#6
-        add     hl,de                  ;; &clip->y1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->y1
-        ld      e,-1(ix)
-        ld      d,-2(ix)               ;; DE = y0
-        call    __rect_cmp16s_lt
-        jp      nz,gvl_reject
-
-        ;; if (y1 < clip->y0) reject
-        ld      l,-3(ix)
-        ld      h,-4(ix)               ;; HL = y1
-        push    hl
-        ld      l,c
-        ld      h,b
-        inc     hl
-        inc     hl                     ;; &clip->y0
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                 ;; DE = clip->y0
-        pop     hl                     ;; HL = y1
-        call    __rect_cmp16s_lt
-        jp      nz,gvl_reject
-
-        ;; if (y0 < clip->y0) y0 = clip->y0
+        ;; primary Y-axis clip via shared __clip_seg (BC = clip ptr).
+        ;; IY = &clip->y0 (= clip+2); clip->y1 is at IY+4 (= clip+6).
+        ld      iy,#2
+        add     iy,bc
         ld      l,-1(ix)
         ld      h,-2(ix)               ;; HL = y0
-        ld      e,c
-        ld      d,b
-        ex      de,hl                  ;; HL = clip ptr, DE = y0
-        inc     hl
-        inc     hl                     ;; &clip->y0
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->y0
-        ex      de,hl                  ;; HL = y0, DE = clip->y0
-        call    __rect_cmp16s_lt
-        jr      z,gvl_no_clip_top
-        ld      -1(ix),e
-        ld      -2(ix),d
-
-gvl_no_clip_top:
-        ;; if (clip->y1 < y1) y1 = clip->y1
-        ld      l,c
-        ld      h,b
-        ld      de,#6
-        add     hl,de                  ;; &clip->y1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->y1
         ld      e,-3(ix)
         ld      d,-4(ix)               ;; DE = y1
-        call    __rect_cmp16s_lt
-        jr      z,gvl_draw
-        ld      -3(ix),l
-        ld      -4(ix),h
+        call    __clip_seg
+        jp      c,gvl_reject
+        ld      -1(ix),l
+        ld      -2(ix),h               ;; y0 = clamped lo
+        ld      -3(ix),e
+        ld      -4(ix),d               ;; y1 = clamped hi
 
 gvl_draw:
         ;; patt = ror(lpatt, (y0 - y0_orig) & 7)

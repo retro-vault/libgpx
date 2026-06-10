@@ -7,8 +7,84 @@
 
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
+        .globl  __clip_seg
 
         .area   _CODE
+
+        ;; ------------------------------------------------------------
+        ;; __clip_seg
+        ;;
+        ;; 1-D segment clip against one clip-rect axis (primary axis):
+        ;;   reject if (clip_hi < seg_lo) || (seg_hi < clip_lo)
+        ;;   else clamp seg_lo = max(seg_lo, clip_lo),
+        ;;             seg_hi = min(seg_hi, clip_hi)
+        ;;
+        ;; Pure register I/O so any caller's local layout works:
+        ;;   IN:  HL = seg_lo, DE = seg_hi
+        ;;        IY = &clip primary-axis lo field (hi field is at IY+4,
+        ;;             which holds for both x0/x1 and y0/y1 in rect_t).
+        ;;   OUT: HL = clamped seg_lo, DE = clamped seg_hi
+        ;;        CARRY set  => reject (segment outside clip on this axis)
+        ;;        CARRY clear => keep (HL/DE updated)
+        ;;
+        ;; Relies on __rect_cmp16s_lt preserving BC/DE/HL (only A changes).
+        ;; Preserves IX and IY; uses A, BC, DE, HL and one stack slot.
+        ;; ------------------------------------------------------------
+__clip_seg:
+        ld      b,h
+        ld      c,l                    ;; BC = seg_lo (survives cmp calls)
+        push    de                     ;; stack: [seg_hi]
+
+        ;; reject if seg_hi < clip_lo
+        ex      de,hl                  ;; HL = seg_hi
+        ld      e,0(iy)
+        ld      d,1(iy)                ;; DE = clip_lo
+        call    __rect_cmp16s_lt
+        or      a
+        jr      nz,.cs_reject
+
+        ;; reject if clip_hi < seg_lo
+        ld      l,4(iy)
+        ld      h,5(iy)                ;; HL = clip_hi
+        ld      e,c
+        ld      d,b                    ;; DE = seg_lo
+        call    __rect_cmp16s_lt
+        or      a
+        jr      nz,.cs_reject
+
+        ;; clamp: if seg_lo < clip_lo -> seg_lo = clip_lo
+        ld      l,c
+        ld      h,b                    ;; HL = seg_lo
+        ld      e,0(iy)
+        ld      d,1(iy)                ;; DE = clip_lo
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.cs_lo_ok
+        ld      c,0(iy)
+        ld      b,1(iy)                ;; seg_lo = clip_lo
+.cs_lo_ok:
+
+        ;; clamp: if clip_hi < seg_hi -> seg_hi = clip_hi
+        pop     hl                     ;; HL = seg_hi (stack balanced)
+        ld      e,l
+        ld      d,h                    ;; DE = seg_hi
+        ld      l,4(iy)
+        ld      h,5(iy)                ;; HL = clip_hi
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.cs_hi_ok
+        ld      e,4(iy)
+        ld      d,5(iy)                ;; seg_hi = clip_hi
+.cs_hi_ok:
+        ld      l,c
+        ld      h,b                    ;; HL = seg_lo
+        or      a                      ;; carry clear => keep
+        ret
+
+.cs_reject:
+        pop     de                     ;; discard saved seg_hi (balance push)
+        scf                            ;; carry set => reject
+        ret
 
         ;; uint8_t _rect_cmp16s_lt(coord a, coord b)
         ;;   HL = a

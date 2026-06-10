@@ -13,6 +13,7 @@
         .globl  __gpx_hline
         .globl  __gpx_hline_raw8
         .globl  __rect_cmp16s_lt
+        .globl  __clip_seg
         .globl  __vid_rowaddr
 
         .area   _CODE
@@ -135,65 +136,20 @@ ghl_clip_checks:
         call    __rect_cmp16s_lt
         jp      nz,ghl_reject
 
-        ;; if (clip->x1 < x0) reject
-        ld      l,c
-        ld      h,b
-        ld      de,#4
-        add     hl,de                  ;; &clip->x1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x1
-        ld      e,-2(ix)
-        ld      d,-1(ix)               ;; DE = x0
-        call    __rect_cmp16s_lt
-        jp      nz,ghl_reject
-
-        ;; if (x1 < clip->x0) reject
-        ld      l,-4(ix)
-        ld      h,-3(ix)               ;; HL = x1
-        push    hl
-        ld      l,c
-        ld      h,b                    ;; HL = &clip->x0
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                 ;; DE = clip->x0
-        pop     hl                     ;; HL = x1
-        call    __rect_cmp16s_lt
-        jp      nz,ghl_reject
-
-        ;; if (x0 < clip->x0) x0 = clip->x0
+        ;; primary X-axis clip via shared __clip_seg (BC = clip ptr).
+        ;; IY = &clip->x0; clip->x1 is at IY+4.
+        ld      iy,#0
+        add     iy,bc
         ld      l,-2(ix)
         ld      h,-1(ix)               ;; HL = x0
-        ld      e,c
-        ld      d,b
-        ex      de,hl                  ;; HL = clip ptr, DE = x0
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x0
-        ex      de,hl                  ;; HL = x0, DE = clip->x0
-        call    __rect_cmp16s_lt
-        jr      z,ghl_no_clip_left
-        ld      -2(ix),e
-        ld      -1(ix),d
-
-ghl_no_clip_left:
-        ;; if (clip->x1 < x1) x1 = clip->x1
-        ld      l,c
-        ld      h,b
-        ld      de,#4
-        add     hl,de                  ;; &clip->x1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x1
         ld      e,-4(ix)
         ld      d,-3(ix)               ;; DE = x1
-        call    __rect_cmp16s_lt
-        jr      z,ghl_draw_core
-        ld      -4(ix),l
-        ld      -3(ix),h
+        call    __clip_seg
+        jp      c,ghl_reject
+        ld      -2(ix),l
+        ld      -1(ix),h               ;; x0 = clamped lo
+        ld      -4(ix),e
+        ld      -3(ix),d               ;; x1 = clamped hi
 
 ghl_draw_core:
         ;; patt_start = ror(lpatt, (x0 - x0_orig) & 7)

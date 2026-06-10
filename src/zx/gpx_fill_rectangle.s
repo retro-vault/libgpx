@@ -11,7 +11,7 @@
         .globl  _gpx_fill_rectangle
         .globl  __gpx_hline_raw8
         .globl  __rect_unpack_norm
-        .globl  __rect_cmp16s_lt
+        .globl  __clip_seg
 
         .area   _CODE
 
@@ -169,130 +169,39 @@ _gpx_fill_rectangle::
         or      10(ix)
         jp      z,.fr_phase_setup
 
-        ;; if (x1 < clip->x0) return
-        ld      l,-3(ix)
-        ld      h,-4(ix)               ;; HL = x1
-        push    hl
-        ld      l,9(ix)
-        ld      h,10(ix)               ;; HL = &clip->x0
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                 ;; DE = clip->x0
-        pop     hl                     ;; HL = x1
-        call    __rect_cmp16s_lt
-        jp      nz,.fr_done
-
-        ;; if (clip->x1 < x0) return
-        ld      l,9(ix)
-        ld      h,10(ix)
-        ld      de,#4
-        add     hl,de                  ;; &clip->x1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x1
-        ld      e,-1(ix)
-        ld      d,-2(ix)               ;; DE = x0
-        call    __rect_cmp16s_lt
-        jp      nz,.fr_done
-
-        ;; if (x0 < clip->x0) x0 = clip->x0
+        ;; Clip [x0..x1] and [y0..y1] against the clip rect once, via the
+        ;; shared __clip_seg helper (reject on either axis => nothing visible).
+        ;; X axis: IY = &clip->x0 (clip+0); x1 at IY+4.
+        ld      c,9(ix)
+        ld      b,10(ix)               ;; BC = clip ptr
+        ld      iy,#0
+        add     iy,bc
         ld      l,-1(ix)
         ld      h,-2(ix)               ;; HL = x0
-        ld      e,9(ix)
-        ld      d,10(ix)
-        ex      de,hl                  ;; HL = clip ptr, DE = x0
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x0
-        ex      de,hl                  ;; HL = x0, DE = clip->x0
-        call    __rect_cmp16s_lt
-        jr      z,.fr_no_clip_left
-        ld      -1(ix),e
-        ld      -2(ix),d
-
-.fr_no_clip_left:
-        ;; if (clip->x1 < x1) x1 = clip->x1
-        ld      l,9(ix)
-        ld      h,10(ix)
-        ld      de,#4
-        add     hl,de                  ;; &clip->x1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->x1
         ld      e,-3(ix)
         ld      d,-4(ix)               ;; DE = x1
-        call    __rect_cmp16s_lt
-        jr      z,.fr_clip_y_range
-        ld      -3(ix),l
-        ld      -4(ix),h
+        call    __clip_seg
+        jp      c,.fr_done
+        ld      -1(ix),l
+        ld      -2(ix),h               ;; x0 = clamped lo
+        ld      -3(ix),e
+        ld      -4(ix),d               ;; x1 = clamped hi
 
-.fr_clip_y_range:
-        ;; if (y1 < clip->y0) return
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        ld      e,9(ix)
-        ld      d,10(ix)
-        ex      de,hl
-        inc     hl
-        inc     hl
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        ex      de,hl
-        call    __rect_cmp16s_lt
-        jp      nz,.fr_done
-
-        ;; if (clip->y1 < y0) return
-        ld      l,9(ix)
-        ld      h,10(ix)
-        ld      de,#6
-        add     hl,de
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a
-        ld      e,-5(ix)
-        ld      d,-6(ix)
-        call    __rect_cmp16s_lt
-        jp      nz,.fr_done
-
-        ;; if (y0 < clip->y0) y0 = clip->y0
+        ;; Y axis: IY = &clip->y0 (clip+2); y1 at IY+4 (clip+6).
+        ld      c,9(ix)
+        ld      b,10(ix)               ;; reload BC = clip ptr
+        ld      iy,#2
+        add     iy,bc
         ld      l,-5(ix)
-        ld      h,-6(ix)
-        ld      e,9(ix)
-        ld      d,10(ix)
-        ex      de,hl
-        inc     hl
-        inc     hl
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a
-        ex      de,hl
-        call    __rect_cmp16s_lt
-        jr      z,.fr_no_clip_top
-        ld      -5(ix),e
-        ld      -6(ix),d
-
-.fr_no_clip_top:
-        ;; if (clip->y1 < y1) y1 = clip->y1
-        ld      l,9(ix)
-        ld      h,10(ix)
-        ld      de,#6
-        add     hl,de
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a
+        ld      h,-6(ix)               ;; HL = y0
         ld      e,-7(ix)
-        ld      d,-8(ix)
-        call    __rect_cmp16s_lt
-        jr      z,.fr_phase_setup
-        ld      -7(ix),l
-        ld      -8(ix),h
+        ld      d,-8(ix)               ;; DE = y1
+        call    __clip_seg
+        jp      c,.fr_done
+        ld      -5(ix),l
+        ld      -6(ix),h               ;; y0 = clamped lo
+        ld      -7(ix),e
+        ld      -8(ix),d               ;; y1 = clamped hi
 
 .fr_phase_setup:
         ;; x phase shift = (x0_clipped - x0_original) & 7
