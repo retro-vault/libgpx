@@ -8,7 +8,7 @@
 
         .globl  __gpx_bresenham_line
         .globl  __gpx_draw_line_raw_local
-        .globl  _gpx_draw_pixel
+        .globl  __gpx_plot_raw
         .globl  __rect_cmp16s_lt
 
         .area   _CODE
@@ -163,29 +163,34 @@ __gpx_draw_line_raw_local::
         ld      -24(ix),l
         ld      -25(ix),h
 
+        ;; precompute packed color/mode for __gpx_plot_raw, once per line:
+        ;;   bit0 = color (CO_FORE), bit1 = mode (BM_XOR).
+        ;; Stored in -22(ix) (the old e2 slot; e2 now lives in BC).
+        ld      a,11(ix)               ;; mode
+        and     #0x01
+        add     a,a
+        ld      b,a
+        ld      a,10(ix)               ;; color
+        and     #0x01
+        or      b
+        ld      -22(ix),a
+
 .gbl_loop:
-        ;; if (lpatt & 1) draw pixel
+        ;; if (lpatt & 1) draw pixel via the register-fed raw plotter
+        ;; (no per-pixel IX frame / stack marshalling). Clip stays per-pixel,
+        ;; so the result is identical to calling the public draw_pixel.
         ld      a,-11(ix)
         and     #0x01
         jr      z,.gbl_after_plot
 
-        ld      l,-12(ix)
-        ld      h,-13(ix)
-        push    hl                     ;; clip
-
-        ld      l,10(ix)               ;; c
-        ld      h,11(ix)               ;; m
-        push    hl
-
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; y
-
-        ld      l,-1(ix)
-        ld      h,-2(ix)
         ld      e,-3(ix)
-        ld      d,-4(ix)
-        call    _gpx_draw_pixel
+        ld      d,-4(ix)               ;; DE = x
+        ld      l,-5(ix)
+        ld      h,-6(ix)               ;; HL = y
+        ld      c,-12(ix)
+        ld      b,-13(ix)              ;; BC = clip
+        ld      a,-22(ix)              ;; A = packed color/mode
+        call    __gpx_plot_raw
 
 .gbl_after_plot:
         ;; if (x0==x1 && y0==y1) done
