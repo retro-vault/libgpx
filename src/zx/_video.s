@@ -7,6 +7,7 @@
 
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
+        .globl  __vid_prevrow
 
         .area   _CODE
 
@@ -37,6 +38,8 @@ __vid_rowaddr::
         ;; __vid_nextrow
         ;;   HL = current row base
         ;;   HL = next row base
+        ;; Works on x-offset pointers too (bits 0..4 of L untouched).
+        ;; Clobbers A only; preserves BC/DE and the alternate set.
 __vid_nextrow::
         inc     h
         ld      a,h
@@ -53,4 +56,27 @@ __vid_nextrow::
         ld      h,a
 
 .vn_done:
+        ret
+
+        ;; __vid_prevrow
+        ;;   HL = current row (or x-offset) address
+        ;;   HL = address one pixel row up
+        ;; Exact inverse of __vid_nextrow. Clobbers A only.
+__vid_prevrow::
+        dec     h
+        ld      a,h
+        and     #0x07
+        cp      #0x07
+        jr      nz,.vp_done
+
+        ld      a,l
+        sub     #0x20
+        ld      l,a
+        jr      c,.vp_done
+
+        ld      a,h
+        add     a,#0x08
+        ld      h,a
+
+.vp_done:
         ret

@@ -20,6 +20,34 @@
         .area   _CODE
 
         ;; ------------------------------------------------------------
+        ;; void gpx_draw_pixel(
+        ;;   gpx_t *gpx,        HL (ignored)
+        ;;   coord x,           DE
+        ;;   coord y,           stack
+        ;;   color c,           stack (1 byte)
+        ;;   bmode m,           stack (1 byte)
+        ;;   const rect_t *clip stack (2 bytes)
+        ;;
+        ;; Callee cleans 6 bytes: args are popped straight into the
+        ;; __gpx_plot_raw register interface (no IX frame, no epilogue).
+        ;; Return address is parked in BC' while the stack is drained,
+        ;; then pushed back so plot_raw's ret goes to the caller.
+        ;; ------------------------------------------------------------
+_gpx_draw_pixel::
+        exx
+        pop     bc                     ;; BC' = return address
+        exx
+        pop     hl                     ;; HL = y
+        pop     af                     ;; A = m, F = c (carry = color bit0)
+        rla                            ;; A = (m<<1) | color
+        and     #0x03                  ;; packed flags
+        pop     bc                     ;; BC = clip
+        exx
+        push    bc                     ;; return address back on stack
+        exx
+        ;; fall through into __gpx_plot_raw (its ret returns to caller)
+
+        ;; ------------------------------------------------------------
         ;; __gpx_plot_raw  (internal, register interface, no IX frame)
         ;;   DE = x (signed 16-bit)
         ;;   HL = y (signed 16-bit)
@@ -172,46 +200,4 @@ __gpx_plot_raw:
 
 .pr_reject:
         pop     af
-        ret
-
-        ;; ------------------------------------------------------------
-        ;; void gpx_draw_pixel(
-        ;;   gpx_t *gpx,        HL (ignored)
-        ;;   coord x,           DE
-        ;;   coord y,           SP+2 (2 bytes)
-        ;;   color c,           SP+4 (1 byte)
-        ;;   bmode m,           SP+5 (1 byte)
-        ;;   const rect_t *clip SP+6 (2 bytes)
-        ;;
-        ;; Callee cleans 6 bytes from stack.
-        ;; ------------------------------------------------------------
-_gpx_draw_pixel::
-        push    ix
-        ld      ix,#0
-        add     ix,sp
-
-        ;; packed = (color&1) | ((mode&1) << 1)
-        ld      a,7(ix)                ;; mode
-        and     #0x01
-        add     a,a                    ;; -> bit1
-        ld      b,a
-        ld      a,6(ix)                ;; color
-        and     #0x01
-        or      b
-        push    af                     ;; packed (DE=x must stay intact)
-
-        ld      l,4(ix)
-        ld      h,5(ix)                ;; HL = y
-        ld      c,8(ix)
-        ld      b,9(ix)                ;; BC = clip
-        pop     af                     ;; A = packed
-        call    __gpx_plot_raw
-
-        pop     ix
-        ;; callee cleanup: 6 bytes (y,c,m,clip)
-        pop     de
-        ld      hl,#6
-        add     hl,sp
-        ld      sp,hl
-        push    de
         ret

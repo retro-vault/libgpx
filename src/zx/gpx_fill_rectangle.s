@@ -28,16 +28,12 @@ _gpx_fill_rectangle::
         ld      ix,#0
         add     ix,sp
 
-        ;; preserve gpx across local stack allocation
-        ld      b,h
-        ld      c,l
-
         ;; locals (18 bytes)
         ;; -1..-2   x0
         ;; -3..-4   x1
         ;; -5..-6   y0
         ;; -7..-8   y1
-        ;; -9..-10  gpx
+        ;; -9..-10  (unused)
         ;; -11..-12 y0 original / ycur
         ;; -13      fpatt idx
         ;; -14..-15 fpatt ptr
@@ -47,10 +43,6 @@ _gpx_fill_rectangle::
         ld      hl,#-18
         add     hl,sp
         ld      sp,hl
-
-        ;; save gpx
-        ld      -9(ix),c
-        ld      -10(ix),b
 
         ;; if (r == NULL) return
         ld      a,d
@@ -298,9 +290,7 @@ _gpx_fill_rectangle::
         ld      h,-12(ix)
         push    hl                     ;; y0
 
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
+        ld      e,-1(ix)               ;; (gpx arg unused by hline_raw8)
         ld      d,-2(ix)
         call    __gpx_hline_raw8
 

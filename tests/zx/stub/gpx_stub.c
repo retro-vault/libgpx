@@ -442,6 +442,12 @@ uint8_t gpx_draw_hline(
     return lpatt;
 }
 
+/* Line semantics: the segment is clipped up front (Cohen-Sutherland) against
+ * the effective rect = clip ∩ screen (screen alone when clip is NULL), the
+ * dash pattern is pre-rotated by the skipped major-axis distance, and the
+ * clipped segment is then rasterized with NO per-pixel checks. A clip rect
+ * with swapped corners draws nothing. The returned pattern is the rotation
+ * state at the clipped end, so chained segments stay in phase. */
 uint8_t gpx_draw_line(
     gpx_t *gpx, coord x0, coord y0, coord x1, coord y1,
     color c, bmode m, uint8_t lpatt, const rect_t *clip)
@@ -451,11 +457,15 @@ uint8_t gpx_draw_line(
     coord ox1 = x1;
     coord oy1 = y1;
     uint8_t original_lpatt = lpatt;
-    int dx = x1 > x0 ? x1 - x0 : x0 - x1;
-    int sx = x0 < x1 ? 1 : -1;
-    int dy = y1 > y0 ? y1 - y0 : y0 - y1;
-    int sy = y0 < y1 ? 1 : -1;
-    int err = (dx > dy ? dx : -dy) / 2;
+    rect_t eff;
+    int32_t odx;
+    int32_t ody;
+    int32_t skip;
+    int dx;
+    int sx;
+    int dy;
+    int sy;
+    int err;
     int e2;
 
     if (x0 == x1 && y0 == y1) {
@@ -464,44 +474,45 @@ uint8_t gpx_draw_line(
         return original_lpatt;
     }
 
+    eff.x0 = 0;
+    eff.y0 = 0;
+    eff.x1 = ZX_WIDTH - 1;
+    eff.y1 = ZX_HEIGHT - 1;
     if (clip) {
-        rect_t cl = *clip;
-        int32_t odx;
-        int32_t ody;
-        int32_t skip;
-
-        if (cl.x0 > cl.x1) {
-            coord t = cl.x0;
-            cl.x0 = cl.x1;
-            cl.x1 = t;
-        }
-        if (cl.y0 > cl.y1) {
-            coord t = cl.y0;
-            cl.y0 = cl.y1;
-            cl.y1 = t;
-        }
-
-        if (!zx_clip_line(&x0, &y0, &x1, &y1, &cl))
+        if (clip->x0 > clip->x1 || clip->y0 > clip->y1)
             return original_lpatt;
-
-        odx = zx_abs32((int32_t)ox1 - (int32_t)ox0);
-        ody = zx_abs32((int32_t)oy1 - (int32_t)oy0);
-        if (odx >= ody)
-            skip = zx_abs32((int32_t)x0 - (int32_t)ox0);
-        else
-            skip = zx_abs32((int32_t)y0 - (int32_t)oy0);
-        lpatt = zx_rotate_pattern_n(lpatt, (uint8_t)(skip & 7));
-
-        dx = x1 > x0 ? x1 - x0 : x0 - x1;
-        sx = x0 < x1 ? 1 : -1;
-        dy = y1 > y0 ? y1 - y0 : y0 - y1;
-        sy = y0 < y1 ? 1 : -1;
-        err = (dx > dy ? dx : -dy) / 2;
+        if (clip->x0 > eff.x0)
+            eff.x0 = clip->x0;
+        if (clip->y0 > eff.y0)
+            eff.y0 = clip->y0;
+        if (clip->x1 < eff.x1)
+            eff.x1 = clip->x1;
+        if (clip->y1 < eff.y1)
+            eff.y1 = clip->y1;
+        if (eff.x0 > eff.x1 || eff.y0 > eff.y1)
+            return original_lpatt;
     }
+
+    if (!zx_clip_line(&x0, &y0, &x1, &y1, &eff))
+        return original_lpatt;
+
+    odx = zx_abs32((int32_t)ox1 - (int32_t)ox0);
+    ody = zx_abs32((int32_t)oy1 - (int32_t)oy0);
+    if (odx >= ody)
+        skip = zx_abs32((int32_t)x0 - (int32_t)ox0);
+    else
+        skip = zx_abs32((int32_t)y0 - (int32_t)oy0);
+    lpatt = zx_rotate_pattern_n(lpatt, (uint8_t)(skip & 7));
+
+    dx = x1 > x0 ? x1 - x0 : x0 - x1;
+    sx = x0 < x1 ? 1 : -1;
+    dy = y1 > y0 ? y1 - y0 : y0 - y1;
+    sy = y0 < y1 ? 1 : -1;
+    err = (dx > dy ? dx : -dy) / 2;
 
     while (1) {
         if (lpatt & 0x01)
-            gpx_draw_pixel(gpx, x0, y0, c, m, clip);
+            zx_set_pixel(x0, y0, c, m); /* pre-clipped: no per-pixel checks */
         if (x0 == x1 && y0 == y1)
             break;
         e2 = err;

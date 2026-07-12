@@ -13,6 +13,7 @@
         .globl  __gpx_hline
         .globl  __gpx_hline_raw8
         .globl  __rect_cmp16s_lt
+        .globl  __ret_clean11
         .globl  __clip_seg
         .globl  __vid_rowaddr
 
@@ -32,7 +33,14 @@
         ;;
         ;; Returns:
         ;;   A = updated lpatt, or unchanged lpatt on reject.
+        ;; __gpx_hline_raw8 shares the prologue: B=0 raw (no clip logic),
+        ;; B=1 full clip handling. raw expects x0<=x1, on-screen 8-bit.
+__gpx_hline_raw8::
+        ld      b,#0
+        jr      ghl_entry
 __gpx_hline::
+        ld      b,#1
+ghl_entry:
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -59,6 +67,11 @@ __gpx_hline::
         ld      -4(ix),a               ;; x1 lo
         ld      a,7(ix)
         ld      -3(ix),a               ;; x1 hi
+
+        ;; raw entry skips clip logic entirely
+        ld      a,b
+        or      a
+        jp      z,ghl_draw_core
 
         ;; optional clip
         ld      a,13(ix)
@@ -66,75 +79,23 @@ __gpx_hline::
         jr      nz,ghl_clip_checks
         jp      ghl_draw_core
 
-        ;; ------------------------------------------------------------
-        ;; __gpx_hline_raw8
-        ;;
-        ;; Raw draw entry:
-        ;;  - no clip checks at all
-        ;;  - expects x0<=x1 and on-screen 8-bit coordinates
-        ;;  - same calling convention / return value as __gpx_hline
-        ;; ------------------------------------------------------------
-__gpx_hline_raw8::
-        push    ix
-        ld      ix,#0
-        add     ix,sp
-
-        ;; locals (11 bytes):
-        ;; -1..-2  x0
-        ;; -3..-4  x1
-        ;; -5      x0 original low
-        ;; -6      patt_start
-        ;; -7      patt_byte
-        ;; -8      mask_first
-        ;; -9      mask_last
-        ;; -10     byte_lo
-        ;; -11     byte_hi
-        ld      hl,#-11
-        add     hl,sp
-        ld      sp,hl
-
-        ;; cache x0/x1
-        ld      -2(ix),e               ;; x0 lo
-        ld      -1(ix),d               ;; x0 hi
-        ld      -5(ix),e               ;; x0 original lo
-        ld      a,6(ix)
-        ld      -4(ix),a               ;; x1 lo
-        ld      a,7(ix)
-        ld      -3(ix),a               ;; x1 hi
-
-        jp      ghl_draw_core
-
 ghl_clip_checks:
         ;; BC = clip pointer
         ld      c,13(ix)
         ld      b,14(ix)
 
-        ;; if (y < clip->y0) reject
-        ld      l,c
-        ld      h,b
-        inc     hl
-        inc     hl                     ;; &clip->y0
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        ld      l,4(ix)                ;; y
-        ld      h,5(ix)
-        call    __rect_cmp16s_lt
-        jp      nz,ghl_reject
-
-        ;; if (clip->y1 < y) reject
-        ld      l,c
-        ld      h,b
-        ld      de,#6
-        add     hl,de                  ;; &clip->y1
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                    ;; HL = clip->y1
-        ld      e,4(ix)
-        ld      d,5(ix)                ;; DE = y
-        call    __rect_cmp16s_lt
-        jp      nz,ghl_reject
+        ;; y outside the clip's y-range? A point is a degenerate segment,
+        ;; so the shared 1-D clip does the reject test (clamp is a no-op).
+        ld      iy,#2
+        add     iy,bc                  ;; IY = &clip->y0 (y1 at IY+4)
+        ld      l,4(ix)
+        ld      h,5(ix)                ;; HL = y
+        ld      e,l
+        ld      d,h                    ;; DE = y
+        call    __clip_seg
+        jp      c,ghl_reject
+        ld      c,13(ix)               ;; reload clip (__clip_seg uses BC)
+        ld      b,14(ix)
 
         ;; primary X-axis clip via shared __clip_seg (BC = clip ptr).
         ;; IY = &clip->x0; clip->x1 is at IY+4.
@@ -357,14 +318,7 @@ ghl_reject:
 ghl_return:
         ld      sp,ix
         pop     ix
-        pop     hl
-        pop     bc
-        pop     bc
-        pop     bc
-        pop     bc
-        pop     bc
-        inc     sp
-        jp      (hl)
+        jp      __ret_clean11
 
         ;; ------------------------------------------------------------
         ;; Apply pattern byte in A to (HL), limited by coverage mask in C.

@@ -57,7 +57,6 @@ $(ZX_LIB_STAMP): $(ZX_ASM_SRCS) $(ZX_C_SRCS) | $(BUILD_DIR)/zx/
 		for src in src/zx/*.s; do \
 			[ -e "$$src" ] || continue; \
 			base="$$(basename "$$src" .s)"; \
-			case "$$base" in _gpx_rect_clip|_gpx_cohen_sutherland|_gpx_cs_intersection|_gpx_line_normalize) continue;; esac; \
 			dest="build/zx/$$base.rel"; \
 			/opt/sdcc/bin/sdasz80 -o "$$dest" "$$src"; \
 		done; \

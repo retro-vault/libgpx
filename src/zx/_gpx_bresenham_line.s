@@ -1,314 +1,762 @@
         ;; _gpx_bresenham_line.s
         ;;
-        ;; Compact generic Bresenham renderer.
-        ;; Clipping is delegated to gpx_draw_pixel via clip argument.
+        ;; Diagonal line renderer: clip first, then draw fast.
+        ;;
+        ;; The segment is clipped up front with Cohen-Sutherland against the
+        ;; effective rect = clip ∩ screen (screen alone when clip is NULL),
+        ;; in full signed 16-bit space, so arbitrarily far off-screen
+        ;; endpoints cost a handful of intersections instead of one plot
+        ;; call per off-screen pixel. The dash pattern is pre-rotated by the
+        ;; skipped major-axis distance so the phase matches an unclipped
+        ;; draw. The surviving segment lies inside 256x192, so the raster
+        ;; loops run entirely in registers: main set holds count/pattern/
+        ;; masks/VRAM pointer, alternate set holds err/dx/dy, A' holds the
+        ;; step directions. No per-pixel bounds or clip checks remain.
+        ;;
+        ;; Semantics byte-match the oracle stub (tests/zx/stub/gpx_stub.c):
+        ;; same C-S edge order (T,B,R,L), same truncating-division
+        ;; intersection, same skip rule, same raster loop, same return
+        ;; pattern. A clip rect with swapped corners draws nothing.
+        ;;
+        ;; Re-entrant: all state lives in registers and the stack frame.
 
         .module _gpx_bresenham_line
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_bresenham_line
-        .globl  __gpx_draw_line_raw_local
-        .globl  __gpx_plot_raw
         .globl  __rect_cmp16s_lt
+        .globl  __ret_clean11
+        .globl  __vid_rowaddr
+        .globl  __vid_nextrow
+        .globl  __vid_prevrow
+
+        ;; outcode bits (stub order/priority: T, B, R, L)
+        .equ    OC_LEFT,   0
+        .equ    OC_RIGHT,  1
+        .equ    OC_TOP,    2
+        .equ    OC_BOTTOM, 3
+
+        ;; frame locals (IX-relative)
+        .equ    L_X0,     -2           ;; word: clipped-in-progress x0
+        .equ    L_EX0,    -3           ;; effective clip, bytes (post-clamp)
+        .equ    L_EY0,    -4
+        .equ    L_EX1,    -5
+        .equ    L_EY1,    -6
+        .equ    L_SKIPB,  -8           ;; word: original major-axis start
+        .equ    L_FLAGS,  -9           ;; bit0 = major axis is x (|odx|>=|ody|)
+        .equ    L_AXIS,   -10          ;; isect flavor: 0 = x (T/B), 1 = y (R/L)
+        .equ    L_NB,     -11          ;; byte: clip-edge coordinate for isect
+        .equ    L_SIGN,   -12          ;; byte: folded sign of isect offset
+        .equ    L_DX,     -13          ;; byte: post-clip |dx|
+        .equ    L_DY,     -14          ;; byte: post-clip |dy|
+        .equ    L_A0,     -16          ;; word: isect base coordinate
+        .equ    L_SIZE,   16
+
+        ;; args after push ix (callee cleans 11 bytes)
+        ;;   HL = gpx (unused), DE = x0
+        .equ    A_Y0,   4              ;; word (mutated in place by C-S)
+        .equ    A_X1,   6              ;; word (mutated in place by C-S)
+        .equ    A_Y1,   8              ;; word (mutated in place by C-S)
+        .equ    A_C,    10
+        .equ    A_M,    11
+        .equ    A_LP,   12             ;; lpatt (skip-rotated in place)
+        .equ    A_CLIP, 13
 
         .area   _CODE
 
-        ;; Signature matches gpx_draw_line():
-        ;;   HL = gpx
-        ;;   DE = x0
-        ;;   stack: y0, x1, y1, c, m, lpatt, clip
 __gpx_bresenham_line::
-__gpx_draw_line_raw_local::
         push    ix
         ld      ix,#0
         add     ix,sp
-
-        ;; locals (25 bytes)
-        ;; -1..-2   gpx
-        ;; -3..-4   x0
-        ;; -5..-6   y0
-        ;; -7..-8   x1
-        ;; -9..-10  y1
-        ;; -11      lpatt
-        ;; -12..-13 clip ptr
-        ;; -14      sx (1/-1)
-        ;; -15      sy (1/-1)
-        ;; -16..-17 dx
-        ;; -18..-19 dy
-        ;; -20..-21 err
-        ;; -22..-23 e2
-        ;; -24..-25 neg_dy
-        ld      hl,#-25
+        ld      hl,#-L_SIZE
         add     hl,sp
         ld      sp,hl
 
-        ;; save args
-        ld      -1(ix),l               ;; gpx lo
-        ld      -2(ix),h               ;; gpx hi
+        ld      L_X0(ix),e
+        ld      L_X0+1(ix),d
 
-        ld      -3(ix),e               ;; x0
-        ld      -4(ix),d
-
-        ld      a,4(ix)                ;; y0
-        ld      -5(ix),a
-        ld      a,5(ix)
-        ld      -6(ix),a
-
-        ld      a,6(ix)                ;; x1
-        ld      -7(ix),a
-        ld      a,7(ix)
-        ld      -8(ix),a
-
-        ld      a,8(ix)                ;; y1
-        ld      -9(ix),a
-        ld      a,9(ix)
-        ld      -10(ix),a
-
-        ld      a,12(ix)               ;; lpatt
-        ld      -11(ix),a
-
-        ld      a,13(ix)               ;; clip ptr
-        ld      -12(ix),a
-        ld      a,14(ix)
-        ld      -13(ix),a
-
-        ;; dx + sx
-        ;; if (x1 < x0) { sx=-1; dx=x0-x1; } else { sx=1; dx=x1-x0; }
-        ld      l,-7(ix)
-        ld      h,-8(ix)               ;; HL=x1
-        ld      e,-3(ix)
-        ld      d,-4(ix)               ;; DE=x0
-        call    __rect_cmp16s_lt
+        ;; original |dx| vs |dy| picks the skip axis (before clipping)
+        ld      l,A_X1(ix)
+        ld      h,A_X1+1(ix)
+        ld      e,L_X0(ix)
+        ld      d,L_X0+1(ix)
+        call    .bl_absd               ;; HL = |odx|
+        push    hl
+        ld      l,A_Y1(ix)
+        ld      h,A_Y1+1(ix)
+        ld      e,A_Y0(ix)
+        ld      d,A_Y0+1(ix)
+        call    .bl_absd               ;; HL = |ody|
+        pop     de                     ;; DE = |odx|
         or      a
-        jr      z,.gbl_dx_pos
+        sbc     hl,de                  ;; |ody| - |odx| (unsigned)
+        jr      c,.bl_sb_x             ;; ody < odx -> x major
+        jr      z,.bl_sb_x             ;; equal     -> x major
+        xor     a
+        ld      L_FLAGS(ix),a
+        ld      a,A_Y0(ix)
+        ld      L_SKIPB(ix),a
+        ld      a,A_Y0+1(ix)
+        ld      L_SKIPB+1(ix),a
+        jr      .bl_eff
+.bl_sb_x:
+        ld      a,#1
+        ld      L_FLAGS(ix),a
+        ld      a,L_X0(ix)
+        ld      L_SKIPB(ix),a
+        ld      a,L_X0+1(ix)
+        ld      L_SKIPB+1(ix),a
 
-        ld      a,#0xff
-        ld      -14(ix),a              ;; sx=-1
-        ld      l,-3(ix)
-        ld      h,-4(ix)               ;; HL=x0
-        ld      e,-7(ix)
-        ld      d,-8(ix)               ;; DE=x1
-        or      a
-        sbc     hl,de
-        jr      .gbl_dx_done
+        ;; ---- effective clip rect: (clip ∩ screen) as four bytes ----
+.bl_eff:
+        xor     a
+        ld      L_EX0(ix),a
+        ld      L_EY0(ix),a
+        dec     a
+        ld      L_EX1(ix),a            ;; 255
+        ld      a,#191
+        ld      L_EY1(ix),a
 
-.gbl_dx_pos:
-        ld      a,#0x01
-        ld      -14(ix),a              ;; sx=+1
-        ld      l,-7(ix)
-        ld      h,-8(ix)               ;; HL=x1
-        ld      e,-3(ix)
-        ld      d,-4(ix)               ;; DE=x0
-        or      a
-        sbc     hl,de
-
-.gbl_dx_done:
-        ld      -16(ix),l              ;; dx
-        ld      -17(ix),h
-
-        ;; dy + sy
-        ;; if (y1 < y0) { sy=-1; dy=y0-y1; } else { sy=1; dy=y1-y0; }
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL=y1
-        ld      e,-5(ix)
-        ld      d,-6(ix)               ;; DE=y0
-        call    __rect_cmp16s_lt
-        or      a
-        jr      z,.gbl_dy_pos
-
-        ld      a,#0xff
-        ld      -15(ix),a              ;; sy=-1
-        ld      l,-5(ix)
-        ld      h,-6(ix)               ;; HL=y0
-        ld      e,-9(ix)
-        ld      d,-10(ix)              ;; DE=y1
-        or      a
-        sbc     hl,de
-        jr      .gbl_dy_done
-
-.gbl_dy_pos:
-        ld      a,#0x01
-        ld      -15(ix),a              ;; sy=+1
-        ld      l,-9(ix)
-        ld      h,-10(ix)              ;; HL=y1
-        ld      e,-5(ix)
-        ld      d,-6(ix)               ;; DE=y0
-        or      a
-        sbc     hl,de
-
-.gbl_dy_done:
-        ld      -18(ix),l              ;; dy
-        ld      -19(ix),h
-
-        ;; err = dx - dy
-        ld      l,-16(ix)
-        ld      h,-17(ix)
-        ld      e,-18(ix)
-        ld      d,-19(ix)
-        or      a
-        sbc     hl,de
-        ld      -20(ix),l
-        ld      -21(ix),h
-
-        ;; neg_dy = -dy (loop invariant: hoisted out of the per-pixel step)
-        ld      l,-18(ix)
-        ld      h,-19(ix)
-        ld      a,l
-        cpl
-        ld      l,a
+        ld      l,A_CLIP(ix)
+        ld      h,A_CLIP+1(ix)
         ld      a,h
-        cpl
-        ld      h,a
+        or      l
+        jp      z,.bl_cs_loop          ;; no clip: screen rect stands
+
+        ld      e,(hl)                 ;; x0c
         inc     hl
-        ld      -24(ix),l
-        ld      -25(ix),h
-
-        ;; precompute packed color/mode for __gpx_plot_raw, once per line:
-        ;;   bit0 = color (CO_FORE), bit1 = mode (BM_XOR).
-        ;; Stored in -22(ix) (the old e2 slot; e2 now lives in BC).
-        ld      a,11(ix)               ;; mode
-        and     #0x01
-        add     a,a
-        ld      b,a
-        ld      a,10(ix)               ;; color
-        and     #0x01
-        or      b
-        ld      -22(ix),a
-
-.gbl_loop:
-        ;; if (lpatt & 1) draw pixel via the register-fed raw plotter
-        ;; (no per-pixel IX frame / stack marshalling). Clip stays per-pixel,
-        ;; so the result is identical to calling the public draw_pixel.
-        ld      a,-11(ix)
-        and     #0x01
-        jr      z,.gbl_after_plot
-
-        ld      e,-3(ix)
-        ld      d,-4(ix)               ;; DE = x
-        ld      l,-5(ix)
-        ld      h,-6(ix)               ;; HL = y
-        ld      c,-12(ix)
-        ld      b,-13(ix)              ;; BC = clip
-        ld      a,-22(ix)              ;; A = packed color/mode
-        call    __gpx_plot_raw
-
-.gbl_after_plot:
-        ;; if (x0==x1 && y0==y1) done
-        ld      a,-3(ix)
-        cp      -7(ix)
-        jr      nz,.gbl_step
-        ld      a,-4(ix)
-        cp      -8(ix)
-        jr      nz,.gbl_step
-        ld      a,-5(ix)
-        cp      -9(ix)
-        jr      nz,.gbl_step
-        ld      a,-6(ix)
-        cp      -10(ix)
-        jp      z,.gbl_done
-
-.gbl_step:
-        ;; e2 = err * 2.  Hybrid register use: e2 is a per-pixel transient,
-        ;; so keep it in BC across both compares instead of an IX local
-        ;; (__rect_cmp16s_lt preserves BC, and neither the err-=dy nor the
-        ;; x-step block touches BC).  All the interleaved Bresenham state
-        ;; (x0,y0,x1,y1,dx,dy,neg_dy,err,sx,sy,lpatt) stays in IX.
-        ld      l,-20(ix)
-        ld      h,-21(ix)
-        add     hl,hl
-        ld      b,h
-        ld      c,l                    ;; BC = e2
-
-        ;; if (e2 > -dy) => if (-dy < e2)  (neg_dy precomputed before loop)
-        ld      l,-24(ix)
-        ld      h,-25(ix)              ;; HL=-dy
-        ld      e,c
-        ld      d,b                    ;; DE=e2
+        ld      d,(hl)
+        inc     hl
+        push    de
+        ld      e,(hl)                 ;; y0c
+        inc     hl
+        ld      d,(hl)
+        inc     hl
+        push    de
+        ld      e,(hl)                 ;; x1c
+        inc     hl
+        ld      d,(hl)
+        inc     hl
+        ld      c,(hl)                 ;; y1c
+        inc     hl
+        ld      h,(hl)
+        ld      l,c                    ;; HL = y1c
+        ld      b,d
+        ld      c,e                    ;; BC = x1c
+        pop     de                     ;; DE = y0c
+        ;; swapped clip (y1c < y0c) draws nothing
         call    __rect_cmp16s_lt
         or      a
-        jr      z,.gbl_skip_x
-
-        ;; err -= dy
-        ld      l,-20(ix)
-        ld      h,-21(ix)
-        ld      e,-18(ix)
-        ld      d,-19(ix)
+        jp      nz,.bl_rej1
+        ;; clamp y0c (DE) -> EY0
+        bit     7,d
+        jr      nz,.bl_cy1             ;; y0c<0 -> keep 0
+        ld      a,d
         or      a
-        sbc     hl,de
-        ld      -20(ix),l
-        ld      -21(ix),h
-
-        ;; x0 += sx
-        ld      a,-14(ix)
-        cp      #0xff
-        jr      z,.gbl_x_dec
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        inc     hl
-        ld      -3(ix),l
-        ld      -4(ix),h
-        jr      .gbl_skip_x
-
-.gbl_x_dec:
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        dec     hl
-        ld      -3(ix),l
-        ld      -4(ix),h
-
-.gbl_skip_x:
-        ;; if (e2 < dx)   (e2 still in BC from above)
+        jp      nz,.bl_rej1            ;; y0c>255: below screen -> empty
+        ld      a,e
+        cp      #192
+        jp      nc,.bl_rej1            ;; y0c in 192..255 -> empty
+        ld      L_EY0(ix),a
+.bl_cy1:
+        ;; clamp y1c (HL) -> EY1
+        bit     7,h
+        jp      nz,.bl_rej1            ;; y1c<0: above screen -> empty
+        ld      a,h
+        or      a
+        jr      nz,.bl_cx              ;; y1c>255 -> keep 191
+        ld      a,l
+        cp      #192
+        jr      nc,.bl_cx              ;; 192..255 -> keep 191
+        ld      L_EY1(ix),a
+.bl_cx:
+        pop     de                     ;; DE = x0c
+        ;; swapped clip (x1c < x0c) draws nothing
         ld      l,c
-        ld      h,b                    ;; HL=e2
-        ld      e,-16(ix)
-        ld      d,-17(ix)              ;; DE=dx
+        ld      h,b                    ;; HL = x1c
         call    __rect_cmp16s_lt
         or      a
-        jr      z,.gbl_rot
+        jp      nz,.bl_reject
+        ;; clamp x0c (DE) -> EX0
+        bit     7,d
+        jr      nz,.bl_cx1             ;; x0c<0 -> keep 0
+        ld      a,d
+        or      a
+        jp      nz,.bl_reject          ;; x0c>255 -> empty
+        ld      a,e
+        ld      L_EX0(ix),a
+.bl_cx1:
+        ;; clamp x1c (HL=BC) -> EX1
+        bit     7,b
+        jp      nz,.bl_reject          ;; x1c<0 -> empty
+        ld      a,b
+        or      a
+        jr      nz,.bl_cs_loop         ;; x1c>255 -> keep 255
+        ld      a,c
+        ld      L_EX1(ix),a
 
-        ;; err += dx
-        ld      l,-20(ix)
-        ld      h,-21(ix)
-        ld      e,-16(ix)
-        ld      d,-17(ix)
-        add     hl,de
-        ld      -20(ix),l
-        ld      -21(ix),h
+        ;; ---- Cohen-Sutherland loop (16-bit, cold) ----
+.bl_cs_loop:
+        ld      l,L_X0(ix)
+        ld      h,L_X0+1(ix)
+        ld      e,A_Y0(ix)
+        ld      d,A_Y0+1(ix)
+        call    .bl_outc
+        ld      b,a                    ;; B = c0
+        ld      l,A_X1(ix)
+        ld      h,A_X1+1(ix)
+        ld      e,A_Y1(ix)
+        ld      d,A_Y1+1(ix)
+        call    .bl_outc               ;; A = c1 (B preserved)
+        ld      c,a
+        or      b
+        jp      z,.bl_accept           ;; both inside
+        ld      a,b
+        and     c
+        jp      nz,.bl_reject          ;; share an outside half-plane
+        push    bc                     ;; save which-endpoint (B = c0)
+        ld      a,b
+        or      a
+        jr      nz,.bl_disp
+        ld      a,c
+.bl_disp:
+        bit     OC_TOP,a
+        jp      nz,.bl_edge_t
+        bit     OC_BOTTOM,a
+        jp      nz,.bl_edge_b
+        bit     OC_RIGHT,a
+        jp      nz,.bl_edge_r
+        jp      .bl_edge_l
 
-        ;; y0 += sy
-        ld      a,-15(ix)
-        cp      #0xff
-        jr      z,.gbl_y_dec
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        inc     hl
-        ld      -5(ix),l
-        ld      -6(ix),h
-        jr      .gbl_rot
-
-.gbl_y_dec:
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        dec     hl
-        ld      -5(ix),l
-        ld      -6(ix),h
-
-.gbl_rot:
-        ld      a,-11(ix)
+        ;; ---- accept: rotate pattern by skipped major distance ----
+.bl_accept:
+        ld      a,L_FLAGS(ix)
+        and     #0x01
+        jr      z,.bl_sk_y
+        ld      l,L_X0(ix)
+        ld      h,L_X0+1(ix)
+        jr      .bl_sk_go
+.bl_sk_y:
+        ld      l,A_Y0(ix)
+        ld      h,A_Y0+1(ix)
+.bl_sk_go:
+        ld      e,L_SKIPB(ix)
+        ld      d,L_SKIPB+1(ix)
+        call    .bl_absd               ;; HL = skip distance
+        ld      a,l
+        and     #0x07
+        jr      z,.bl_setup
+        ld      b,a
+        ld      a,A_LP(ix)
+.bl_sk_rot:
         rrca
-        ld      -11(ix),a
-        jp      .gbl_loop
+        djnz    .bl_sk_rot
+        ld      A_LP(ix),a
 
-.gbl_done:
-        ld      a,-11(ix)
+        ;; ---- 8-bit raster setup ----
+.bl_setup:
+        ld      c,#0                   ;; C = direction flags
+        ld      a,A_X1(ix)
+        sub     L_X0(ix)
+        jr      nc,.bl_dxp
+        neg
+        set     0,c                    ;; x runs left
+.bl_dxp:
+        ld      L_DX(ix),a
+        ld      a,A_Y1(ix)
+        sub     A_Y0(ix)
+        jr      nc,.bl_dyp
+        neg
+        set     1,c                    ;; y runs up
+.bl_dyp:
+        ld      L_DY(ix),a
+        ld      a,c
+        ex      af,af'                 ;; A' = direction flags
 
+        exx                            ;; alt: BC=dy, DE=dx, HL=err
+        ld      b,#0
+        ld      c,L_DY(ix)
+        ld      d,#0
+        ld      e,L_DX(ix)
+        ld      a,L_FLAGS(ix)
+        and     #0x01
+        jr      z,.bl_err_y
+        ld      a,e                    ;; err = dx/2
+        srl     a
+        ld      l,a
+        ld      h,#0
+        jr      .bl_err_ok
+.bl_err_y:
+        ld      a,c                    ;; err = -(dy/2)
+        srl     a
+        ld      l,a
+        ld      h,#0
+        or      a
+        jr      z,.bl_err_ok
+        xor     a
+        sub     l
+        ld      l,a
+        sbc     a,a
+        ld      h,a
+.bl_err_ok:
+        exx
+
+        ;; mask = 0x80 >> (x0 & 7)
+        ld      a,L_X0(ix)
+        and     #0x07
+        ld      b,a
+        ld      a,#0x80
+        jr      z,.bl_mask_ok
+.bl_mask_sh:
+        srl     a
+        djnz    .bl_mask_sh
+.bl_mask_ok:
+        ;; plot = (byte | D) ^ E:  set D=M,E=0; clear D=M,E=M; xor D=0,E=M
+        ld      d,a
+        ld      e,a
+        ld      a,A_M(ix)
+        and     #0x01
+        jr      z,.bl_m_cpy
+        ld      d,#0                   ;; xor
+        jr      .bl_m_ok
+.bl_m_cpy:
+        ld      a,A_C(ix)
+        and     #0x01
+        jr      z,.bl_m_ok             ;; clear: D=E=M
+        ld      e,#0                   ;; set
+.bl_m_ok:
+        ;; HL = VRAM addr of (x0,y0)
+        ld      b,A_Y0(ix)
+        call    __vid_rowaddr          ;; preserves DE
+        ld      a,L_X0(ix)
+        rrca
+        rrca
+        rrca
+        and     #0x1F
+        add     a,l
+        ld      l,a                    ;; row base has bits 0..4 clear
+
+        ld      c,A_LP(ix)             ;; C = pattern
+        ld      a,L_FLAGS(ix)
+        and     #0x01
+        jr      z,.bl_go_y
+        ld      b,L_DX(ix)             ;; steps = dx
+        ld      a,b
+        or      a
+        jr      z,.bl_last             ;; clipped to a single pixel
+        jp      .bx_loop
+.bl_go_y:
+        ld      b,L_DY(ix)             ;; steps = dy (>0: dy>dx>=0)
+        ld      a,L_DX(ix)
+        or      a
+        jp      nz,.by_loop            ;; genuine diagonal
+        ex      af,af'
+        bit     1,a                    ;; vertical: upward?
+        jr      nz,.bl_go_vup
+        ex      af,af'
+        jp      .bv_loop               ;; downward vertical: fast path
+.bl_go_vup:
+        ex      af,af'
+        jp      .by_loop               ;; upward vertical: generic loop
+
+        ;; ---- x-major raster: B=steps C=patt D/E=masks HL=vram ----
+        ;; alt: HL'=err DE'=dx BC'=dy; A' bit0=left bit1=up
+.bx_loop:
+        bit     0,c
+        jr      z,.bx_np
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+.bx_np:
+        exx
+        or      a
+        sbc     hl,bc                  ;; err -= dy
+        exx                            ;; flags survive exx
+        jp      p,.bx_xadv             ;; err >= 0: no y step
+        exx
+        add     hl,de                  ;; err += dx
+        exx
+        ex      af,af'
+        bit     1,a
+        jr      nz,.bx_yup
+        ex      af,af'
+        call    __vid_nextrow
+        jr      .bx_xadv
+.bx_yup:
+        ex      af,af'
+        call    __vid_prevrow
+.bx_xadv:
+        ex      af,af'
+        bit     0,a
+        jr      nz,.bx_xleft
+        ex      af,af'
+        ld      a,d
+        or      e                      ;; A = live mask
+        rrc     d
+        rrc     e
+        rrca                           ;; carry = old bit0 (wrap right)
+        jr      nc,.bx_rot
+        inc     hl
+        jr      .bx_rot
+.bx_xleft:
+        ex      af,af'
+        ld      a,d
+        or      e
+        rlc     d
+        rlc     e
+        rlca                           ;; carry = old bit7 (wrap left)
+        jr      nc,.bx_rot
+        dec     hl
+.bx_rot:
+        rrc     c                      ;; rotate pattern
+        djnz    .bx_loop
+
+        ;; ---- shared tail: final pixel + return pattern ----
+.bl_last:
+        bit     0,c
+        jr      z,.bl_retp
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+.bl_retp:
+        ld      a,c
+.bl_done:
         ld      sp,ix
         pop     ix
+        jp      __ret_clean11
 
-        ;; callee cleanup: y0(2), x1(2), y1(2), c(1), m(1), lpatt(1), clip(2) = 11
+.bl_rej1:                              ;; reject with one word still stacked
         pop     de
-        ld      hl,#11
-        add     hl,sp
-        ld      sp,hl
-        push    de
+.bl_reject:
+        ld      a,A_LP(ix)             ;; untouched original pattern
+        jr      .bl_done
+
+        ;; ---- y-major raster ----
+.by_loop:
+        bit     0,c
+        jr      z,.by_np
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+.by_np:
+        exx
+        or      a
+        adc     hl,de                  ;; err += dx (adc sets S/Z)
+        exx
+        jp      m,.by_yadv             ;; err <= 0: no x step
+        jr      z,.by_yadv
+        exx
+        or      a
+        sbc     hl,bc                  ;; err -= dy
+        exx
+        ex      af,af'
+        bit     0,a
+        jr      nz,.by_xleft
+        ex      af,af'
+        ld      a,d
+        or      e
+        rrc     d
+        rrc     e
+        rrca
+        jr      nc,.by_yadv
+        inc     hl
+        jr      .by_yadv
+.by_xleft:
+        ex      af,af'
+        ld      a,d
+        or      e
+        rlc     d
+        rlc     e
+        rlca
+        jr      nc,.by_yadv
+        dec     hl
+.by_yadv:
+        ex      af,af'
+        bit     1,a
+        jr      nz,.by_yup
+        ex      af,af'
+        call    __vid_nextrow
+        jr      .by_rot
+.by_yup:
+        ex      af,af'
+        call    __vid_prevrow
+.by_rot:
+        rrc     c
+        djnz    .by_loop
+        jr      .bl_last
+
+        ;; ---- vertical fast path: dx == 0, y increasing ----
+        ;; With dx = 0 the y-major loop never steps x, so no err
+        ;; bookkeeping is needed: plot, next row, rotate pattern.
+        ;; B=steps C=patt D/E=masks HL=vram. ~105 T/pixel.
+.bv_loop:
+        bit     0,c
+        jr      z,.bv_np
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+.bv_np:
+        call    __vid_nextrow
+        rrc     c
+        djnz    .bv_loop
+        jp      .bl_last
+
+        ;; ---- C-S edge handlers ----
+        ;; stack holds pushed BC (B = c0 = which endpoint moves)
+.bl_edge_t:
+        call    .bl_eqy
+        jp      z,.bl_rejpop
+        ld      a,L_EY0(ix)
+        ld      L_NB(ix),a
+        call    .bl_isect_x            ;; HL = nx
+        jr      .bl_put_xy
+.bl_edge_b:
+        call    .bl_eqy
+        jp      z,.bl_rejpop
+        ld      a,L_EY1(ix)
+        ld      L_NB(ix),a
+        call    .bl_isect_x
+        jr      .bl_put_xy
+.bl_edge_r:
+        call    .bl_eqx
+        jp      z,.bl_rejpop
+        ld      a,L_EX1(ix)
+        ld      L_NB(ix),a
+        call    .bl_isect_y            ;; HL = ny
+        jr      .bl_put_yx
+.bl_edge_l:
+        call    .bl_eqx
+        jp      z,.bl_rejpop
+        ld      a,L_EX0(ix)
+        ld      L_NB(ix),a
+        call    .bl_isect_y
+
+.bl_put_yx:                            ;; HL = ny computed, nx = NB
+        ex      de,hl                  ;; DE = ny
+        ld      l,L_NB(ix)
+        ld      h,#0                   ;; HL = nx
+        jr      .bl_put
+.bl_put_xy:                            ;; HL = nx computed, ny = NB
+        ld      e,L_NB(ix)
+        ld      d,#0                   ;; DE = ny
+.bl_put:
+        pop     bc                     ;; B = c0
+        ld      a,b
+        or      a
+        jr      z,.bl_put1
+        ld      L_X0(ix),l             ;; move endpoint 0
+        ld      L_X0+1(ix),h
+        ld      A_Y0(ix),e
+        ld      A_Y0+1(ix),d
+        jp      .bl_cs_loop
+.bl_put1:
+        ld      A_X1(ix),l             ;; move endpoint 1
+        ld      A_X1+1(ix),h
+        ld      A_Y1(ix),e
+        ld      A_Y1+1(ix),d
+        jp      .bl_cs_loop
+
+.bl_rejpop:
+        pop     bc
+        jp      .bl_reject
+
+        ;; ---- helpers ----
+
+        ;; outcode of (HL=x, DE=y) vs effective rect. A = code, clobbers C.
+.bl_outc:
+        ld      c,#0
+        bit     7,h
+        jr      z,.bo_x1
+        set     OC_LEFT,c             ;; x < 0
+        jr      .bo_y
+.bo_x1:
+        ld      a,h
+        or      a
+        jr      z,.bo_x2
+        set     OC_RIGHT,c            ;; x > 255
+        jr      .bo_y
+.bo_x2:
+        ld      a,l
+        cp      L_EX0(ix)
+        jr      nc,.bo_x3
+        set     OC_LEFT,c
+        jr      .bo_y
+.bo_x3:
+        ld      a,L_EX1(ix)
+        cp      l
+        jr      nc,.bo_y
+        set     OC_RIGHT,c
+.bo_y:
+        bit     7,d
+        jr      z,.bo_y1
+        set     OC_TOP,c              ;; y < 0
+        jr      .bo_ret
+.bo_y1:
+        ld      a,d
+        or      a
+        jr      z,.bo_y2
+        set     OC_BOTTOM,c           ;; y > 255 (> 191)
+        jr      .bo_ret
+.bo_y2:
+        ld      a,e
+        cp      L_EY0(ix)
+        jr      nc,.bo_y3
+        set     OC_TOP,c
+        jr      .bo_ret
+.bo_y3:
+        ld      a,L_EY1(ix)
+        cp      e
+        jr      nc,.bo_ret
+        set     OC_BOTTOM,c
+.bo_ret:
+        ld      a,c
+        ret
+
+        ;; endpoint equality tests (Z set when equal / parallel to edge)
+.bl_eqy:
+        ld      a,A_Y0(ix)
+        cp      A_Y1(ix)
+        ret     nz
+        ld      a,A_Y0+1(ix)
+        cp      A_Y1+1(ix)
+        ret
+.bl_eqx:
+        ld      a,L_X0(ix)
+        cp      A_X1(ix)
+        ret     nz
+        ld      a,L_X0+1(ix)
+        cp      A_X1+1(ix)
+        ret
+
+        ;; HL = |HL - DE| (signed operands), A = 1 iff HL < DE
+.bl_absd:
+        call    __rect_cmp16s_lt       ;; A=1 iff HL<DE; BC/DE/HL preserved
+        or      a
+        jr      z,.ba_sub
+        ex      de,hl
+.ba_sub:
+        or      a                      ;; clear carry, keep A
+        sbc     hl,de
+        ret
+
+        ;; intersection: n = a0 +/- m1*m2/m3 (magnitudes u16, trunc division)
+        ;;   x-flavor (T/B edges): a = x, b = y, NB = edge y
+        ;;   y-flavor (R/L edges): a = y, b = x, NB = edge x
+        ;; Both flavors need P = |x1-x0| and Q = |y1-y0|; they only swap
+        ;; the m1 (numerator) / m3 (divisor) roles, the m2 base coordinate
+        ;; and the a0 base, so P/Q are computed once and arranged after.
+.bl_isect_x:
+        xor     a
+        jr      .bl_isect
+.bl_isect_y:
+        ld      a,#1
+.bl_isect:
+        ld      L_AXIS(ix),a
+        ld      l,A_X1(ix)             ;; P = |x1 - x0|, sign in B
+        ld      h,A_X1+1(ix)
+        ld      e,L_X0(ix)
+        ld      d,L_X0+1(ix)
+        call    .bl_absd
+        ld      b,a                    ;; B survives .bl_absd
+        push    hl                     ;; park P
+        ld      l,A_Y1(ix)             ;; Q = |y1 - y0|, sign in A
+        ld      h,A_Y1+1(ix)
+        ld      e,A_Y0(ix)
+        ld      d,A_Y0+1(ix)
+        call    .bl_absd
+        xor     b
+        ld      L_SIGN(ix),a           ;; sP ^ sQ (m2 sign folded below)
+        pop     de                     ;; DE = P, HL = Q
+        ld      a,L_AXIS(ix)
+        or      a
+        jr      nz,.bi_yflav
+        ;; x-flavor: m1 = P, m3 = Q, b0 = y0, a0 = x0
+        push    de                     ;; [m1 = P]
+        push    hl                     ;; park m3 = Q
+        ld      a,L_X0(ix)
+        ld      L_A0(ix),a
+        ld      a,L_X0+1(ix)
+        ld      L_A0+1(ix),a
+        ld      e,A_Y0(ix)             ;; b0 = y0
+        ld      d,A_Y0+1(ix)
+        jr      .bi_m2
+.bi_yflav:
+        ;; y-flavor: m1 = Q, m3 = P, b0 = x0, a0 = y0
+        push    hl                     ;; [m1 = Q]
+        push    de                     ;; park m3 = P
+        ld      a,A_Y0(ix)
+        ld      L_A0(ix),a
+        ld      a,A_Y0+1(ix)
+        ld      L_A0+1(ix),a
+        ld      e,L_X0(ix)             ;; b0 = x0
+        ld      d,L_X0+1(ix)
+.bi_m2:
+        ld      l,L_NB(ix)             ;; m2 = |nb - b0|
+        ld      h,#0
+        call    .bl_absd
+        ex      de,hl                  ;; DE = m2
+        ld      l,a                    ;; fold m2 sign
+        ld      a,L_SIGN(ix)
+        xor     l
+        ld      L_SIGN(ix),a
+        pop     hl                     ;; m3
+        pop     bc                     ;; m1
+        push    hl                     ;; park m3
+        call    .bl_mul16              ;; DE:HL = m1 * m2
+        ex      de,hl                  ;; HL = hi, DE = lo
+        pop     bc                     ;; m3
+        call    .bl_div                ;; DE = quotient (hi < m3 guaranteed)
+        ld      l,L_A0(ix)
+        ld      h,L_A0+1(ix)
+        ld      a,L_SIGN(ix)
+        or      a
+        jr      z,.bi_add
+        sbc     hl,de                  ;; carry cleared by or above
+        ret
+.bi_add:
+        add     hl,de
+        ret
+
+        ;; DE:HL = DE * BC (unsigned 16x16 -> 32)
+.bl_mul16:
+        ld      hl,#0
+        ld      a,#16
+.bm_loop:
+        add     hl,hl
+        rl      e
+        rl      d
+        jr      nc,.bm_next
+        add     hl,bc
+        jr      nc,.bm_next
+        inc     de
+.bm_next:
+        dec     a
+        jr      nz,.bm_loop
+        ret
+
+        ;; DE = HL:DE / BC (requires HL < BC; that holds: quotient < 2^16),
+        ;; HL = remainder
+.bl_div:
+        ld      a,#16
+.bd_loop:
+        sla     e
+        rl      d
+        adc     hl,hl
+        jr      c,.bd_s17              ;; 17-bit remainder: subtract always
+        sbc     hl,bc                  ;; trial (carry clear from adc)
+        jr      nc,.bd_one
+        add     hl,bc
+        jr      .bd_next
+.bd_s17:
+        or      a
+        sbc     hl,bc
+.bd_one:
+        inc     e                      ;; quotient bit (bit0 vacated by sla)
+.bd_next:
+        dec     a
+        jr      nz,.bd_loop
         ret

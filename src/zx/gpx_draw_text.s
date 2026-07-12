@@ -35,12 +35,6 @@ _gpx_draw_text::
         ld      ix,#0
         add     ix,sp
 
-        ;; keep gpx in alternate HL for draw calls
-        push    hl
-        exx
-        pop     hl
-        exx
-
         ;; text == NULL ?
         ld      a,6(ix)
         or      7(ix)
@@ -128,11 +122,7 @@ _gpx_draw_text::
         ld      h,5(ix)
         push    hl                    ;; y
 
-        exx
-        push    hl
-        exx
-        pop     hl                    ;; gpx
-        ld      e,-1(ix)
+        ld      e,-1(ix)              ;; (gpx arg unused by the bmp core)
         ld      d,-2(ix)              ;; xcur
         ld      b,11(ix)              ;; bmode
         ld      c,10(ix)              ;; color
@@ -245,20 +235,11 @@ _gpx_draw_text::
         ld      h,#BM_CPY
         push    hl                    ;; c,m
 
-        exx
-        push    hl
-        exx
-        pop     hl                    ;; gpx
-
         push    ix
         pop     de
         ld      hl,#-18
         add     hl,de
-        ex      de,hl                 ;; DE = &rect
-        exx
-        push    hl
-        exx
-        pop     hl                    ;; HL = gpx
+        ex      de,hl                 ;; DE = &rect (gpx arg unused)
         call    _gpx_fill_rectangle
         ret
 

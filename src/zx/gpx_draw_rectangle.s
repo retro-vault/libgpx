@@ -10,7 +10,7 @@
 
         .globl  _gpx_draw_rectangle
         .globl  __gpx_hline
-        .globl  __gpx_vline
+        .globl  __gpx_bresenham_line
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
 
@@ -33,16 +33,12 @@ _gpx_draw_rectangle::
         ;; -3..-4   x1
         ;; -5..-6   y0
         ;; -7..-8   y1
-        ;; -9..-10  gpx
+        ;; -9..-10  (unused)
         ;; -11..-12 ytop = y0+1
         ;; -13..-14 ybot = y1-1
         ld      hl,#-14
         add     hl,sp
         ld      sp,hl
-
-        ;; save gpx
-        ld      -9(ix),l
-        ld      -10(ix),h
 
         ;; if (r == NULL) return
         ld      a,d
@@ -66,10 +62,7 @@ _gpx_draw_rectangle::
         ld      l,4(ix)
         ld      h,5(ix)
         push    hl                     ;; c,m
-
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; y1 (unused by hline)
+        push    hl                     ;; y1 slot (ignored by hline)
 
         ld      l,-3(ix)
         ld      h,-4(ix)
@@ -79,9 +72,7 @@ _gpx_draw_rectangle::
         ld      h,-6(ix)
         push    hl                     ;; y0
 
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
+        ld      e,-1(ix)               ;; (gpx arg unused by hline)
         ld      d,-2(ix)
         call    __gpx_hline
 
@@ -97,10 +88,7 @@ _gpx_draw_rectangle::
         ld      l,4(ix)
         ld      h,5(ix)
         push    hl                     ;; c,m
-
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        push    hl                     ;; y1 (unused by hline)
+        push    hl                     ;; y1 slot (ignored by hline)
 
         ld      l,-3(ix)
         ld      h,-4(ix)
@@ -110,8 +98,6 @@ _gpx_draw_rectangle::
         ld      h,-8(ix)
         push    hl                     ;; y0
 
-        ld      l,-9(ix)
-        ld      h,-10(ix)
         ld      e,-1(ix)
         ld      d,-2(ix)
         call    __gpx_hline
@@ -156,19 +142,15 @@ _gpx_draw_rectangle::
         ld      h,-14(ix)
         push    hl                     ;; y1
 
-        ld      l,-1(ix)
-        ld      h,-2(ix)
-        push    hl                     ;; x1 (same as x0)
+        ld      e,-1(ix)
+        ld      d,-2(ix)               ;; DE = x0 (kept for the call)
+        push    de                     ;; x1 slot (same as x0)
 
         ld      l,-11(ix)
         ld      h,-12(ix)
         push    hl                     ;; y0
 
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
-        ld      d,-2(ix)
-        call    __gpx_vline
+        call    __gpx_bresenham_line   ;; dx=0, downward: bres fast path
 
         ;; right side: vline(x1, ytop..ybot), solid
         ld      l,7(ix)
@@ -187,19 +169,15 @@ _gpx_draw_rectangle::
         ld      h,-14(ix)
         push    hl                     ;; y1
 
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; x1
+        ld      e,-3(ix)
+        ld      d,-4(ix)               ;; DE = x1 (kept for the call)
+        push    de                     ;; x1 slot
 
         ld      l,-11(ix)
         ld      h,-12(ix)
         push    hl                     ;; y0
 
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-3(ix)
-        ld      d,-4(ix)
-        call    __gpx_vline
+        call    __gpx_bresenham_line   ;; dx=0, downward: bres fast path
 
 .dr_done:
         ld      sp,ix
@@ -207,8 +185,8 @@ _gpx_draw_rectangle::
 
         ;; callee cleanup: c(1), m(1), lpatt(1), clip(2) = 5
         pop     de
-        ld      hl,#5
-        add     hl,sp
-        ld      sp,hl
+        pop     hl
+        pop     hl
+        inc     sp
         push    de
         ret

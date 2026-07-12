@@ -107,25 +107,24 @@ _gpx_show_sprite::
         cp      #SCRHEIGHT
         jp      nc,.gs_done
 
+        ;; store bitmap/background pointers, null-testing as they stream by
         inc     hl
         ld      a,(hl)
         ld      S_BMP_LO(ix),a
+        ld      c,a
         inc     hl
         ld      a,(hl)
         ld      S_BMP_HI(ix),a
+        or      c
+        jp      z,.gs_done
         inc     hl
         ld      a,(hl)
         ld      S_BG_LO(ix),a
+        ld      c,a
         inc     hl
         ld      a,(hl)
         ld      S_BG_HI(ix),a
-
-        ;; sprite pointers must exist
-        ld      a,S_BMP_LO(ix)
-        or      S_BMP_HI(ix)
-        jp      z,.gs_done
-        ld      a,S_BG_LO(ix)
-        or      S_BG_HI(ix)
+        or      c
         jp      z,.gs_done
 
         ld      l,S_BMP_LO(ix)

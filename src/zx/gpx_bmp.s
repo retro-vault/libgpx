@@ -13,6 +13,7 @@
 
         .globl  _gpx_draw_bmp
         .globl  _gpx_draw_bmp_clip
+        .globl  __gpx_ffshr
         .globl  __rect_cmp16s_lt
         .globl  __vid_rowaddr
 
@@ -121,6 +122,16 @@ _gpx_draw_bmp::
         ;;   C = color
 _gpx_draw_bmp_clip::
 gb_core:
+        ;; Drain y and bitmap-ptr args into the alternate set and park the
+        ;; return address back on the stack; clip stays as the only stack
+        ;; arg (read at 6(ix) below, discarded by the exit). DE = x and
+        ;; BC = mode tags stay live in the main set throughout.
+        exx
+        pop     bc                     ;; BC' = return address
+        pop     hl                     ;; HL' = y
+        pop     de                     ;; DE' = bitmap ptr
+        push    bc                     ;; return address back (clip below it)
+        exx
         push    ix
         push    iy
         ld      ix,#0
@@ -169,28 +180,24 @@ gb_mode_select:
         ld      L_X(iy),e
         ld      L_XHI(iy),d
 
-        ;; Save clip pointer.
-        ld      e,10(ix)
-        ld      d,11(ix)
+        ;; Save clip pointer (the one remaining stack arg).
+        ld      e,6(ix)
+        ld      d,7(ix)
         ST16DE  L_CLIP
 
-        ;; Load full y and bitmap pointer.
-        ld      a,6(ix)
-        ld      L_Y(iy),a
-        ld      a,7(ix)
-        ld      L_YHI(iy),a
-
-        ld      e,8(ix)
-        ld      d,9(ix)
+        ;; y and bitmap pointer were drained into the alternate set.
+        exx
+        ld      L_Y(iy),l
+        ld      L_YHI(iy),h
         ST16DE  L_BPTR
+        push    de
+        exx
+        pop     hl                     ;; HL = bitmap ptr (main set)
 
         ;; Null bitmap -> return.
-        ld      a,d
-        or      e
+        ld      a,h
+        or      l
         jp      z,gb_exit
-
-        ;; Validate encoding + parse compact metadata.
-        ex      de,hl                  ;; HL = b
         ld      a,(hl)
         and     #BMP_SIG_ENC_MASK
         cp      #BMP_SIG_1BPP
@@ -455,11 +462,7 @@ gb_mode_select:
 
         ;; rshift = (dbit - srcbit) & 7
         ld      a,L_DBIT(iy)
-        ld      b,a
-        ld      a,L_SRCBIT(iy)
-        ld      c,a
-        ld      a,b
-        sub     c
+        sub     L_SRCBIT(iy)
         and     #0x07
         ld      L_RSHIFT(iy),a
 
@@ -468,41 +471,19 @@ gb_mode_select:
         and     #0x07
         ld      L_SUB(iy),a
 
-        ;; lmask = ~(0xff >> dbit)
+        ;; lmask = ~(0xff >> dbit)   (dbit=0 -> ~0xff = 0, same formula)
         ld      a,L_DBIT(iy)
-        or      a
-        jr      z,gb_lmask_zero
-        ld      b,a
-        ld      a,#0xff
- gb_lmask_loop:
-        srl     a
-        djnz    gb_lmask_loop
+        call    __gpx_ffshr
         cpl
         ld      L_LMASK(iy),a
-        jr      gb_lmask_done
 
- gb_lmask_zero:
-        xor     a
-        ld      L_LMASK(iy),a
-
- gb_lmask_done:
         ;; rmask = 0xff >> ((dbit + visw) & 7), with 0 -> 0
-        ld      a,L_DBIT(iy)
-        ld      b,a
         ld      a,L_VISW(iy)
-        add     a,b
+        add     a,L_DBIT(iy)
         and     #0x07
         jr      z,gb_rmask_zero
-        ld      b,a
-        ld      a,#0xff
- gb_rmask_loop:
-        srl     a
-        djnz    gb_rmask_loop
-        ld      L_RMASK(iy),a
-        jr      gb_rmask_done
-
+        call    __gpx_ffshr
  gb_rmask_zero:
-        xor     a
         ld      L_RMASK(iy),a
 
  gb_rmask_done:
@@ -874,14 +855,12 @@ gb_mode_select:
         jp      gb_row_loop
 
  gb_exit:
-        ;; callee cleanup: y(2), b(2), clip(2)
+        ;; y and b were popped at entry; drop the remaining clip word.
         ld      sp,ix
         pop     iy
         pop     ix
-        pop     de
-        ld      hl,#6
-        add     hl,sp
-        ld      sp,hl
+        pop     de                     ;; return address
+        pop     hl                     ;; discard clip
         push    de
         ret
 
@@ -918,6 +897,20 @@ gb_mode_select:
         djnz    gb_win_lp
  gb_win_done:
         ld      a,d
+        ret
+
+        ;; __gpx_ffshr: A = 0xff >> A (A = 0..7; 0 -> 0xff). Clobbers B.
+__gpx_ffshr::
+        or      a
+        jr      z,gb_ffshr_ff
+        ld      b,a
+        ld      a,#0xff
+ gb_ffshr_lp:
+        srl     a
+        djnz    gb_ffshr_lp
+        ret
+ gb_ffshr_ff:
+        ld      a,#0xff
         ret
 
         ;; gb_span: A = bit (0..7) -> A = (bit + L_VISW + 7) >> 3

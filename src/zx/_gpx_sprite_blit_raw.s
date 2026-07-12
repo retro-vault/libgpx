@@ -24,6 +24,7 @@
 
         .globl  __gpx_sprite_blit_raw
         .globl  __vid_rowaddr
+        .globl  __gpx_ffshr
 
         .equ    BMP_SIG_ENC_MASK,        0xF0
         .equ    BMP_SIG_1BPP,            0x00
@@ -51,9 +52,6 @@
         .equ    P_AND0,                  -19
         .equ    P_AND1,                  -20
         .equ    P_AND2,                  -21
-        .equ    P_OR0,                   -22
-        .equ    P_OR1,                   -23
-        .equ    P_OR2,                   -24
 
         .macro  LD16HL off
         ld      l,off(ix)
@@ -85,7 +83,7 @@ __gpx_sprite_blit_raw:
         ld      ix,#0
         add     ix,sp
 
-        ld      hl,#-24
+        ld      hl,#-21
         add     hl,sp
         ld      sp,hl
 
@@ -210,28 +208,11 @@ __gpx_sprite_blit_raw:
         push    hl
         pop     iy
 
-        xor     a
-        ld      P_INS0(ix),a
-        ld      P_INS1(ix),a
-        ld      P_INS2(ix),a
-
+        ;; left-keep = ~(0xff >> shift) (shift 0 -> keep nothing = 0)
         ld      a,P_SHIFT(ix)
-        or      a
-        jr      z,.gbr_left_keep_zero
-        ld      b,a
-        ld      a,#8
-        sub     b
-        ld      b,a
-        ld      a,#0xFF
-.gbr_left_keep_loop:
-        add     a,a
-        djnz    .gbr_left_keep_loop
+        call    __gpx_ffshr
+        cpl
         ld      d,a
-        jr      .gbr_left_keep_done
-.gbr_left_keep_zero:
-        xor     a
-        ld      d,a
-.gbr_left_keep_done:
 
         ld      a,P_SHIFT(ix)
         add     a,P_VISW(ix)
@@ -242,20 +223,13 @@ __gpx_sprite_blit_raw:
         srl     a
         ld      P_SPAN(ix),a
 
+        ;; right-keep = 0xff >> ((shift+visw) & 7), 0 -> 0
         ld      a,e
         and     #0x07
-        jr      z,.gbr_right_keep_zero
-        ld      b,a
-        ld      a,#0xFF
-.gbr_right_keep_loop:
-        srl     a
-        djnz    .gbr_right_keep_loop
+        jr      z,.gbr_rk_store        ;; A = 0 stands
+        call    __gpx_ffshr
+.gbr_rk_store:
         ld      e,a
-        jr      .gbr_right_keep_done
-.gbr_right_keep_zero:
-        xor     a
-        ld      e,a
-.gbr_right_keep_done:
 
         ld      a,P_SPAN(ix)
         cp      #1
@@ -301,19 +275,6 @@ __gpx_sprite_blit_raw:
 .gbr_dst_ptr_ok:
         push    hl
 
-        ld      b,0(iy)                ;; OR byte 0 (IY = pinned OR src ptr)
-        ld      a,P_STRIDE(ix)
-        cp      #2
-        jr      nz,.gbr_or_second_zero
-        ld      c,1(iy)                ;; OR byte 1 (stride 2)
-        jr      .gbr_or_ready
-.gbr_or_second_zero:
-        xor     a
-        ld      c,a
-.gbr_or_ready:
-        ld      P_OR0(ix),b
-        ld      P_OR1(ix),c
-
         ld      a,P_MASKED(ix)
         or      a
         jr      z,.gbr_load_std_and
@@ -343,8 +304,7 @@ __gpx_sprite_blit_raw:
         ld      d,#0xFF
         ld      e,#0xFF
 .gbr_and_ready:
-        pop     hl
-
+        ;; shift AND plane into D:E:B, park in the frame
         xor     a
         ld      b,a
         ld      a,P_SHIFT(ix)
@@ -361,8 +321,18 @@ __gpx_sprite_blit_raw:
         ld      P_AND1(ix),e
         ld      P_AND2(ix),b
 
-        ld      b,P_OR0(ix)
-        ld      c,P_OR1(ix)
+        ;; OR plane straight from the pinned source into B:C, shifted
+        ;; into B:C:D — stays in registers through composition
+        ld      b,0(iy)
+        ld      a,P_STRIDE(ix)
+        cp      #2
+        jr      nz,.gbr_or_second_zero
+        ld      c,1(iy)
+        jr      .gbr_or_ready
+.gbr_or_second_zero:
+        xor     a
+        ld      c,a
+.gbr_or_ready:
         xor     a
         ld      d,a
         ld      a,P_SHIFT(ix)
@@ -376,23 +346,17 @@ __gpx_sprite_blit_raw:
         dec     e
         jr      nz,.gbr_or_shift_loop
 .gbr_or_shift_done:
-        ld      P_OR0(ix),b
-        ld      P_OR1(ix),c
-        ld      P_OR2(ix),d
+        pop     hl                     ;; destination
 
+        ;; compose: new = (old & ANDn) | ORn, then merge under INSn via
+        ;; old ^ ((old ^ new) & INSn)
         ld      a,(hl)
-        ld      e,a                    ;; E = old byte (A already holds it)
+        ld      e,a
         and     P_AND0(ix)
-        or      P_OR0(ix)
-        ld      d,a
-        ld      c,P_INS0(ix)           ;; cache INS0 (C is free here)
-        ld      a,c
-        and     d
-        ld      d,a
-        ld      a,c
-        cpl
-        and     e
-        or      d
+        or      b
+        xor     e
+        and     P_INS0(ix)
+        xor     e
         ld      (hl),a
 
         ld      a,P_SPAN(ix)
@@ -401,18 +365,12 @@ __gpx_sprite_blit_raw:
 
         inc     hl
         ld      a,(hl)
-        ld      e,a                    ;; E = old byte (A already holds it)
+        ld      e,a
         and     P_AND1(ix)
-        or      P_OR1(ix)
-        ld      d,a
-        ld      c,P_INS1(ix)           ;; cache INS1 (C is free here)
-        ld      a,c
-        and     d
-        ld      d,a
-        ld      a,c
-        cpl
-        and     e
-        or      d
+        or      c
+        xor     e
+        and     P_INS1(ix)
+        xor     e
         ld      (hl),a
 
         ld      a,P_SPAN(ix)
@@ -421,18 +379,12 @@ __gpx_sprite_blit_raw:
 
         inc     hl
         ld      a,(hl)
-        ld      e,a                    ;; E = old byte (A already holds it)
+        ld      e,a
         and     P_AND2(ix)
-        or      P_OR2(ix)
-        ld      d,a
-        ld      c,P_INS2(ix)           ;; cache INS2 (C is free here)
-        ld      a,c
-        and     d
-        ld      d,a
-        ld      a,c
-        cpl
-        and     e
         or      d
+        xor     e
+        and     P_INS2(ix)
+        xor     e
         ld      (hl),a
 
 .gbr_next_row:

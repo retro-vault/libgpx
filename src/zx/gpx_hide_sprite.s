@@ -52,5 +52,4 @@ _gpx_hide_sprite::
 
         ex      de,hl
         ld      a,#1                  ;; standard bitmap copy mode
-        call    __gpx_sprite_blit_raw
-        ret
+        jp      __gpx_sprite_blit_raw ;; tail call

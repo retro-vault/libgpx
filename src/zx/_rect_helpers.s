@@ -8,8 +8,25 @@
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
         .globl  __clip_seg
+        .globl  __ret_clean11
 
         .area   _CODE
+
+        ;; ------------------------------------------------------------
+        ;; __ret_clean11
+        ;;
+        ;; Shared callee-cleanup tail for the line-family entry points
+        ;; (draw_line/hline/vline/bresenham all clean 11 stack bytes).
+        ;; Enter via jp with the return value in A and the caller frame
+        ;; already unwound to [ret][args]. Clobbers DE/HL.
+        ;; ------------------------------------------------------------
+__ret_clean11:
+        pop     de                     ;; return address
+        ld      hl,#11
+        add     hl,sp
+        ld      sp,hl
+        push    de
+        ret
 
         ;; ------------------------------------------------------------
         ;; __clip_seg

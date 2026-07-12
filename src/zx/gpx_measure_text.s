@@ -32,19 +32,22 @@ _gpx_measure_text::
         jp      z,.mt_zero
 
         push    ix
-        push    iy
         push    de
         pop     ix                      ;; IX = font
         push    hl
-        pop     iy                      ;; IY = text
+        exx
+        pop     hl                      ;; HL' = text (survives the lookup)
+        exx
 
         ld      bc,#0x0000              ;; BC = accumulated width
 
 .mt_loop:
-        ld      a,0(iy)                 ;; ch = *text
+        exx                             ;; ch = *text++ from the alt bank
+        ld      a,(hl)
         or      a
+        inc     hl
+        exx                             ;; flags survive exx
         jr      z,.mt_done
-        inc     iy
 
         ;; width = __gpx_glyph_lookup(ch, font).  IX = font here, so pass
         ;; font in DE; the helper preserves IX and clobbers BC (the width
@@ -81,7 +84,6 @@ _gpx_measure_text::
 .mt_done:
         ld      d,b
         ld      e,c
-        pop     iy
         pop     ix
         ret
 

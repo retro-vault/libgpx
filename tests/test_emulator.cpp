@@ -475,6 +475,7 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum hline spans", "bin/zx/test_hline_spans.ihx", "bin/zx-oracle/test_hline_spans.ihx");
     status |= run_target_against_oracle("ZX Spectrum vline spans", "bin/zx/test_vline_spans.ihx", "bin/zx-oracle/test_vline_spans.ihx");
     status |= run_target_against_oracle("ZX Spectrum line clip cross", "bin/zx/test_line_clip_cross.ihx", "bin/zx-oracle/test_line_clip_cross.ihx");
+    status |= run_target_against_oracle("ZX Spectrum line clip diagonal", "bin/zx/test_line_clip_diag.ihx", "bin/zx-oracle/test_line_clip_diag.ihx");
     status |= run_target_against_oracle("ZX Spectrum line xor", "bin/zx/test_line_xor.ihx", "bin/zx-oracle/test_line_xor.ihx");
     status |= run_target_against_oracle("ZX Spectrum rect grid", "bin/zx/test_rect_grid.ihx", "bin/zx-oracle/test_rect_grid.ihx");
     status |= run_target_against_oracle("ZX Spectrum rect clip", "bin/zx/test_rect_clip2.ihx", "bin/zx-oracle/test_rect_clip2.ihx");
