@@ -108,6 +108,47 @@ void main(void)
     gpx_set_page(PG_DISPLAY | PG_WRITE, 0);
     mark(gpx, 9, 0);
 
+    /* XOR sprite semantics: show draws the tiny-vector bitmap in XOR,
+     * hide draws it again — show+hide must leave the screen untouched.
+     * Three identical backdrops: A gets a lasting sprite, B gets
+     * show+hide (must equal C, the pure backdrop). */
+    {
+        sprite_t spr;
+        rect_t win_d = {905, 140, 920, 158};
+        rect_t win_e = {905, 180, 920, 198};
+        spr.bitmap = gpx_get_stock_bmp(GPXSB_CURSOR_STD);
+        spr.background = (bmp_t *)0;
+        spr.clip = (const rect_t *)0;
+        gpx_draw_line(gpx, 800, 150, 840, 150, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        gpx_draw_line(gpx, 800, 190, 840, 190, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        gpx_draw_line(gpx, 800, 230, 840, 230, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        spr.x = 810;
+        spr.y = 144;
+        gpx_show_sprite(gpx, &spr);            /* A: lasting sprite */
+        spr.y = 184;
+        gpx_show_sprite(gpx, &spr);
+        gpx_hide_sprite(gpx, &spr);            /* B: net identity */
+
+        /* window-clipped sprites: strokes restricted to sprite->clip */
+        gpx_draw_line(gpx, 900, 150, 940, 150, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        gpx_draw_line(gpx, 900, 190, 940, 190, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        gpx_draw_line(gpx, 900, 230, 940, 230, CO_FORE, BM_CPY, 0xFF,
+                      (const rect_t *)0);
+        spr.x = 910;
+        spr.y = 144;
+        spr.clip = &win_d;
+        gpx_show_sprite(gpx, &spr);            /* D: lasting, clipped */
+        spr.y = 184;
+        spr.clip = &win_e;
+        gpx_show_sprite(gpx, &spr);
+        gpx_hide_sprite(gpx, &spr);            /* E: identity under clip */
+    }
+
     if (ok)
         mark(gpx, 10, 0);
 

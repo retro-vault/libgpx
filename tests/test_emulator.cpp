@@ -490,6 +490,7 @@ int main()
     status |= run_target_against_oracle("ZX Spectrum bmp gather", "bin/zx/test_bmp_gather.ihx", "bin/zx-oracle/test_bmp_gather.ihx");
     status |= run_target_against_oracle("ZX Spectrum clip edges", "bin/zx/test_clip_edges.ihx", "bin/zx-oracle/test_clip_edges.ihx");
     status |= run_target_against_oracle("ZX Spectrum sprite align", "bin/zx/test_sprite_align.ihx", "bin/zx-oracle/test_sprite_align.ihx");
+    status |= run_target_against_oracle("ZX Spectrum sprite clip", "bin/zx/test_sprite_clip.ihx", "bin/zx-oracle/test_sprite_clip.ihx");
     status |= run_target_against_oracle("ZX Spectrum plot raw", "bin/zx/test_plot_raw.ihx", "bin/zx-oracle/test_plot_raw.ihx");
     status |= run_target_against_oracle("ZX Spectrum text gaps", "bin/zx/test_text_gaps.ihx", "bin/zx-oracle/test_text_gaps.ihx");
     status |= run_target_against_oracle("ZX Spectrum measure widths", "bin/zx/test_measure2.ihx", "bin/zx-oracle/test_measure2.ihx");

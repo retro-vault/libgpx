@@ -46,6 +46,7 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/gpx_draw_text.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_line.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_rectangle.s \
+	$(ROOT_DIR)/src/partner/gpx_show_sprite.s \
 	$(ROOT_DIR)/src/partner/gpx_fill_rectangle.s \
 	$(ROOT_DIR)/src/partner/_gpx_get_system_font.s \
 	$(ROOT_DIR)/src/partner/_gpx_get_tiny_font.s \
@@ -53,7 +54,6 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/_gpx_cursors_tiny.s \
 	$(ROOT_DIR)/src/partner/_gpx_bresenham_line.s \
 	$(ROOT_DIR)/src/partner/_gpx_cohen_sutherland.s \
-	$(ROOT_DIR)/src/partner/_gpx_cs_intersection.s \
 	$(ROOT_DIR)/src/partner/_ef9367.s \
 	$(ROOT_DIR)/src/partner/_rect_helpers.s \
 	$(ROOT_DIR)/src/partner/_qmath.s \

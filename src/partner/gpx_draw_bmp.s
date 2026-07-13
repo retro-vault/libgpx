@@ -7,7 +7,9 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_bmp
+        .globl  _gpx_draw_bmp_xor
         .globl  _gpx_draw_line
+        .globl  __rect_cmp16s_lt
 
         .equ    BMP_ENC_TINY,          0x02
         .equ    BMP_ENC_TINY_MASK,     0x03
@@ -15,6 +17,7 @@
         .equ    CO_FORE,               0x01
         .equ    CO_BACK,               0x00
         .equ    BM_CPY,                0x00
+        .equ    BM_XOR,                0x01
         .equ    LPATT_SOLID,           0xFF
 
         ;; locals (40 bytes)
@@ -33,6 +36,9 @@
         .equ    L_W_HI,                -12
         .equ    L_H_LO,                -13
         .equ    L_H_HI,                -14
+        .equ    L_MODE,                -15
+        .equ    L_BOXW,                -16
+        .equ    L_BOXH,                -17
         .equ    L_MOVES,               -33
         .equ    L_I,                   -34
         .equ    L_X0_LO,               -35
@@ -55,7 +61,14 @@
         ;;
         ;; Clobbers:
         ;;   AF, BC, DE, HL, IX
+        ;; XOR entry: same signature, strokes drawn in BM_XOR (used by
+        ;; the show/hide sprite pair; XOR twice restores the screen).
+_gpx_draw_bmp_xor::
+        ld      a,#BM_XOR
+        jr      .bmp_entry
 _gpx_draw_bmp::
+        ld      a,#BM_CPY
+.bmp_entry:
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -67,6 +80,7 @@ _gpx_draw_bmp::
         ld      hl,#-40
         add     hl,sp
         ld      sp,hl
+        ld      L_MODE(ix),a           ;; stroke blit mode (CPY or XOR)
 
         ;; cache args
         ld      L_GPX_LO(ix),c
@@ -119,7 +133,11 @@ _gpx_draw_bmp::
         ld      l,L_BMP_LO(ix)
         ld      h,L_BMP_HI(ix)
         inc     hl
+        ld      a,(hl)                  ;; declared width (box pre-clip)
+        ld      L_BOXW(ix),a
         inc     hl
+        ld      a,(hl)                  ;; declared height
+        ld      L_BOXH(ix),a
         inc     hl
         ld      a,(hl)                  ;; size low
         ld      L_MOVES(ix),a
@@ -145,6 +163,110 @@ _gpx_draw_bmp::
 
         ld      L_DAT_LO(ix),l
         ld      L_DAT_HI(ix),h
+
+        ;; ---- box pre-clip (per-bitmap clip box, tiny_clip_t idea) ----
+        ;; The declared w x h box bounds every stroke: box fully inside
+        ;; the clip -> strokes skip per-stroke clipping (clip := NULL);
+        ;; fully outside -> nothing to draw; straddling keeps per-stroke
+        ;; Cohen-Sutherland. Degenerate w/h = 0 skips the optimization so
+        ;; contract-breaking assets keep the old behavior. Uses the
+        ;; L_X0/L_Y0 stroke scratch (initialized right below).
+        ld      a,L_CLIP_LO(ix)
+        or      L_CLIP_HI(ix)
+        jp      z,.bmp_box_done
+        ld      a,L_BOXW(ix)
+        or      a
+        jp      z,.bmp_box_done
+        ld      a,L_BOXH(ix)
+        or      a
+        jp      z,.bmp_box_done
+        ;; box x1 -> L_X0, box y1 -> L_Y0 (scratch)
+        ld      l,L_X_LO(ix)
+        ld      h,L_X_HI(ix)
+        ld      e,L_BOXW(ix)
+        ld      d,#0
+        add     hl,de
+        dec     hl
+        ld      L_X0_LO(ix),l
+        ld      L_X0_HI(ix),h
+        ld      l,L_Y_LO(ix)
+        ld      h,L_Y_HI(ix)
+        ld      e,L_BOXH(ix)
+        ld      d,#0
+        add     hl,de
+        dec     hl
+        ld      L_Y0_LO(ix),l
+        ld      L_Y0_HI(ix),h
+        ld      l,L_CLIP_LO(ix)
+        ld      h,L_CLIP_HI(ix)
+        push    hl
+        pop     iy                      ;; IY = clip fields
+        ld      b,#1                    ;; fully-inside until disproven
+        ;; x axis
+        ld      e,0(iy)
+        ld      d,1(iy)                 ;; DE = cx0
+        ld      l,L_X0_LO(ix)
+        ld      h,L_X0_HI(ix)
+        call    __rect_cmp16s_lt        ;; box_x1 < cx0 -> fully outside
+        or      a
+        jp      nz,.bmp_done
+        ld      l,L_X_LO(ix)
+        ld      h,L_X_HI(ix)
+        call    __rect_cmp16s_lt        ;; x < cx0 -> not fully inside
+        or      a
+        jr      z,.bmp_box_x1
+        ld      b,#0
+.bmp_box_x1:
+        ld      l,4(iy)
+        ld      h,5(iy)                 ;; HL = cx1
+        ld      e,L_X_LO(ix)
+        ld      d,L_X_HI(ix)
+        call    __rect_cmp16s_lt        ;; cx1 < x -> fully outside
+        or      a
+        jp      nz,.bmp_done
+        ld      e,L_X0_LO(ix)
+        ld      d,L_X0_HI(ix)
+        call    __rect_cmp16s_lt        ;; cx1 < box_x1 -> not fully inside
+        or      a
+        jr      z,.bmp_box_y0
+        ld      b,#0
+.bmp_box_y0:
+        ;; y axis
+        ld      e,2(iy)
+        ld      d,3(iy)                 ;; DE = cy0
+        ld      l,L_Y0_LO(ix)
+        ld      h,L_Y0_HI(ix)
+        call    __rect_cmp16s_lt        ;; box_y1 < cy0 -> fully outside
+        or      a
+        jp      nz,.bmp_done
+        ld      l,L_Y_LO(ix)
+        ld      h,L_Y_HI(ix)
+        call    __rect_cmp16s_lt        ;; y < cy0 -> not fully inside
+        or      a
+        jr      z,.bmp_box_y1
+        ld      b,#0
+.bmp_box_y1:
+        ld      l,6(iy)
+        ld      h,7(iy)                 ;; HL = cy1
+        ld      e,L_Y_LO(ix)
+        ld      d,L_Y_HI(ix)
+        call    __rect_cmp16s_lt        ;; cy1 < y -> fully outside
+        or      a
+        jp      nz,.bmp_done
+        ld      e,L_Y0_LO(ix)
+        ld      d,L_Y0_HI(ix)
+        call    __rect_cmp16s_lt        ;; cy1 < box_y1 -> not fully inside
+        or      a
+        jr      z,.bmp_box_class
+        ld      b,#0
+.bmp_box_class:
+        ld      a,b
+        or      a
+        jr      z,.bmp_box_done         ;; straddling: keep per-stroke clip
+        xor     a                       ;; fully inside: strokes skip C-S
+        ld      L_CLIP_LO(ix),a
+        ld      L_CLIP_HI(ix),a
+.bmp_box_done:
 
         ;; x0 = x, y0 = y (no origin bytes in payload)
         ld      l,L_X_LO(ix)
@@ -251,7 +373,7 @@ _gpx_draw_bmp::
         ld      b,#CO_BACK
 
 .bmp_tiny_draw:
-        ;; gpx_draw_line(gpx, x0, y0, x1, y1, color, BM_CPY, 0xFF, clip)
+        ;; gpx_draw_line(gpx, x0, y0, x1, y1, color, L_MODE, 0xFF, clip)
         ld      l,L_CLIP_LO(ix)
         ld      h,L_CLIP_HI(ix)
         push    hl                     ;; clip
@@ -263,7 +385,7 @@ _gpx_draw_bmp::
         ld      (hl),a                 ;; lpatt
 
         ld      l,b                     ;; color
-        ld      h,#BM_CPY
+        ld      h,L_MODE(ix)           ;; CPY normally, XOR for sprites
         push    hl                     ;; c,m
 
         ld      l,L_H_LO(ix)

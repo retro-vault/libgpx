@@ -1,6 +1,6 @@
 #include "libgpx.h"
 
-static uint8_t std_sprite[] = {
+static const uint8_t std_sprite[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP, 2), 12, 6, 12, 0,
     0xFF, 0xF0,
     0x80, 0x10,

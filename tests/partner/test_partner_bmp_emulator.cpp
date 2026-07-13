@@ -59,6 +59,9 @@ int main()
 
     // Tiny with large clip (relative clip preparation + 0x20 tiny signature).
     check(pixel_on(screen, 40, 30, width, height), "tiny-large point 40,30 missing", failures);
+
+    check(!pixel_on(screen, 60, 30, width, height),
+        "box pre-clip: fully-excluded tiny must not draw", failures);
     check(pixel_on(screen, 42, 30, width, height), "tiny-large point 42,30 missing", failures);
     check(pixel_on(screen, 43, 30, width, height), "tiny-large point 43,30 missing", failures);
     check(pixel_on(screen, 43, 31, width, height), "tiny-large point 43,31 missing", failures);

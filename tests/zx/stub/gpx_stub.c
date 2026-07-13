@@ -107,7 +107,7 @@ static void zx_host_init_font_blob(void)
 }
 #endif
 
-static uint8_t zx_stock_classic[] = {
+static const uint8_t zx_stock_classic[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
     0b00111111, 0b00000000,
     0b00011111, 0b01000000,
@@ -121,7 +121,7 @@ static uint8_t zx_stock_classic[] = {
     0b11110111, 0b00000000,
     0x01, 0x01
 };
-static uint8_t zx_stock_std[] = {
+static const uint8_t zx_stock_std[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
     0b11111111, 0b11000000,
     0b00011111, 0b10100000,
@@ -135,7 +135,7 @@ static uint8_t zx_stock_std[] = {
     0b11100111, 0b00011000,
     0x01, 0x01
 };
-static uint8_t zx_stock_hourglass[] = {
+static const uint8_t zx_stock_hourglass[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
     0b00000001, 0b11111110,
     0b10000011, 0b01000100,
@@ -149,7 +149,7 @@ static uint8_t zx_stock_hourglass[] = {
     0b11111111, 0b00000000,
     0x03, 0x04
 };
-static uint8_t zx_stock_caret[] = {
+static const uint8_t zx_stock_caret[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
     0b00100111, 0b11011000,
     0b00000111, 0b10101000,
@@ -163,7 +163,7 @@ static uint8_t zx_stock_caret[] = {
     0b00100111, 0b11011000,
     0x01, 0x07
 };
-static uint8_t zx_stock_hand[] = {
+static const uint8_t zx_stock_hand[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
     0b11011111, 0b00100000,
     0b10001111, 0b01010000,
@@ -845,7 +845,7 @@ void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite)
         ((uint8_t *)sprite->background)[i] = 0;
 
     zx_capture_sprite_background(sprite, visw, vish);
-    gpx_draw_bmp(gpx, sprite->x, sprite->y, sprite->bitmap, (const rect_t *)0);
+    gpx_draw_bmp(gpx, sprite->x, sprite->y, sprite->bitmap, sprite->clip);
 }
 
 void gpx_hide_sprite(gpx_t *gpx, sprite_t *sprite)

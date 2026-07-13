@@ -11,7 +11,7 @@
  * NOTE: no helper functions — main() must be the lowest code address.
  */
 
-static uint8_t spr_std[] = {
+static const uint8_t spr_std[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP, 2), 12, 6, 12, 0,
     0xFF, 0xF0,
     0x80, 0x10,
@@ -22,7 +22,7 @@ static uint8_t spr_std[] = {
 };
 
 /* masked 12x6 stride 2: per row AND0 AND1 OR0 OR1. size = 6*2*2 = 24 */
-static uint8_t spr_msk[] = {
+static const uint8_t spr_msk[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 2), 12, 6, 24, 0,
     0x00, 0x00, 0xFF, 0xF0,
     0x0F, 0x00, 0xF0, 0x00,
@@ -53,6 +53,7 @@ void main(void)
     /* --- standard sprite: show->hide round-trip at every x&7 (incl right edge) --- */
     s.bitmap = (bmp_t *)spr_std;
     s.background = (bmp_t *)bg_rt;
+    s.clip = (const rect_t *)0;
     for (dx = 0; dx < 8; ++dx) {
         s.x = (coord)(40 + dx);
         s.y = 28;

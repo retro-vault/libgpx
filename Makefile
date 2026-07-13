@@ -21,7 +21,7 @@ PARTNER_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME).tar.gz
 export DOCKER_SPEC DOCKER_PARTNER DOCKER_USER SDCC
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR RELEASE_DIR VERSION
 
-.PHONY: all build lib partner-lib package-zx package-partner release-packages tests coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 clean
+.PHONY: all build lib partner-lib package-zx package-partner release-packages tests coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 clean
 
 all: build
 
@@ -64,6 +64,9 @@ lib-size:
 
 demo1:
 	$(MAKE) -C samples/demo1 build
+
+demo2:
+	$(MAKE) -C samples/demo2 build
 
 $(RELEASE_DIR):
 	mkdir -p $@

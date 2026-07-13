@@ -100,13 +100,19 @@ typedef struct gpx_s gpx_t;
 
 /* Save-under sprite descriptor. The bitmap pointer is the source image;
  * the background pointer must reference writable storage of at least
- * GPX_SPRITE_BG_SIZE bytes. */
+ * GPX_SPRITE_BG_SIZE bytes (unused on vector platforms, may be NULL).
+ * clip is an optional window rect: the sprite renders only inside it
+ * (NULL = whole screen). Show and hide both read it from the descriptor
+ * so they use the same window; keep it unchanged between the two calls.
+ * ZX captures/restores the full background box regardless, so hide also
+ * heals pixels the clip suppressed. */
 typedef struct sprite_s
 {
     coord x;
     coord y;
     bmp_t *bitmap;
     bmp_t *background;
+    const rect_t *clip;
 } sprite_t;
 
 /* Font header flags (byte 0). */

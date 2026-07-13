@@ -72,6 +72,59 @@ int main()
     check(any_pixel_in_rect(screen, 20, 20, 31, 35, width, height),
         "draw_text produced no pixels in expected area", failures);
 
+    /* XOR sprite: region B (show+hide over backdrop at y=190) must equal
+     * region C (pure backdrop at y=230) pixel for pixel; region A
+     * (lasting sprite at y=150) must differ from C somewhere. */
+    {
+        int identity_bad = 0;
+        bool shown_differs = false;
+        for (int k = -10; k <= 26; ++k) {
+            for (int x = 780; x <= 870; ++x) {
+                bool a = pixel_on(screen, x, 150 + k, width, height);
+                bool b = pixel_on(screen, x, 190 + k, width, height);
+                bool c = pixel_on(screen, x, 230 + k, width, height);
+                if (b != c)
+                    ++identity_bad;
+                if (a != c)
+                    shown_differs = true;
+            }
+        }
+        check(identity_bad == 0,
+            "XOR sprite show+hide must restore the screen", failures);
+        check(shown_differs,
+            "XOR sprite show must change pixels", failures);
+    }
+
+    /* window-clipped sprite column: D (lasting, clip {905,140,920,158})
+     * vs F (pure backdrop); E (show+hide under clip) must equal F. */
+    {
+        int identity_bad = 0;
+        int outside_bad = 0;
+        bool clipped_differs = false;
+        for (int k = -10; k <= 26; ++k) {
+            for (int x = 890; x <= 950; ++x) {
+                bool d = pixel_on(screen, x, 150 + k, width, height);
+                bool e = pixel_on(screen, x, 190 + k, width, height);
+                bool f = pixel_on(screen, x, 230 + k, width, height);
+                if (e != f)
+                    ++identity_bad;
+                if (d != f) {
+                    clipped_differs = true;
+                    bool inside = x >= 905 && x <= 920 &&
+                                  (150 + k) >= 140 && (150 + k) <= 158;
+                    if (!inside)
+                        ++outside_bad;
+                }
+            }
+        }
+        check(identity_bad == 0,
+            "clipped XOR sprite show+hide must restore the screen", failures);
+        check(clipped_differs,
+            "clipped sprite must draw inside its window", failures);
+        check(outside_bad == 0,
+            "clipped sprite must not draw outside its window", failures);
+    }
+
     if (failures == 0) {
         std::cout << "Partner API emulator test passed.\n";
         return 0;

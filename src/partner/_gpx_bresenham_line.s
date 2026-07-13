@@ -6,7 +6,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_bresenham_line_local
-        .globl  __cs_rect_cmp16s_lt
+        .globl  __rect_cmp16s_lt
         .globl  __ef9367_set_xy
         .globl  __ef9367_exec_cmd
 
@@ -61,7 +61,7 @@ __gpx_bresenham_line_local:
         ld      h,S_X1_HI(ix)          ;; HL = x1
         ld      e,S_X0_LO(ix)
         ld      d,S_X0_HI(ix)          ;; DE = x0
-        call    __cs_rect_cmp16s_lt
+        call    __rect_cmp16s_lt
         or      a
         jr      z,.gbl_dx_pos
 
@@ -94,7 +94,7 @@ __gpx_bresenham_line_local:
         ld      h,S_Y1_HI(ix)          ;; HL = y1
         ld      e,S_Y0_LO(ix)
         ld      d,S_Y0_HI(ix)          ;; DE = y0
-        call    __cs_rect_cmp16s_lt
+        call    __rect_cmp16s_lt
         or      a
         jr      z,.gbl_dy_pos
 
@@ -185,7 +185,7 @@ __gpx_bresenham_line_local:
         ld      h,BS_NDY_HI(ix)        ;; HL = -dy
         ld      e,BS_E2_LO(ix)
         ld      d,BS_E2_HI(ix)         ;; DE = e2
-        call    __cs_rect_cmp16s_lt    ;; (-dy < e2)?
+        call    __rect_cmp16s_lt    ;; (-dy < e2)?
         or      a
         jr      z,.gbl_skip_x
 
@@ -223,7 +223,7 @@ __gpx_bresenham_line_local:
         ld      h,BS_E2_HI(ix)         ;; HL = e2
         ld      e,BS_DX_LO(ix)
         ld      d,BS_DX_HI(ix)         ;; DE = dx
-        call    __cs_rect_cmp16s_lt
+        call    __rect_cmp16s_lt
         or      a
         jr      z,.gbl_rot
 

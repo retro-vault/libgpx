@@ -1,403 +1,374 @@
-        ;; __gpx_cohen_sutherland.s
+        ;; _gpx_cohen_sutherland.s
         ;;
-        ;; Full Cohen-Sutherland clipping using bisection intersections.
+        ;; Cohen-Sutherland line clip with exact parametric intersections.
+        ;;
+        ;; Replaces the earlier bisection-based implementation: coordinate
+        ;; -pair bisection converges on the clipped edge axis but leaves
+        ;; the transverse coordinate unsupervised (it tracks the chord of
+        ;; rounded midpoints, not the line), drifting up to the length of
+        ;; a grazing run. The intersection here is computed from the line
+        ;; equation with unsigned 16-bit magnitudes:
+        ;;     n = a0 +/- |a1-a0| * |edge-b0| / |b1-b0|
+        ;; using a 16x16->32 shift-add multiply and a 32/16 restoring
+        ;; divide (the numerator high word is provably below the divisor,
+        ;; so 16 quotient bits always suffice). Truncating semantics match
+        ;; a C int32 expression bit for bit.
+        ;;
+        ;; Edge priority: TOP, BOTTOM, RIGHT, LEFT. A rect with swapped
+        ;; corners rejects every line (both outcodes share a bit).
+        ;;
+        ;; Re-entrant: all state lives in registers and the stack frame.
 
-        .module __gpx_cohen_sutherland
+        .module _gpx_cohen_sutherland
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_cohen_sutherland
-        .globl  __cs_compute_code
-        .globl  __cs_rect_cmp16s_lt
-        .globl  __gpx_cs_intersection_bisect
+        .globl  __rect_cmp16s_lt
+
+        ;; frame locals (IX-relative)
+        .equ    L_S,    -2             ;; state ptr (x0,y0,x1,y1 words)
+        .equ    L_R,    -4             ;; rect ptr
+        .equ    L_NB,   -6             ;; word: clip-edge coordinate
+        .equ    L_SIGN, -7             ;; folded sign of the offset
+        .equ    L_AXIS, -8             ;; 0 = x-flavor (T/B), 1 = y (R/L)
+        .equ    L_A0,   -10            ;; word: intersection base coord
+
+        ;; state-field offsets
+        .equ    SO_X0,  0
+        .equ    SO_Y0,  2
+        .equ    SO_X1,  4
+        .equ    SO_Y1,  6
 
         .area   _CODE
 
-        .equ    CS_LEFT,             0x01
-        .equ    CS_RIGHT,            0x02
-        .equ    CS_TOP,              0x04
-        .equ    CS_BOTTOM,           0x08
-
         ;; ------------------------------------------------------------
         ;; uint8_t gpx_cohen_sutherland(gpx_line_state_t *s, const rect_t *r)
-        ;;   HL = s
+        ;;   HL = s (x0,y0,x1,y1 consecutive words; clipped in place)
         ;;   DE = r
         ;; returns:
         ;;   A = 1 accepted (and clipped), A = 0 rejected
+        ;; Clobbers AF, BC, DE, HL, IY (and the alternate HL'/DE').
         ;; ------------------------------------------------------------
 __gpx_cohen_sutherland::
         push    ix
         ld      ix,#0
         add     ix,sp
-
-        ;; locals: 18 bytes
-        ;; -18  loop_guard
-        ;; -1   oc0
-        ;; -2   oc1
-        ;; -3   oc
-        ;; -5..-4 yi
-        ;; -7..-6 xi
-        ;; -9..-8 pyo ptr
-        ;; -11..-10 pxo ptr
-        ;; -15..-14 r ptr
-        ;; -17..-16 s ptr
-        ld      c,l                    ;; save s ptr
-        ld      b,h
-        ld      hl,#-18
+        push    hl                     ;; L_S
+        push    de                     ;; L_R
+        ld      hl,#-6                 ;; NB, SIGN, AXIS, A0
         add     hl,sp
         ld      sp,hl
-
-        ld      -18(ix),#24            ;; hard stop: guarantee termination
-        ld      -17(ix),c
-        ld      -16(ix),b
-        ld      -15(ix),e
-        ld      -14(ix),d
+        push    de
+        pop     iy                     ;; IY = rect (field access)
 
 .cs_loop:
-        ld      a,-18(ix)
-        or      a
-        jp      z,.cs_reject
-        dec     a
-        ld      -18(ix),a
-
-        ;; IY = r
-        ld      l,-15(ix)
-        ld      h,-14(ix)
-        push    hl
-        pop     iy
-
-        ;; oc0 = outcode(s->x0, s->y0, r)
-        ld      l,-17(ix)
-        ld      h,-16(ix)              ;; HL = s
-        ld      e,(hl)                 ;; x0 lo
-        inc     hl
-        ld      d,(hl)                 ;; x0 hi
-        push    de
-        inc     hl
-        ld      e,(hl)                 ;; y0 lo
-        inc     hl
-        ld      d,(hl)                 ;; y0 hi
-        pop     hl                     ;; HL = x0
-        call    __cs_compute_code
-        ld      -1(ix),a
-
-        ;; oc1 = outcode(s->x1, s->y1, r)
-        ld      l,-17(ix)
-        ld      h,-16(ix)              ;; HL = s
-        ld      de,#4
-        add     hl,de                  ;; HL = &x1
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    de
-        inc     hl
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        pop     hl                     ;; HL = x1, DE = y1
-        call    __cs_compute_code
-        ld      -2(ix),a
-
-        ;; accept if (oc0 | oc1) == 0
-        ld      a,-1(ix)
-        or      -2(ix)
+        xor     a                      ;; endpoint 0
+        call    .cs_outc
+        ld      b,a                    ;; B = c0
+        ld      a,#SO_X1               ;; endpoint 1
+        call    .cs_outc               ;; A = c1 (B preserved)
+        ld      c,a
+        or      b
         jp      z,.cs_accept
-
-        ;; reject if (oc0 & oc1) != 0
-        ld      a,-1(ix)
-        and     -2(ix)
+        ld      a,b
+        and     c
         jp      nz,.cs_reject
 
-        ;; choose outside endpoint and inside endpoint
-        ld      a,-1(ix)
+        push    bc                     ;; save which-endpoint (B = c0)
+        ld      a,b
         or      a
-        jr      z,.cs_out_ep1
+        jr      nz,.cs_disp
+        ld      a,c
 
-        ;; outside endpoint = 0
-        ld      a,-1(ix)
-        ld      -3(ix),a               ;; oc = oc0
-
-        ld      l,-17(ix)
-        ld      h,-16(ix)              ;; HL = s
-        ld      -11(ix),l              ;; pxo = &x0
-        ld      -10(ix),h
-
-        inc     hl
-        inc     hl                     ;; &y0
-        ld      -9(ix),l               ;; pyo = &y0
-        ld      -8(ix),h
-
-        inc     hl
-        inc     hl                     ;; &x1
-        ld      a,(hl)
-        ld      -7(ix),a               ;; xi = x1
-        inc     hl
-        ld      a,(hl)
-        ld      -6(ix),a
-
-        inc     hl                     ;; &y1
-        ld      a,(hl)
-        ld      -5(ix),a               ;; yi = y1
-        inc     hl
-        ld      a,(hl)
-        ld      -4(ix),a
-
-        jr      .cs_pick_side
-
-.cs_out_ep1:
-        ;; outside endpoint = 1
-        ld      a,-2(ix)
-        ld      -3(ix),a               ;; oc = oc1
-
-        ld      l,-17(ix)
-        ld      h,-16(ix)              ;; HL = s
-
-        ld      a,(hl)
-        ld      -7(ix),a               ;; xi = x0
-        inc     hl
-        ld      a,(hl)
-        ld      -6(ix),a
-
-        inc     hl
-        ld      a,(hl)
-        ld      -5(ix),a               ;; yi = y0
-        inc     hl
-        ld      a,(hl)
-        ld      -4(ix),a
-
-        inc     hl                     ;; &x1
-        ld      -11(ix),l              ;; pxo = &x1
-        ld      -10(ix),h
-
-        inc     hl
-        inc     hl                     ;; &y1
-        ld      -9(ix),l               ;; pyo = &y1
-        ld      -8(ix),h
-
-.cs_pick_side:
-        ld      a,-3(ix)
-        bit     2,a
-        jr      nz,.cs_top
-        bit     3,a
-        jr      nz,.cs_bottom
-        bit     1,a
-        jr      nz,.cs_right
-        jp      .cs_left
-
-.cs_top:
-        ;; ao=&y_out bo=&x_out ai=y_in bi=x_in edge=r->y0 outside_gt=0
-        ld      a,#0
-        push    af
-        inc     sp
-
-        ld      l,-15(ix)
-        ld      h,-14(ix)              ;; r
-        inc     hl
-        inc     hl                     ;; &y0
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    de                     ;; edge
-
-        ld      l,-7(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; bi = xi
-
-        ld      l,-5(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; ai = yi
-
-        ld      l,-9(ix)
-        ld      h,-8(ix)               ;; ao = pyo
-        ld      e,-11(ix)
-        ld      d,-10(ix)              ;; bo = pxo
-        call    __gpx_cs_intersection_bisect
-        jp      .cs_loop
-
-.cs_bottom:
-        ;; ao=&y_out bo=&x_out ai=y_in bi=x_in edge=r->y1 outside_gt=1
+        ;; edge select (priority T, B, R, L): NB = edge value, AXIS flavor
+.cs_disp:
+        bit     2,a                    ;; TOP
+        jr      z,.cd_notT
+        ld      e,2(iy)
+        ld      d,3(iy)
+        xor     a
+        jr      .cs_edge
+.cd_notT:
+        bit     3,a                    ;; BOTTOM
+        jr      z,.cd_notB
+        ld      e,6(iy)
+        ld      d,7(iy)
+        xor     a
+        jr      .cs_edge
+.cd_notB:
+        bit     1,a                    ;; RIGHT
+        jr      z,.cd_left
+        ld      e,4(iy)
+        ld      d,5(iy)
         ld      a,#1
-        push    af
-        inc     sp
-
-        ld      l,-15(ix)
-        ld      h,-14(ix)              ;; r
-        ld      de,#6
-        add     hl,de                  ;; &y1
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    de                     ;; edge
-
-        ld      l,-7(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; bi = xi
-
-        ld      l,-5(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; ai = yi
-
-        ld      l,-9(ix)
-        ld      h,-8(ix)               ;; ao = pyo
-        ld      e,-11(ix)
-        ld      d,-10(ix)              ;; bo = pxo
-        call    __gpx_cs_intersection_bisect
-        jp      .cs_loop
-
-.cs_right:
-        ;; ao=&x_out bo=&y_out ai=x_in bi=y_in edge=r->x1 outside_gt=1
+        jr      .cs_edge
+.cd_left:
+        ld      e,0(iy)                ;; LEFT
+        ld      d,1(iy)
         ld      a,#1
-        push    af
-        inc     sp
+.cs_edge:
+        ld      L_NB(ix),e
+        ld      L_NB+1(ix),d
+        ld      L_AXIS(ix),a
 
-        ld      l,-15(ix)
-        ld      h,-14(ix)              ;; r
-        ld      de,#4
-        add     hl,de                  ;; &x1
-        ld      e,(hl)
+        ;; ---- intersection: n = a0 +/- m1*m2/m3 ----
+        ;; P = |x1 - x0| (sign parked in B), Q = |y1 - y0| (sign in A)
+        ld      a,#SO_X0
+        call    .cs_ldst
+        ex      de,hl                  ;; DE = x0
+        ld      a,#SO_X1
+        call    .cs_ldst               ;; HL = x1
+        call    .cs_absd
+        ld      b,a
+        push    hl                     ;; park P
+        ld      a,#SO_Y0
+        call    .cs_ldst
+        ex      de,hl
+        ld      a,#SO_Y1
+        call    .cs_ldst
+        call    .cs_absd               ;; HL = Q, A = sQ
+        xor     b
+        ld      L_SIGN(ix),a           ;; sP ^ sQ (m2 sign folded below)
+        pop     de                     ;; DE = P, HL = Q
+
+        ld      a,L_AXIS(ix)
+        or      a
+        jr      nz,.ci_yflav
+        ;; x-flavor: m1 = P, m3 = Q, b0 = y0, a0 = x0
+        push    de                     ;; [m1 = P]
+        push    hl                     ;; park m3 = Q
+        ld      a,#SO_X0
+        call    .cs_ldst
+        ld      L_A0(ix),l
+        ld      L_A0+1(ix),h
+        ld      a,#SO_Y0
+        jr      .ci_m2
+.ci_yflav:
+        ;; y-flavor: m1 = Q, m3 = P, b0 = x0, a0 = y0
+        push    hl                     ;; [m1 = Q]
+        push    de                     ;; park m3 = P
+        ld      a,#SO_Y0
+        call    .cs_ldst
+        ld      L_A0(ix),l
+        ld      L_A0+1(ix),h
+        ld      a,#SO_X0
+.ci_m2:
+        call    .cs_ldst
+        ex      de,hl                  ;; DE = b0
+        ld      l,L_NB(ix)
+        ld      h,L_NB+1(ix)           ;; HL = edge value
+        call    .cs_absd               ;; HL = m2 = |nb - b0|, A = sign
+        ex      de,hl                  ;; DE = m2
+        ld      l,a
+        ld      a,L_SIGN(ix)
+        xor     l
+        ld      L_SIGN(ix),a
+        pop     hl                     ;; m3
+        pop     bc                     ;; m1
+        push    hl                     ;; park m3
+        call    .cs_mul16              ;; DE:HL = m1 * m2
+        ex      de,hl                  ;; HL = hi, DE = lo
+        pop     bc                     ;; m3
+        call    .cs_div                ;; DE = quotient
+        ld      l,L_A0(ix)
+        ld      h,L_A0+1(ix)
+        ld      a,L_SIGN(ix)
+        or      a
+        jr      z,.ci_add
+        sbc     hl,de                  ;; carry clear from or above
+        jr      .cs_put
+.ci_add:
+        add     hl,de
+
+        ;; ---- write the moved endpoint back into the state ----
+.cs_put:
+        ex      de,hl                  ;; DE = computed coordinate
+        ld      l,L_NB(ix)
+        ld      h,L_NB+1(ix)           ;; HL = edge value
+        ld      a,L_AXIS(ix)
+        or      a
+        jr      nz,.cp_go              ;; y-flavor: x = NB, y = computed
+        ex      de,hl                  ;; x-flavor: x = computed, y = NB
+.cp_go:
+        ;; HL = new x, DE = new y; target = out endpoint (c0 != 0 -> p0)
+        pop     bc                     ;; B = c0
+        ld      a,b
+        or      a
+        ld      a,#SO_X0
+        jr      nz,.cp_off
+        ld      a,#SO_X1
+.cp_off:
+        push    hl                     ;; save new x
+        ld      l,L_S(ix)
+        ld      h,L_S+1(ix)
+        add     a,l
+        ld      l,a
+        jr      nc,.cp_ptr
+        inc     h
+.cp_ptr:
+        pop     bc                     ;; BC = new x
+        ld      (hl),c
         inc     hl
-        ld      d,(hl)
-        push    de                     ;; edge
-
-        ld      l,-5(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; bi = yi
-
-        ld      l,-7(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; ai = xi
-
-        ld      l,-11(ix)
-        ld      h,-10(ix)              ;; ao = pxo
-        ld      e,-9(ix)
-        ld      d,-8(ix)               ;; bo = pyo
-        call    __gpx_cs_intersection_bisect
-        jp      .cs_loop
-
-.cs_left:
-        ;; ao=&x_out bo=&y_out ai=x_in bi=y_in edge=r->x0 outside_gt=0
-        ld      a,#0
-        push    af
-        inc     sp
-
-        ld      l,-15(ix)
-        ld      h,-14(ix)              ;; r
-        ld      e,(hl)
+        ld      (hl),b
         inc     hl
-        ld      d,(hl)
-        push    de                     ;; edge
-
-        ld      l,-5(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; bi = yi
-
-        ld      l,-7(ix)
-        ld      h,-6(ix)
-        push    hl                     ;; ai = xi
-
-        ld      l,-11(ix)
-        ld      h,-10(ix)              ;; ao = pxo
-        ld      e,-9(ix)
-        ld      d,-8(ix)               ;; bo = pyo
-        call    __gpx_cs_intersection_bisect
+        ld      (hl),e
+        inc     hl
+        ld      (hl),d
         jp      .cs_loop
 
 .cs_accept:
         ld      a,#1
-        jr      .cs_ret
-
+        jr      .cs_done
 .cs_reject:
         xor     a
-
-.cs_ret:
+.cs_done:
         ld      sp,ix
         pop     ix
         ret
 
         ;; ------------------------------------------------------------
-        ;; uint8_t __cs_compute_code(coord x, coord y, const rect_t *r)
-        ;;   HL = x
-        ;;   DE = y
-        ;;   IY = r
-        ;; returns:
-        ;;   A = outcode
+        ;; .cs_outc: outcode of a state endpoint vs the rect (IY)
+        ;;   IN:  A = state offset (0 = p0, 4 = p1)
+        ;;   OUT: A = code (L=1, R=2, T=4, B=8)
+        ;; Preserves B; clobbers C, DE, HL and the alternate HL'/DE'.
         ;; ------------------------------------------------------------
-__cs_compute_code:
-        push    de                    ;; save y
-        ld      c,#0                  ;; code accumulator
-
-        ;; if (x < r->x0) code |= LEFT;
+.cs_outc:
+        ld      l,L_S(ix)
+        ld      h,L_S+1(ix)
+        add     a,l
+        ld      l,a
+        jr      nc,.co_pt
+        inc     h
+.co_pt:
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        inc     hl
+        ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a                    ;; HL = py, DE = px
+        push    de
+        push    hl
+        exx
+        pop     de                     ;; DE' = py
+        pop     hl                     ;; HL' = px
+        exx
+        ld      c,#0
+        ;; L: px < rx0 ?
+        exx
+        push    hl
+        exx
+        pop     hl                     ;; HL = px
         ld      e,0(iy)
         ld      d,1(iy)
-        call    __cs_rect_cmp16s_lt
-        jr      z,.cc_x_right
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.co_r
         set     0,c
-        jr      .cc_y_enter
-
-.cc_x_right:
-        ;; else if (x > r->x1) code |= RIGHT;  (x1 < x)
-        ex      de,hl                 ;; DE = x
+.co_r:
+        ;; R: rx1 < px ?
         ld      l,4(iy)
         ld      h,5(iy)
-        call    __cs_rect_cmp16s_lt
-        jr      z,.cc_y_enter
+        exx
+        push    hl
+        exx
+        pop     de                     ;; DE = px
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.co_t
         set     1,c
-
-.cc_y_enter:
-        pop     hl                    ;; HL = y
-
-        ;; if (y < r->y0) code |= TOP;
+.co_t:
+        ;; T: py < ry0 ?
+        exx
+        push    de
+        exx
+        pop     hl                     ;; HL = py
         ld      e,2(iy)
         ld      d,3(iy)
-        call    __cs_rect_cmp16s_lt
-        jr      z,.cc_y_bottom
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.co_b
         set     2,c
-        jr      .cc_done
-
-.cc_y_bottom:
-        ;; else if (y > r->y1) code |= BOTTOM; (y1 < y)
-        ex      de,hl                 ;; DE = y
+.co_b:
+        ;; B: ry1 < py ?
         ld      l,6(iy)
         ld      h,7(iy)
-        call    __cs_rect_cmp16s_lt
-        jr      z,.cc_done
+        exx
+        push    de
+        exx
+        pop     de                     ;; DE = py
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.co_ret
         set     3,c
-
-.cc_done:
+.co_ret:
         ld      a,c
         ret
 
-        ;; ------------------------------------------------------------
-        ;; uint8_t __cs_rect_cmp16s_lt(coord a, coord b)
-        ;;   HL = a
-        ;;   DE = b
-        ;; returns:
-        ;;   A = 1 if (a < b), else 0
-        ;; ------------------------------------------------------------
-__cs_rect_cmp16s_lt:
-        ;; Keep compare helper non-destructive for HL/DE.
-        ld      a,h
-        xor     d
-        jp      p,.cs_cmp_same_sign
-
-        ;; different signs: negative is smaller
-        bit     7,h
-        jr      z,.cs_cmp_false
-        ld      a,#1
+        ;; .cs_ldst: HL = state word at offset A.
+.cs_ldst:
+        ld      l,L_S(ix)
+        ld      h,L_S+1(ix)
+        add     a,l
+        ld      l,a
+        jr      nc,.cl_rd
+        inc     h
+.cl_rd:
+        ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a
         ret
 
-.cs_cmp_same_sign:
-        ld      a,h
-        cp      d
-        jr      c,.cs_cmp_true
-        jr      nz,.cs_cmp_false
-        ld      a,l
-        cp      e
-        jr      c,.cs_cmp_true
-
-.cs_cmp_false:
-        xor     a
+        ;; .cs_absd: HL = |HL - DE| (signed operands), A = 1 iff HL < DE.
+        ;; Preserves BC.
+.cs_absd:
+        call    __rect_cmp16s_lt
+        or      a
+        jr      z,.ca_sub
+        ex      de,hl
+.ca_sub:
+        or      a                      ;; clear carry, keep A
+        sbc     hl,de
         ret
 
-.cs_cmp_true:
-        ld      a,#1
+        ;; DE:HL = DE * BC (unsigned 16x16 -> 32)
+.cs_mul16:
+        ld      hl,#0
+        ld      a,#16
+.cm_loop:
+        add     hl,hl
+        rl      e
+        rl      d
+        jr      nc,.cm_next
+        add     hl,bc
+        jr      nc,.cm_next
+        inc     de
+.cm_next:
+        dec     a
+        jr      nz,.cm_loop
+        ret
+
+        ;; DE = HL:DE / BC (requires HL < BC; quotient < 2^16 guaranteed),
+        ;; HL = remainder
+.cs_div:
+        ld      a,#16
+.cd_loop:
+        sla     e
+        rl      d
+        adc     hl,hl
+        jr      c,.cd_s17
+        sbc     hl,bc
+        jr      nc,.cd_one
+        add     hl,bc
+        jr      .cd_next
+.cd_s17:
+        or      a
+        sbc     hl,bc
+.cd_one:
+        inc     e
+.cd_next:
+        dec     a
+        jr      nz,.cd_loop
         ret
