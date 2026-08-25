@@ -10,8 +10,14 @@
 
         .globl  _gpx_draw_text
         .globl  _gpx_draw_bmp_clip
-        .globl  _gpx_fill_rectangle
         .globl  __gpx_glyph_lookup
+        .globl  __gpx_span_setup
+        .globl  __gpx_span_row
+        .globl  __clip_seg
+        .globl  __rect_screen
+        .globl  __vid_rowaddr
+        .globl  __vid_nextrow
+        .globl  __vid_nextrow_carry
 
         .equ    FONT_FLAG_OFFSETS_BE, 0x02
         .equ    BMP_ENC_MASK,         0xF0
@@ -45,16 +51,25 @@ _gpx_draw_text::
         or      9(ix)
         jp      z,.dt_epilogue
 
-        ;; locals (18 bytes):
+        ;; locals (20 bytes):
         ;; -1..-2   xcur
         ;; -3..-4   text pointer
         ;; -8       empty_width
         ;; -9       advance
         ;; -10      glyph_height
-        ;; -11..-18 spacing rect (x0,y0,x1,y1)
+        ;; The inter-glyph gap is a narrow column of the same height at every
+        ;; glyph, so its row range, first row address, x bounds and plot
+        ;; selectors are resolved ONCE for the whole string. Only the x span
+        ;; changes per gap.
+        ;; -11      gap row count (0 => nothing of the band is visible)
+        ;; -12..-13 first visible gap row in pixel VRAM
+        ;; -14      gap x low bound  (0..255, clip inter screen)
+        ;; -15      gap x high bound (0..255)
+        ;; -20..-16 span descriptor: mask_first, mask_last, count,
+        ;;          sel_or, sel_xor
         ;; (-5..-7 no longer used: __gpx_glyph_lookup reads flags/first/last
         ;;  straight from the font.)
-        ld      hl,#-18
+        ld      hl,#-20
         add     hl,sp
         ld      sp,hl
 
@@ -85,13 +100,15 @@ _gpx_draw_text::
         ld      a,(hl)
         ld      -9(ix),a              ;; advance
 
+        call    .dt_gap_band_setup
+
 .dt_loop:
         ;; ch = *text++
         ld      l,-3(ix)
         ld      h,-4(ix)
         ld      a,(hl)
         or      a
-        jp      z,.dt_done
+        jr      z,.dt_done
         inc     hl
         ld      -3(ix),l
         ld      -4(ix),h
@@ -104,7 +121,7 @@ _gpx_draw_text::
         ld      d,9(ix)               ;; DE = font
         call    __gpx_glyph_lookup
         or      a
-        jp      z,.dt_add_empty
+        jr      z,.dt_add_empty
         ld      c,l
         ld      b,h                   ;; BC = glyph bmp_t*
 
@@ -145,13 +162,11 @@ _gpx_draw_text::
         push    af
         call    .dt_fill_inv_span
         pop     af
-        ld      b,a
-        ld      a,-1(ix)
-        add     a,b
+        add     a,-1(ix)
         ld      -1(ix),a
-        jp      nc,.dt_loop
+        jr      nc,.dt_loop
         inc     -2(ix)
-        jp      .dt_loop
+        jr      .dt_loop
 
 .dt_add_empty:
         ;; Fill missing/empty glyph span with inverse color.
@@ -174,74 +189,204 @@ _gpx_draw_text::
         ret
 
 .dt_fill_inv_span:
-        ;; A = span width in pixels
+        ;; A = gap width in pixels. Fills [xcur, xcur+A-1] across the band
+        ;; that .dt_gap_band_setup resolved once for this string, so nothing
+        ;; here re-derives the clip, the row range or the row address.
         or      a
         ret     z
-        ld      b,a
-        ld      a,-10(ix)             ;; glyph_height
+        ld      c,a                    ;; C = width
+        ld      a,-11(ix)              ;; rows visible in the band
         or      a
         ret     z
 
-        ;; rect.x0 = xcur  (packed at -18..-17)
+        ;; --- x0: clamp the 16-bit xcur onto the screen ---
+        ld      a,-2(ix)               ;; xcur high
+        or      a
+        jr      z,.dt_gap_x0_lo
+        bit     7,a
+        ret     z                      ;; xcur > 255: nothing visible
+        xor     a                      ;; xcur < 0: start at 0
+        jr      .dt_gap_x0_have
+.dt_gap_x0_lo:
         ld      a,-1(ix)
-        ld      -18(ix),a
+.dt_gap_x0_have:
+        ld      b,a                    ;; B = x0 on screen
+
+        ;; --- x1 = xcur + width - 1, clamped to 255 ---
+        ld      a,c
+        dec     a
+        add     a,-1(ix)
+        ld      c,a
         ld      a,-2(ix)
-        ld      -17(ix),a
+        adc     a,#0x00
+        jr      z,.dt_gap_x1_have
+        bit     7,a
+        ret     nz                     ;; x1 < 0: nothing visible
+        ld      c,#255
+.dt_gap_x1_have:
 
-        ;; rect.y0 = y argument  (packed at -16..-15)
-        ld      a,4(ix)
-        ld      -16(ix),a
-        ld      a,5(ix)
-        ld      -15(ix),a
+        ;; --- narrow to the band's x bounds, all 8-bit from here ---
+        ld      a,c
+        cp      -14(ix)
+        ret     c                      ;; x1 < gap_lo
+        ld      a,-15(ix)
+        cp      b
+        ret     c                      ;; gap_hi < x0
 
-        ;; rect.x1 = xcur + (width - 1)  (packed at -14..-13)
         ld      a,b
-        dec     a
+        cp      -14(ix)
+        jr      nc,.dt_gap_lo_ok
+        ld      a,-14(ix)
         ld      b,a
-        ld      a,-1(ix)
-        add     a,b
-        ld      -14(ix),a
-        ld      a,-2(ix)
-        adc     a,#0x00
-        ld      -13(ix),a
+.dt_gap_lo_ok:
+        ld      a,-15(ix)
+        cp      c
+        jr      nc,.dt_gap_hi_ok
+        ld      c,a
+.dt_gap_hi_ok:
 
-        ;; rect.y1 = y + (glyph_height - 1)  (packed at -12..-11)
-        ld      a,-10(ix)
-        dec     a
-        ld      b,a
-        ld      a,4(ix)
-        add     a,b
-        ld      -12(ix),a
-        ld      a,5(ix)
-        adc     a,#0x00
-        ld      -11(ix),a
-
-        ;; gpx_fill_rectangle(gpx, &rect, inv_color, BM_CPY, {0xFF}, 1, clip)
-        ld      l,12(ix)
-        ld      h,13(ix)
-        push    hl                    ;; clip
-
-        ld      a,#0x01
-        push    af
-        inc     sp                    ;; fpatt_len
-
-        ld      hl,#.dt_solid_fpatt
-        push    hl                    ;; fpatt*
-
-        ld      a,10(ix)              ;; inverse color of text color
+        ;; --- descriptor, then one solid span per row ---
+        ;; IY already points at the descriptor: it is set once per string and
+        ;; survives, because gpx_draw_bmp_clip preserves IY and the glyph
+        ;; lookup never touches it.
+        ld      a,10(ix)               ;; text color
         xor     #0x01
         and     #0x01
-        ld      l,a
-        ld      h,#BM_CPY
-        push    hl                    ;; c,m
+        ld      d,a                    ;; the gap uses the inverse color
+        ld      e,#0x00                ;; BM_CPY
+        call    __gpx_span_setup       ;; A = byte_lo
 
-        push    ix
-        pop     de
-        ld      hl,#-18
-        add     hl,de
-        ex      de,hl                 ;; DE = &rect (gpx arg unused)
-        call    _gpx_fill_rectangle
+        ld      e,a
+        ld      d,#0x00
+        ld      l,-12(ix)
+        ld      h,-13(ix)
+        add     hl,de                  ;; HL = first band row + byte_lo
+        ld      b,-11(ix)
+
+        ;; An advance gap is normally one pixel wide, so the whole column
+        ;; lands in a single byte. The pattern is solid and the descriptor is
+        ;; fixed, so the two plot masks fold once here and each row becomes a
+        ;; read-modify-write plus a row step -- no per-row span call at all.
+        ;; descriptor is at ix-20: mask_first, mask_last, count,
+        ;; sel_or, sel_xor
+        ld      a,-18(ix)              ;; count
+        dec     a
+        jr      nz,.dt_gap_wide
+
+        ld      a,-20(ix)              ;; mask_first
+        and     -19(ix)                ;; & mask_last
+        ld      c,a                    ;; C = coverage
+        and     -17(ix)                ;; & sel_or
+        ld      d,a
+        ld      a,c
+        and     -16(ix)                ;; & sel_xor
+        ld      e,a
+.dt_gap_byte:
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+        inc     h                      ;; inlined __vid_nextrow fast path
+        ld      a,h
+        and     #0x07
+        call    z,__vid_nextrow_carry
+        djnz    .dt_gap_byte
         ret
 
-.dt_solid_fpatt:
-        .db     0xff
+.dt_gap_wide:
+.dt_gap_row:
+        push    bc
+        ld      a,#0xff
+        call    __gpx_span_row         ;; preserves HL
+        call    __vid_nextrow
+        pop     bc
+        djnz    .dt_gap_row
+        ret
+
+        ;; ------------------------------------------------------------
+        ;; .dt_gap_band_setup
+        ;;
+        ;; Resolve everything about the inter-glyph gap band that does not
+        ;; depend on x: how many rows of it are visible, where the first one
+        ;; lives in VRAM, and the x bounds. Runs once per string.
+        ;; Leaves -11 = 0 when no part of the band is visible.
+        ;; ------------------------------------------------------------
+.dt_gap_band_setup:
+        xor     a
+        ld      -11(ix),a
+        ld      a,-10(ix)              ;; glyph_height
+        or      a
+        ret     z
+
+        ;; band = [y, y + glyph_height - 1]
+        ld      l,4(ix)
+        ld      h,5(ix)
+        ld      a,-10(ix)
+        dec     a
+        add     a,l
+        ld      e,a
+        ld      a,h
+        adc     a,#0x00
+        ld      d,a                    ;; DE = y1, HL = y0
+
+        ;; against the screen first, then the caller's clip: both are the
+        ;; same 1-D clamp, so the shared helper does each in turn.
+        ld      iy,#__rect_screen+2
+        call    __clip_seg
+        ret     c
+
+        ld      a,12(ix)
+        or      13(ix)
+        jr      z,.dt_band_rows
+
+        ld      c,12(ix)
+        ld      b,13(ix)
+        push    hl
+        ld      hl,#2
+        add     hl,bc
+        push    hl
+        pop     iy                     ;; IY = &clip->y0
+        pop     hl
+        call    __clip_seg
+        ret     c
+
+.dt_band_rows:
+        ld      a,e
+        sub     l
+        inc     a
+        ld      -11(ix),a              ;; visible row count
+
+        ld      b,l
+        call    __vid_rowaddr
+        ld      -12(ix),l
+        ld      -13(ix),h
+
+        ;; x bounds: the screen, narrowed by the clip when there is one
+        ld      hl,#0
+        ld      de,#255
+        ld      a,12(ix)
+        or      13(ix)
+        jr      z,.dt_band_x_store
+
+        ld      c,12(ix)
+        ld      b,13(ix)
+        push    hl
+        push    bc
+        pop     iy                     ;; IY = &clip->x0
+        pop     hl
+        call    __clip_seg
+        jr      nc,.dt_band_x_store
+        xor     a                      ;; clip excludes every column
+        ld      -11(ix),a
+        ret
+
+.dt_band_x_store:
+        ld      -14(ix),l
+        ld      -15(ix),e
+.dt_band_iy:
+        ;; IY = &descriptor, once for the whole string
+        push    ix
+        pop     iy
+        ld      de,#-20
+        add     iy,de
+        ret

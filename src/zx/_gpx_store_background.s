@@ -18,6 +18,7 @@
 
         .globl  __gpx_store_background
         .globl  __vid_rowaddr
+        .globl  __vid_nextrow
 
         .equ    BG_HEADER_SIZE,          5
         .equ    BG_PAYLOAD_SIZE,         32
@@ -26,9 +27,13 @@
         .equ    B_BG_HI,                 -1
         .equ    B_VISW,                  -3
         .equ    B_ROWCNT,                -4
-        .equ    B_YCUR,                  -5
+        ;; Destination row pointer, derived once and then stepped. The low
+        ;; slot was the per-row y counter that only existed to rebuild the
+        ;; interleaved row address every row.
+        .equ    B_DSTROW_LO,             -5
         .equ    B_SHIFT,                 -6
         .equ    B_XBYTE,                 -7
+        .equ    B_DSTROW_HI,             -8
 
         .macro  LD16HL off
         ld      l,off(ix)
@@ -49,13 +54,13 @@ __gpx_store_background:
         ld      ix,#0
         add     ix,sp
 
-        ld      hl,#-7
+        ld      hl,#-8
         add     hl,sp
         ld      sp,hl
 
         ld      B_VISW(ix),d
         ld      B_ROWCNT(ix),e
-        ld      B_YCUR(ix),b
+        ld      B_DSTROW_LO(ix),b      ;; parks y until xbyte is known
 
         ld      a,c
         and     #0x07
@@ -85,26 +90,29 @@ __gpx_store_background:
         push    hl
         pop     iy
 
+        ;; First row address, derived once; later rows are one __vid_nextrow
+        ;; away. The row base low byte is a multiple of 0x20 and xbyte is
+        ;; 0..31, so the add cannot carry.
+        ld      b,B_DSTROW_LO(ix)      ;; y, parked at entry
+        call    __vid_rowaddr
+        ld      a,B_XBYTE(ix)
+        add     a,l
+        ld      B_DSTROW_LO(ix),a
+        ld      B_DSTROW_HI(ix),h
+
 .gsb_row_loop:
         ld      a,B_ROWCNT(ix)
         or      a
         jp      z,.gsb_done
 
-        ld      b,B_YCUR(ix)
-        call    __vid_rowaddr
-        ld      a,B_XBYTE(ix)
-        add     a,l
-        ld      l,a
-        jr      nc,.gsb_row_ptr_ok
-        inc     h
-.gsb_row_ptr_ok:
+        ld      l,B_DSTROW_LO(ix)
+        ld      h,B_DSTROW_HI(ix)
         ld      d,(hl)
         xor     a
         ld      e,a
         ld      c,a
 
-        ld      a,B_SHIFT(ix)
-        ld      b,a
+        ld      b,B_SHIFT(ix)
         ld      a,B_VISW(ix)
         add     a,b
         cp      #9
@@ -122,8 +130,7 @@ __gpx_store_background:
         or      a
         jr      z,.gsb_shift_done
 .gsb_shift_loop:
-        and     a
-        rl      c
+        sla     c                      ;; shifts a zero in and sets carry
         rl      e
         rl      d
         djnz    .gsb_shift_loop
@@ -176,9 +183,11 @@ __gpx_store_background:
         inc     iy
         inc     iy
 
-        ld      a,B_YCUR(ix)
-        inc     a
-        ld      B_YCUR(ix),a
+        ld      l,B_DSTROW_LO(ix)
+        ld      h,B_DSTROW_HI(ix)
+        call    __vid_nextrow
+        ld      B_DSTROW_LO(ix),l
+        ld      B_DSTROW_HI(ix),h
 
         ld      a,B_ROWCNT(ix)
         dec     a

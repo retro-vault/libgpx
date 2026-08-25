@@ -28,6 +28,8 @@
         .globl  __ret_clean11
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
+        .globl  __vid_nextrow_carry
+        .globl  __vid_prevrow_carry
         .globl  __vid_prevrow
 
         ;; outcode bits (stub order/priority: T, B, R, L)
@@ -121,7 +123,7 @@ __gpx_bresenham_line::
         ld      h,A_CLIP+1(ix)
         ld      a,h
         or      l
-        jp      z,.bl_cs_loop          ;; no clip: screen rect stands
+        jr      z,.bl_cs_loop ;; no clip: screen rect stands
 
         ld      e,(hl)                 ;; x0c
         inc     hl
@@ -146,22 +148,21 @@ __gpx_bresenham_line::
         pop     de                     ;; DE = y0c
         ;; swapped clip (y1c < y0c) draws nothing
         call    __rect_cmp16s_lt
-        or      a
-        jp      nz,.bl_rej1
+        jp      c,.bl_rej1
         ;; clamp y0c (DE) -> EY0
         bit     7,d
         jr      nz,.bl_cy1             ;; y0c<0 -> keep 0
         ld      a,d
         or      a
-        jp      nz,.bl_rej1            ;; y0c>255: below screen -> empty
+        jp      nz,.bl_rej1 ;; y0c>255: below screen -> empty
         ld      a,e
         cp      #192
-        jp      nc,.bl_rej1            ;; y0c in 192..255 -> empty
+        jp      nc,.bl_rej1 ;; y0c in 192..255 -> empty
         ld      L_EY0(ix),a
 .bl_cy1:
         ;; clamp y1c (HL) -> EY1
         bit     7,h
-        jp      nz,.bl_rej1            ;; y1c<0: above screen -> empty
+        jp      nz,.bl_rej1 ;; y1c<0: above screen -> empty
         ld      a,h
         or      a
         jr      nz,.bl_cx              ;; y1c>255 -> keep 191
@@ -175,20 +176,19 @@ __gpx_bresenham_line::
         ld      l,c
         ld      h,b                    ;; HL = x1c
         call    __rect_cmp16s_lt
-        or      a
-        jp      nz,.bl_reject
+        jp      c,.bl_reject
         ;; clamp x0c (DE) -> EX0
         bit     7,d
         jr      nz,.bl_cx1             ;; x0c<0 -> keep 0
         ld      a,d
         or      a
-        jp      nz,.bl_reject          ;; x0c>255 -> empty
+        jp      nz,.bl_reject ;; x0c>255 -> empty
         ld      a,e
         ld      L_EX0(ix),a
 .bl_cx1:
         ;; clamp x1c (HL=BC) -> EX1
         bit     7,b
-        jp      nz,.bl_reject          ;; x1c<0 -> empty
+        jp      nz,.bl_reject ;; x1c<0 -> empty
         ld      a,b
         or      a
         jr      nz,.bl_cs_loop         ;; x1c>255 -> keep 255
@@ -210,10 +210,10 @@ __gpx_bresenham_line::
         call    .bl_outc               ;; A = c1 (B preserved)
         ld      c,a
         or      b
-        jp      z,.bl_accept           ;; both inside
+        jr      z,.bl_accept ;; both inside
         ld      a,b
         and     c
-        jp      nz,.bl_reject          ;; share an outside half-plane
+        jp      nz,.bl_reject ;; share an outside half-plane
         push    bc                     ;; save which-endpoint (B = c0)
         ld      a,b
         or      a
@@ -344,20 +344,20 @@ __gpx_bresenham_line::
         ld      a,b
         or      a
         jr      z,.bl_last             ;; clipped to a single pixel
-        jp      .bx_loop
+        jr      .bx_loop
 .bl_go_y:
         ld      b,L_DY(ix)             ;; steps = dy (>0: dy>dx>=0)
         ld      a,L_DX(ix)
         or      a
-        jp      nz,.by_loop            ;; genuine diagonal
+        jr      nz,.by_loop ;; genuine diagonal
         ex      af,af'
         bit     1,a                    ;; vertical: upward?
         jr      nz,.bl_go_vup
         ex      af,af'
-        jp      .bv_loop               ;; downward vertical: fast path
+        jp      .bv_loop ;; downward vertical: fast path
 .bl_go_vup:
         ex      af,af'
-        jp      .by_loop               ;; upward vertical: generic loop
+        jr      .by_loop ;; upward vertical: generic loop
 
         ;; ---- x-major raster: B=steps C=patt D/E=masks HL=vram ----
         ;; alt: HL'=err DE'=dx BC'=dy; A' bit0=left bit1=up
@@ -478,11 +478,18 @@ __gpx_bresenham_line::
         bit     1,a
         jr      nz,.by_yup
         ex      af,af'
-        call    __vid_nextrow
+        inc     h                      ;; inlined __vid_nextrow fast path
+        ld      a,h
+        and     #0x07
+        call    z,__vid_nextrow_carry
         jr      .by_rot
 .by_yup:
         ex      af,af'
-        call    __vid_prevrow
+        dec     h                      ;; inlined __vid_prevrow fast path
+        ld      a,h
+        and     #0x07
+        cp      #0x07
+        call    z,__vid_prevrow_carry
 .by_rot:
         rrc     c
         djnz    .by_loop
@@ -500,37 +507,40 @@ __gpx_bresenham_line::
         xor     e
         ld      (hl),a
 .bv_np:
-        call    __vid_nextrow
+        inc     h                      ;; inlined __vid_nextrow fast path
+        ld      a,h
+        and     #0x07
+        call    z,__vid_nextrow_carry
         rrc     c
         djnz    .bv_loop
-        jp      .bl_last
+        jr      .bl_last
 
         ;; ---- C-S edge handlers ----
         ;; stack holds pushed BC (B = c0 = which endpoint moves)
 .bl_edge_t:
         call    .bl_eqy
-        jp      z,.bl_rejpop
+        jr      z,.bl_rejpop
         ld      a,L_EY0(ix)
         ld      L_NB(ix),a
         call    .bl_isect_x            ;; HL = nx
         jr      .bl_put_xy
 .bl_edge_b:
         call    .bl_eqy
-        jp      z,.bl_rejpop
+        jr      z,.bl_rejpop
         ld      a,L_EY1(ix)
         ld      L_NB(ix),a
         call    .bl_isect_x
         jr      .bl_put_xy
 .bl_edge_r:
         call    .bl_eqx
-        jp      z,.bl_rejpop
+        jr      z,.bl_rejpop
         ld      a,L_EX1(ix)
         ld      L_NB(ix),a
         call    .bl_isect_y            ;; HL = ny
         jr      .bl_put_yx
 .bl_edge_l:
         call    .bl_eqx
-        jp      z,.bl_rejpop
+        jr      z,.bl_rejpop
         ld      a,L_EX0(ix)
         ld      L_NB(ix),a
         call    .bl_isect_y
@@ -632,10 +642,13 @@ __gpx_bresenham_line::
         cp      A_X1+1(ix)
         ret
 
-        ;; HL = |HL - DE| (signed operands), A = 1 iff HL < DE
+        ;; HL = |HL - DE| (signed operands), A = 1 iff HL < DE.
+        ;; Callers fold that A into a product sign, so the 0/1 value is part
+        ;; of the contract and is synthesized from the compare's carry here.
 .bl_absd:
-        call    __rect_cmp16s_lt       ;; A=1 iff HL<DE; BC/DE/HL preserved
-        or      a
+        call    __rect_cmp16s_lt       ;; carry set iff HL < DE
+        sbc     a,a                    ;; 0xFF on carry, else 0x00
+        and     #0x01                  ;; A = 1 iff HL < DE (carry cleared)
         jr      z,.ba_sub
         ex      de,hl
 .ba_sub:

@@ -189,9 +189,7 @@ _gpx_show_sprite::
         ;; visible height = min(h, 192 - y)
         ld      a,S_H(ix)
         dec     a
-        ld      b,a
-        ld      a,S_Y_LO(ix)
-        add     a,b
+        add     a,S_Y_LO(ix)
         cp      #SCRHEIGHT
         jr      c,.gs_no_bottom_clip
         ld      b,S_Y_LO(ix)

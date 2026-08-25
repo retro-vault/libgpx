@@ -16,7 +16,5 @@ void main(void)
     rect_t clip = {8, 4, 22, 12};
     gpx_draw_bmp(gpx, 10, 5, (bmp_t *)bmp_data, &clip);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

@@ -52,7 +52,5 @@ void main(void)
         gpx_draw_bmp(gpx, (coord)(178 + dx), y, (bmp_t *)m16, &c);
     }
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

@@ -122,8 +122,7 @@ _gpx_draw_rectangle::
         ld      e,-11(ix)
         ld      d,-12(ix)
         call    __rect_cmp16s_lt
-        or      a
-        jr      nz,.dr_done
+        jr      c,.dr_done
 
         ;; left side: vline(x0, ytop..ybot), solid
         ld      l,7(ix)

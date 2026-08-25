@@ -8,6 +8,7 @@
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
         .globl  __clip_seg
+        .globl  __rect_screen
         .globl  __ret_clean11
 
         .area   _CODE
@@ -29,12 +30,26 @@ __ret_clean11:
         ret
 
         ;; ------------------------------------------------------------
+        ;; __rect_screen
+        ;;
+        ;; The whole display as a rect_t, so a screen clamp is just another
+        ;; __clip_seg pass instead of open-coded 16-bit compares in every
+        ;; primitive.
+        ;; ------------------------------------------------------------
+__rect_screen::
+        .dw     0
+        .dw     0
+        .dw     255
+        .dw     191
+
+        ;; ------------------------------------------------------------
         ;; __clip_seg
         ;;
         ;; 1-D segment clip against one clip-rect axis (primary axis):
         ;;   reject if (clip_hi < seg_lo) || (seg_hi < clip_lo)
         ;;   else clamp seg_lo = max(seg_lo, clip_lo),
         ;;             seg_hi = min(seg_hi, clip_hi)
+        ;;   reject if the clamp inverted the span (swapped clip rect)
         ;;
         ;; Pure register I/O so any caller's local layout works:
         ;;   IN:  HL = seg_lo, DE = seg_hi
@@ -48,91 +63,78 @@ __ret_clean11:
         ;; Preserves IX and IY; uses A, BC, DE, HL and one stack slot.
         ;; ------------------------------------------------------------
 __clip_seg:
+        ;; Clamp both ends, then reject if the clamp inverted the span. That
+        ;; single test subsumes the two early rejects this used to do: if
+        ;; seg_hi < clip_lo or clip_hi < seg_lo, the clamped span is inverted
+        ;; by construction. Five signed compares become three.
         ld      b,h
-        ld      c,l                    ;; BC = seg_lo (survives cmp calls)
+        ld      c,l                    ;; BC = seg_lo
         push    de                     ;; stack: [seg_hi]
 
-        ;; reject if seg_hi < clip_lo
-        ex      de,hl                  ;; HL = seg_hi
+        ;; seg_lo = max(seg_lo, clip_lo)
         ld      e,0(iy)
-        ld      d,1(iy)                ;; DE = clip_lo
+        ld      d,1(iy)                ;; DE = clip_lo, HL = seg_lo
         call    __rect_cmp16s_lt
-        or      a
-        jr      nz,.cs_reject
+        jr      nc,.cs_lo_ok
+        ld      c,e
+        ld      b,d                    ;; seg_lo = clip_lo
+.cs_lo_ok:
+        pop     de                     ;; DE = seg_hi
 
-        ;; reject if clip_hi < seg_lo
+        ;; seg_hi = min(seg_hi, clip_hi)
         ld      l,4(iy)
         ld      h,5(iy)                ;; HL = clip_hi
+        call    __rect_cmp16s_lt       ;; clip_hi < seg_hi ?
+        jr      nc,.cs_hi_ok
+        ld      e,l
+        ld      d,h                    ;; seg_hi = clip_hi
+.cs_hi_ok:
+
+        ;; inverted span => nothing visible on this axis
+        ld      l,e
+        ld      h,d                    ;; HL = seg_hi
         ld      e,c
         ld      d,b                    ;; DE = seg_lo
-        call    __rect_cmp16s_lt
-        or      a
-        jr      nz,.cs_reject
-
-        ;; clamp: if seg_lo < clip_lo -> seg_lo = clip_lo
-        ld      l,c
-        ld      h,b                    ;; HL = seg_lo
-        ld      e,0(iy)
-        ld      d,1(iy)                ;; DE = clip_lo
-        call    __rect_cmp16s_lt
-        or      a
-        jr      z,.cs_lo_ok
-        ld      c,0(iy)
-        ld      b,1(iy)                ;; seg_lo = clip_lo
-.cs_lo_ok:
-
-        ;; clamp: if clip_hi < seg_hi -> seg_hi = clip_hi
-        pop     hl                     ;; HL = seg_hi (stack balanced)
-        ld      e,l
-        ld      d,h                    ;; DE = seg_hi
-        ld      l,4(iy)
-        ld      h,5(iy)                ;; HL = clip_hi
-        call    __rect_cmp16s_lt
-        or      a
-        jr      z,.cs_hi_ok
-        ld      e,4(iy)
-        ld      d,5(iy)                ;; seg_hi = clip_hi
-.cs_hi_ok:
-        ld      l,c
-        ld      h,b                    ;; HL = seg_lo
+        call    __rect_cmp16s_lt       ;; seg_hi < seg_lo ?
+        ex      de,hl                  ;; HL = seg_lo, DE = seg_hi
+        ret     c                      ;; carry already set => reject
         or      a                      ;; carry clear => keep
         ret
 
-.cs_reject:
-        pop     de                     ;; discard saved seg_hi (balance push)
-        scf                            ;; carry set => reject
-        ret
 
         ;; uint8_t _rect_cmp16s_lt(coord a, coord b)
         ;;   HL = a
         ;;   DE = b
         ;; returns A=1 when (a < b), else A=0
 __rect_cmp16s_lt:
+        ;; CARRY set when HL < DE (signed), clear otherwise. Clobbers A only;
+        ;; BC, DE and HL are preserved. Callers branch on carry directly, so
+        ;; none of them pays an `or a` to test a 0/1 return any more.
+        ;;
+        ;; Both operands are on-screen coordinates most of the time, so the
+        ;; high bytes are both zero and a plain 8-bit compare answers it.
         ld      a,h
-        xor     d
-        jp      p,.rc_same_sign
-
-        ;; different signs: negative is smaller
-        bit     7,h
-        jr      z,.rc_false
-        ld      a,#1
-        ret
-
-.rc_same_sign:
-        ld      a,h
-        cp      d
-        jr      c,.rc_true
-        jr      nz,.rc_false
+        or      d
+        jr      nz,.rc_wide
         ld      a,l
         cp      e
-        jr      c,.rc_true
-
-.rc_false:
-        xor     a
         ret
 
-.rc_true:
-        ld      a,#1
+.rc_wide:
+        ld      a,h
+        xor     d
+        jp      m,.rc_diff             ;; signs differ
+        ld      a,h
+        cp      d
+        ret     nz                     ;; carry = (hi < hi)
+        ld      a,l
+        cp      e
+        ret                            ;; carry = (lo < lo)
+
+.rc_diff:
+        ;; different signs: the negative one is the smaller
+        ld      a,h
+        rlca                           ;; carry = sign bit of HL
         ret
 
         ;; ------------------------------------------------------------
@@ -188,13 +190,10 @@ __rect_unpack_norm:
         ld      e,-1(ix)
         ld      d,-2(ix)
         call    __rect_cmp16s_lt
-        or      a
-        jr      z,.ru_x_ok
+        jr      nc,.ru_x_ok
 
-        ld      a,-1(ix)
-        ld      c,a
-        ld      a,-2(ix)
-        ld      b,a
+        ld      c,-1(ix)
+        ld      b,-2(ix)
         ld      a,-3(ix)
         ld      -1(ix),a
         ld      a,-4(ix)
@@ -211,13 +210,10 @@ __rect_unpack_norm:
         ld      e,-5(ix)
         ld      d,-6(ix)
         call    __rect_cmp16s_lt
-        or      a
-        jr      z,.ru_done
+        jr      nc,.ru_done
 
-        ld      a,-5(ix)
-        ld      c,a
-        ld      a,-6(ix)
-        ld      b,a
+        ld      c,-5(ix)
+        ld      b,-6(ix)
         ld      a,-7(ix)
         ld      -5(ix),a
         ld      a,-8(ix)

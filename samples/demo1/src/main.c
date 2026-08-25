@@ -110,9 +110,7 @@ int main(void)
     if (hand_sprite2.bitmap != NULL)
         gpx_hide_sprite(gpx, &hand_sprite2);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 
     return 0;
 }

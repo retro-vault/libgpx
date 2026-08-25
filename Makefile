@@ -1,8 +1,3 @@
-DOCKER_SPEC ?= wischner/sdcc-z80-zx-spectrum
-DOCKER_PARTNER ?= wischner/sdcc-z80-idp
-DOCKER_USER ?= $(shell id -u):$(shell id -g)
-SDCC ?= /opt/sdcc/bin/sdcc
-
 ROOT_DIR := $(CURDIR)
 BUILD_DIR ?= $(ROOT_DIR)/build
 BIN_DIR ?= $(ROOT_DIR)/bin
@@ -18,10 +13,12 @@ PARTNER_RELEASE_STAGE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME)
 ZX_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(ZX_RELEASE_NAME).tar.gz
 PARTNER_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME).tar.gz
 
-export DOCKER_SPEC DOCKER_PARTNER DOCKER_USER SDCC
+include $(ROOT_DIR)/mk/toolchain.mk
+
+export DOCKER_ZX DOCKER_IDP DOCKER_USER
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR RELEASE_DIR VERSION
 
-.PHONY: all build lib partner-lib package-zx package-partner release-packages tests coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 clean
+.PHONY: all build lib partner-lib package-zx package-partner release-packages tests zx-tests zx-bench coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 clean
 
 all: build
 
@@ -44,6 +41,12 @@ release-packages: package-zx package-partner
 tests:
 	$(MAKE) -C tests tests
 
+zx-tests:
+	$(MAKE) -C tests zx-tests
+
+zx-bench:
+	$(MAKE) -C tests zx-bench ARGS="$(ARGS)"
+
 coverage:
 	$(MAKE) -C tests coverage
 
@@ -60,7 +63,7 @@ partner-visuals:
 	$(MAKE) -C tests partner-visuals
 
 lib-size:
-	$(MAKE) -C tests lib-size
+	$(MAKE) -C tests lib-size ARGS="$(ARGS)"
 
 demo1:
 	$(MAKE) -C samples/demo1 build

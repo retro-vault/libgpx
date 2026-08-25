@@ -3,15 +3,22 @@
         ;; Rectangle fill renderer:
         ;;  - normalizes rectangle coordinates
         ;;  - pattern is applied per row, MSB-first from x0
-        ;;  - dispatches each row through fast __gpx_hline
+        ;;  - masks, byte count, plot selectors and the pattern rotation are
+        ;;    all constant down the rectangle, so they are computed once and
+        ;;    each row is a single __gpx_span_row call with the row pointer
+        ;;    stepped by __vid_nextrow
 
         .module gpx_fill_rectangle
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_fill_rectangle
-        .globl  __gpx_hline_raw8
+        .globl  __gpx_span_row
+        .globl  __gpx_span_setup
         .globl  __rect_unpack_norm
         .globl  __clip_seg
+        .globl  __rect_screen
+        .globl  __vid_rowaddr
+        .globl  __vid_nextrow
 
         .area   _CODE
 
@@ -28,19 +35,21 @@ _gpx_fill_rectangle::
         ld      ix,#0
         add     ix,sp
 
-        ;; locals (18 bytes)
+        ;; locals (21 bytes)
         ;; -1..-2   x0
         ;; -3..-4   x1
         ;; -5..-6   y0
         ;; -7..-8   y1
-        ;; -9..-10  (unused)
+        ;; -9..-10  row pointer into pixel VRAM
         ;; -11..-12 y0 original / ycur
         ;; -13      fpatt idx
         ;; -14..-15 fpatt ptr
         ;; -16      fpatt len
-        ;; -17      row lpatt (LSB-first for __gpx_hline)
-        ;; -18      x phase shift ((x0 clipped - x0 original) & 7)
-        ld      hl,#-18
+        ;; -17..-21 span descriptor for __gpx_span_row:
+        ;;          -21 mask_first, -20 mask_last, -19 count,
+        ;;          -18 sel_or,     -17 sel_xor
+        ;; -22      x phase shift (x0 original & 7)
+        ld      hl,#-22
         add     hl,sp
         ld      sp,hl
 
@@ -72,94 +81,46 @@ _gpx_fill_rectangle::
         ld      -11(ix),a
         ld      a,-6(ix)
         ld      -12(ix),a
-        ;; preserve original x0 low for x-phase alignment
+        ;; The pattern is anchored to the rectangle's own x0, and every
+        ;; destination byte is 8-aligned, so one rotation by (x0 & 7) puts
+        ;; the pattern on the byte grid for the whole rectangle.
         ld      a,-1(ix)
-        ld      -18(ix),a
+        and     #0x07
+        ld      -22(ix),a
 
-        ;; clamp X to screen [0..255] (ZX width is a constant 256).
-        ;; x is signed 16-bit; on-screen low byte fits 8 bits.
-        ;;
-        ;; if (x1 < 0) return
-        ld      a,-4(ix)               ;; x1 hi
-        bit     7,a
-        jp      nz,.fr_done
+        ;; Clamp to the screen. This is the same 1-D clamp the clip rect
+        ;; needs, so it runs through the shared helper against __rect_screen
+        ;; rather than being open-coded here.
+        ld      iy,#__rect_screen
+        ld      l,-1(ix)
+        ld      h,-2(ix)
+        ld      e,-3(ix)
+        ld      d,-4(ix)
+        call    __clip_seg
+        jp      c,.fr_done
+        ld      -1(ix),l
+        ld      -2(ix),h
+        ld      -3(ix),e
+        ld      -4(ix),d
 
-        ;; if (x0 > 255) return  (x0 >= 0 and hi != 0 => >= 256)
-        ld      a,-2(ix)               ;; x0 hi
-        or      a
-        jr      z,.fr_x0_le255
-        bit     7,a
-        jp      z,.fr_done
-.fr_x0_le255:
+        ld      iy,#__rect_screen+2
+        ld      l,-5(ix)
+        ld      h,-6(ix)
+        ld      e,-7(ix)
+        ld      d,-8(ix)
+        call    __clip_seg
+        jp      c,.fr_done
+        ld      -5(ix),l
+        ld      -6(ix),h
+        ld      -7(ix),e
+        ld      -8(ix),d
 
-        ;; if (x0 < 0) x0 = 0
-        ld      a,-2(ix)
-        bit     7,a
-        jr      z,.fr_no_screen_clip_left
-        xor     a
-        ld      -1(ix),a
-        ld      -2(ix),a
-
-.fr_no_screen_clip_left:
-        ;; if (x1 > 255) x1 = 255  (x1 >= 0 here, so hi != 0 => >= 256)
-        ld      a,-4(ix)
-        or      a
-        jr      z,.fr_screen_clip_x_done
-        ld      a,#0xff
-        ld      -3(ix),a
-        xor     a
-        ld      -4(ix),a
-
-.fr_screen_clip_x_done:
-        ;; clamp Y to screen [0..191] (ZX height is a constant 192).
-        ;;
-        ;; if (y1 < 0) return
-        ld      a,-8(ix)               ;; y1 hi
-        bit     7,a
-        jp      nz,.fr_done
-
-        ;; if (y0 > 191) return
-        ld      a,-6(ix)               ;; y0 hi
-        or      a
-        jr      z,.fr_y0_hi0
-        bit     7,a
-        jp      z,.fr_done             ;; hi>0 positive => y0 >= 256
-        jr      .fr_y0_chk_done        ;; hi<0 negative => not > 191
-.fr_y0_hi0:
-        ld      a,-5(ix)               ;; y0 lo
-        cp      #192
-        jp      nc,.fr_done            ;; 192..255 > 191
-.fr_y0_chk_done:
-
-        ;; if (y0 < 0) y0 = 0
-        ld      a,-6(ix)
-        bit     7,a
-        jr      z,.fr_no_screen_clip_top
-        xor     a
-        ld      -5(ix),a
-        ld      -6(ix),a
-
-.fr_no_screen_clip_top:
-        ;; if (y1 > 191) y1 = 191  (y1 >= 0 here)
-        ld      a,-8(ix)
-        or      a
-        jr      nz,.fr_clamp_y1        ;; hi != 0 => y1 >= 256
-        ld      a,-7(ix)
-        cp      #192
-        jr      c,.fr_screen_clip_done ;; y1 <= 191
-.fr_clamp_y1:
-        ld      a,#191
-        ld      -7(ix),a
-        xor     a
-        ld      -8(ix),a
-
-.fr_screen_clip_done:
         ;; optional clip visible range once:
         ;;   [x0..x1] ∩ [clip->x0..clip->x1]
         ;;   [y0..y1] ∩ [clip->y0..clip->y1]
         ld      a,9(ix)
         or      10(ix)
-        jp      z,.fr_phase_setup
+        jr      z,.fr_phase_setup
 
         ;; Clip [x0..x1] and [y0..y1] against the clip rect once, via the
         ;; shared __clip_seg helper (reject on either axis => nothing visible).
@@ -196,11 +157,32 @@ _gpx_fill_rectangle::
         ld      -8(ix),d               ;; y1 = clamped hi
 
 .fr_phase_setup:
-        ;; x phase shift = (x0_clipped - x0_original) & 7
-        ld      a,-1(ix)
-        sub     -18(ix)
-        and     #0x07
-        ld      -18(ix),a
+        ;; IY = &descriptor (ix - 21)
+        push    ix
+        pop     iy
+        ld      de,#-21
+        add     iy,de
+
+        ld      b,-1(ix)               ;; x0 (clamped to the screen)
+        ld      c,-3(ix)               ;; x1
+        ld      d,4(ix)                ;; color
+        ld      e,5(ix)                ;; mode
+        call    __gpx_span_setup       ;; A = byte_lo
+        ld      c,a
+
+        ;; row pointer for the first visible row
+        ld      b,-5(ix)               ;; y0 low
+        push    bc
+        call    __vid_rowaddr
+        pop     bc
+        ld      a,c                    ;; byte_lo
+        add     a,l
+        ld      l,a
+        jr      nc,.fr_rowptr_ok
+        inc     h
+.fr_rowptr_ok:
+        ld      -9(ix),l
+        ld      -10(ix),h
 
 .fr_idx_setup:
         ;; idx = (y0_clipped - y0_original) % fpatt_len
@@ -229,86 +211,34 @@ _gpx_fill_rectangle::
         ld      a,l
         ld      -13(ix),a
 
-        ;; start from first visible row
-        ld      a,-5(ix)
+        ;; row count = y1 - y0 + 1 (both already clamped to the screen)
+        ld      a,-7(ix)
+        sub     -5(ix)
+        inc     a
         ld      -11(ix),a
-        ld      a,-6(ix)
-        ld      -12(ix),a
 
 .fr_row_loop:
-        ;; row pattern = reverse_bits(fpatt[idx])
-        ;; Fill uses MSB-first from x0, while __gpx_hline consumes lpatt LSB-first.
+        ;; pattern for this row, rotated onto the byte grid
         ld      l,-14(ix)
         ld      h,-15(ix)
         ld      e,-13(ix)
         ld      d,#0x00
         add     hl,de
         ld      a,(hl)
-        ld      c,#0x00
-        ld      b,#0x08
-.fr_rev_loop:
+        ld      b,-22(ix)
+        inc     b
+        dec     b
+        jr      z,.fr_patt_ready
+.fr_patt_rot:
         rrca
-        rl      c
-        djnz    .fr_rev_loop
-        ld      a,c
-        ld      -17(ix),a
-
-        ;; apply x phase once-clipped: lpatt = ror(lpatt, xshift)
-        ld      a,-18(ix)
-        or      a
-        jr      z,.fr_row_patt_ready
-        ld      b,a
-        ld      a,-17(ix)
-.fr_row_rot_loop:
-        rrca
-        djnz    .fr_row_rot_loop
-        ld      -17(ix),a
-
-.fr_row_patt_ready:
-        ;; __gpx_hline_raw8(gpx, x0, ycur, x1, ycur, c, m, row_lpatt, clip)
-        ld      l,9(ix)
-        ld      h,10(ix)
-        push    hl                     ;; clip
-
-        ld      a,-17(ix)
-        push    af
-        inc     sp                     ;; lpatt
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                     ;; c,m
-
-        ld      l,-11(ix)
-        ld      h,-12(ix)
-        push    hl                     ;; y1 (unused by hline)
-
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        push    hl                     ;; x1
-
-        ld      l,-11(ix)
-        ld      h,-12(ix)
-        push    hl                     ;; y0
-
-        ld      e,-1(ix)               ;; (gpx arg unused by hline_raw8)
-        ld      d,-2(ix)
-        call    __gpx_hline_raw8
-
-        ;; if (ycur == y1) complete
-        ld      a,-11(ix)
-        cp      -7(ix)
-        jr      nz,.fr_next_row
-        ld      a,-12(ix)
-        cp      -8(ix)
-        jr      z,.fr_done
-
-.fr_next_row:
-        ;; ycur++
-        ld      l,-11(ix)
-        ld      h,-12(ix)
-        inc     hl
-        ld      -11(ix),l
-        ld      -12(ix),h
+        djnz    .fr_patt_rot
+.fr_patt_ready:
+        ld      l,-9(ix)
+        ld      h,-10(ix)
+        call    __gpx_span_row         ;; preserves HL
+        call    __vid_nextrow
+        ld      -9(ix),l
+        ld      -10(ix),h
 
         ;; idx = (idx + 1) % fpatt_len
         ld      a,-13(ix)
@@ -319,7 +249,8 @@ _gpx_fill_rectangle::
 .fr_store_idx:
         ld      -13(ix),a
 
-        jp      .fr_row_loop
+        dec     -11(ix)
+        jr      nz,.fr_row_loop
 
 .fr_done:
         ld      sp,ix

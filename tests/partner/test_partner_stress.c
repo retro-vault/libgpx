@@ -124,7 +124,5 @@ void main(void)
 done:
     gpx_destroy(gpx);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

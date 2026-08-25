@@ -68,7 +68,7 @@ __gpx_plot_raw:
         jp      nz,.pr_reject
         ld      a,l
         cp      #192
-        jp      nc,.pr_reject
+        jr      nc,.pr_reject
 
         ;; optional clip (BC = rect ptr)
         ld      a,b
@@ -90,10 +90,10 @@ __gpx_plot_raw:
         ld      c,a                    ;; save x0 lo
         ld      a,b
         or      a
-        jp      nz,.pr_reject          ;; x0 >= 256 => x < x0 => reject
+        jr      nz,.pr_reject ;; x0 >= 256 => x < x0 => reject
         ld      a,e                    ;; x
         cp      c
-        jp      c,.pr_reject           ;; x < x0
+        jr      c,.pr_reject ;; x < x0
 
 .pr_cy0:
         ;; if (y < clip->y0) reject
@@ -106,10 +106,10 @@ __gpx_plot_raw:
         ld      c,a
         ld      a,b
         or      a
-        jp      nz,.pr_reject
+        jr      nz,.pr_reject
         ld      a,d                    ;; y
         cp      c
-        jp      c,.pr_reject
+        jr      c,.pr_reject
 
 .pr_cx1:
         ;; if (x > clip->x1) reject  (== clip->x1 < x)
@@ -118,13 +118,13 @@ __gpx_plot_raw:
         ld      b,(hl)                 ;; x1 hi
         inc     hl                     ;; HL -> &y1
         bit     7,b
-        jp      nz,.pr_reject          ;; x1 < 0 => reject
+        jr      nz,.pr_reject ;; x1 < 0 => reject
         ld      a,b
         or      a
         jr      nz,.pr_cy1             ;; x1 >= 256 => pass
         ld      a,c                    ;; x1 lo
         cp      e                      ;; x1 < x ?
-        jp      c,.pr_reject
+        jr      c,.pr_reject
 
 .pr_cy1:
         ;; if (y > clip->y1) reject
@@ -132,13 +132,13 @@ __gpx_plot_raw:
         inc     hl
         ld      b,(hl)                 ;; y1 hi
         bit     7,b
-        jp      nz,.pr_reject          ;; y1 < 0 => reject
+        jr      nz,.pr_reject ;; y1 < 0 => reject
         ld      a,b
         or      a
         jr      nz,.pr_plot            ;; y1 >= 256 => pass
         ld      a,c                    ;; y1 lo
         cp      d                      ;; y1 < y ?
-        jp      c,.pr_reject
+        jr      c,.pr_reject
 
 .pr_plot:
         ;; y in D, x in E

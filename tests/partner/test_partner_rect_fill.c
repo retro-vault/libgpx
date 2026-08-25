@@ -29,7 +29,5 @@ void main(void)
     rect_t fr3_clip = {350, 120, 760, 210};
     gpx_fill_rectangle(gpx, &fr3, CO_FORE, BM_CPY, fp3, 3, &fr3_clip);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

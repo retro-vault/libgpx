@@ -2,16 +2,21 @@
         ;;
         ;; Fast horizontal line helper:
         ;;  - assumes x0 <= x1 (sorted)
-        ;;  - quick clip reject against clip rectangle
-        ;;  - clips x to clip bounds
+        ;;  - quick clip reject against the clip rectangle, or the screen when
+        ;;    the caller passes no clip
+        ;;  - clips x to those bounds
         ;;  - draws by bytes (start/stop masks + full middle bytes)
         ;;  - preserves pattern phase (skip + drawn span)
+        ;;  - pattern 0-bits are left alone, matching gpx_draw_pixel and the
+        ;;    Bresenham raster: CO_FORE sets pattern-1 pixels, CO_BACK clears
+        ;;    them, BM_XOR toggles them and ignores the color.
 
         .module _gpx_hline
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_hline
-        .globl  __gpx_hline_raw8
+        .globl  __gpx_span_row
+        .globl  __gpx_span_setup
         .globl  __rect_cmp16s_lt
         .globl  __ret_clean11
         .globl  __clip_seg
@@ -33,29 +38,22 @@
         ;;
         ;; Returns:
         ;;   A = updated lpatt, or unchanged lpatt on reject.
-        ;; __gpx_hline_raw8 shares the prologue: B=0 raw (no clip logic),
-        ;; B=1 full clip handling. raw expects x0<=x1, on-screen 8-bit.
-__gpx_hline_raw8::
-        ld      b,#0
-        jr      ghl_entry
 __gpx_hline::
-        ld      b,#1
-ghl_entry:
         push    ix
         ld      ix,#0
         add     ix,sp
 
-        ;; locals (11 bytes):
+        ;; locals (13 bytes):
         ;; -1..-2  x0
         ;; -3..-4  x1
         ;; -5      x0 original low
         ;; -6      patt_start
         ;; -7      patt_byte
-        ;; -8      mask_first
-        ;; -9      mask_last
-        ;; -10     byte_lo
-        ;; -11     byte_hi
-        ld      hl,#-11
+        ;; -8      byte_lo
+        ;; -13..-9 span descriptor, laid out for __gpx_span_row:
+        ;;         -13 mask_first, -12 mask_last, -11 count,
+        ;;         -10 sel_or,     -9 sel_xor
+        ld      hl,#-13
         add     hl,sp
         ld      sp,hl
 
@@ -68,16 +66,38 @@ ghl_entry:
         ld      a,7(ix)
         ld      -3(ix),a               ;; x1 hi
 
-        ;; raw entry skips clip logic entirely
-        ld      a,b
+        ;; The screen is an implicit clip, and it is applied first: a clip
+        ;; rect may itself extend off-screen, and a byte-span path handed a
+        ;; span the screen cannot hold would write past the display file.
+        ld      a,5(ix)                ;; y hi: nonzero => y < 0 or y > 255
         or      a
-        jp      z,ghl_draw_core
+        jp      nz,ghl_reject
+        ld      a,4(ix)
+        cp      #192
+        jp      nc,ghl_reject
 
-        ;; optional clip
+        ld      a,-3(ix)               ;; x1 hi
+        or      a
+        jr      z,ghl_x1_onscreen
+        jp      m,ghl_reject           ;; x1 < 0: nothing visible
+        ld      a,#255                 ;; x1 > 255: clamp
+        ld      -4(ix),a
+        xor     a
+        ld      -3(ix),a
+ghl_x1_onscreen:
+        ld      a,-1(ix)               ;; x0 hi
+        or      a
+        jr      z,ghl_x0_onscreen
+        jp      p,ghl_reject           ;; x0 > 255: nothing visible
+        xor     a                      ;; x0 < 0: clamp
+        ld      -1(ix),a
+        ld      -2(ix),a
+ghl_x0_onscreen:
+
+        ;; optional caller clip, on top of the screen bounds
         ld      a,13(ix)
         or      14(ix)
-        jr      nz,ghl_clip_checks
-        jp      ghl_draw_core
+        jr      z,ghl_draw_core
 
 ghl_clip_checks:
         ;; BC = clip pointer
@@ -156,147 +176,30 @@ ghl_pbyte_store:
         ld      a,d
         ld      -7(ix),a
 
-        ;; mask_first = 0xFF >> n
-        ld      a,-2(ix)
-        and     #0x07
-        ld      b,a
-        ld      a,#0xff
-        jr      z,ghl_mfirst_store
-ghl_mfirst_loop:
-        srl     a
-        djnz    ghl_mfirst_loop
-ghl_mfirst_store:
+        ;; Span descriptor for __gpx_span_row: IY = &descriptor (ix - 13).
+        push    ix
+        pop     iy
+        ld      de,#-13
+        add     iy,de
+
+        ld      b,-2(ix)               ;; x0 (clamped to the screen)
+        ld      c,-4(ix)               ;; x1
+        ld      d,10(ix)               ;; color
+        ld      e,11(ix)               ;; mode
+        call    __gpx_span_setup       ;; A = byte_lo
         ld      -8(ix),a
-
-        ;; mask_last = 0xFF << (7 - (x1 & 7))
-        ld      a,-4(ix)
-        and     #0x07
-        ld      c,a
-        ld      a,#7
-        sub     c
-        ld      b,a
-        ld      a,#0xff
-        jr      z,ghl_mlast_store
-ghl_mlast_loop:
-        sla     a
-        djnz    ghl_mlast_loop
-ghl_mlast_store:
-        ld      -9(ix),a
-
-        ;; byte_lo = x0 >> 3
-        ld      a,-2(ix)
-        srl     a
-        srl     a
-        srl     a
-        ld      -10(ix),a
-
-        ;; byte_hi = x1 >> 3
-        ld      a,-4(ix)
-        srl     a
-        srl     a
-        srl     a
-        ld      -11(ix),a
 
         ;; HL = row base + byte_lo
         ld      b,4(ix)                ;; y low
         call    __vid_rowaddr
-        ld      a,-10(ix)
+        ld      a,-8(ix)
         add     a,l
         ld      l,a
         jr      nc,ghl_row_ptr_ok
         inc     h
 ghl_row_ptr_ok:
-        ;; color transform once: CO_BACK uses inverted pattern
-        ld      a,10(ix)               ;; color
-        bit     0,a
-        jr      nz,ghl_mode_select
-        ld      a,-7(ix)
-        cpl
-        ld      -7(ix),a
-
-ghl_mode_select:
-        ;; mode dispatch once
-        ld      a,11(ix)               ;; mode
-        bit     0,a
-        jr      nz,ghl_draw_xor
-
-ghl_draw_cpy:
-        ;; single-byte span?
-        ld      a,-10(ix)
-        cp      -11(ix)
-        jr      nz,ghl_cpy_multi_byte
-
-        ld      a,-8(ix)
-        and     -9(ix)
-        ld      c,a
-        ld      a,-7(ix)
-        call    ghl_apply_cpy_mask
-        jr      ghl_ret_pattern
-
-ghl_cpy_multi_byte:
-        ;; first byte
-        ld      c,-8(ix)
-        ld      a,-7(ix)
-        call    ghl_apply_cpy_mask
-
-        ;; middle full bytes count = byte_hi - byte_lo - 1
-        ld      a,-11(ix)
-        sub     -10(ix)
-        dec     a
-        jr      z,ghl_cpy_last_byte
-        ld      b,a
-        ld      e,-7(ix)
-ghl_cpy_mid_loop:
-        inc     hl
-        ld      a,e
-        ld      (hl),a
-        djnz    ghl_cpy_mid_loop
-
-ghl_cpy_last_byte:
-        inc     hl
-        ld      c,-9(ix)
-        ld      a,-7(ix)
-        call    ghl_apply_cpy_mask
-        jr      ghl_ret_pattern
-
-ghl_draw_xor:
-        ;; single-byte span?
-        ld      a,-10(ix)
-        cp      -11(ix)
-        jr      nz,ghl_xor_multi_byte
-
-        ld      a,-8(ix)
-        and     -9(ix)
-        ld      c,a
-        ld      a,-7(ix)
-        call    ghl_apply_xor_mask
-        jr      ghl_ret_pattern
-
-ghl_xor_multi_byte:
-        ;; first byte
-        ld      c,-8(ix)
-        ld      a,-7(ix)
-        call    ghl_apply_xor_mask
-
-        ;; middle full bytes count = byte_hi - byte_lo - 1
-        ld      a,-11(ix)
-        sub     -10(ix)
-        dec     a
-        jr      z,ghl_xor_last_byte
-        ld      b,a
-        ld      e,-7(ix)
-ghl_xor_mid_loop:
-        inc     hl
-        ld      a,e
-        xor     (hl)
-        ld      (hl),a
-        djnz    ghl_xor_mid_loop
-
-ghl_xor_last_byte:
-        inc     hl
-        ld      c,-9(ix)
-        ld      a,-7(ix)
-        call    ghl_apply_xor_mask
+        ld      a,-7(ix)               ;; byte-grid aligned pattern
+        call    __gpx_span_row
 
 ghl_ret_pattern:
         ;; return patt = ror(patt_start, (x1-x0) & 7)
@@ -321,28 +224,173 @@ ghl_return:
         jp      __ret_clean11
 
         ;; ------------------------------------------------------------
-        ;; Apply pattern byte in A to (HL), limited by coverage mask in C.
+        ;; __gpx_span_setup
+        ;;
+        ;; Fill the span descriptor __gpx_span_row consumes. Everything here
+        ;; is constant down a filled rectangle, which is why it is a separate
+        ;; step: gpx_fill_rectangle calls it once and then loops rows.
+        ;;
+        ;;   B  = x0, C = x1   both already clamped to 0..255, x0 <= x1
+        ;;   D  = color byte, E = mode byte
+        ;;   IY = descriptor (+0 mask_first, +1 mask_last, +2 count,
+        ;;                    +3 sel_or, +4 sel_xor)
+        ;;   Returns A = byte_lo (x0 >> 3). Clobbers A, BC, DE and L.
         ;; ------------------------------------------------------------
-ghl_apply_cpy_mask:
-        push    bc
-        ;; BM_CPY: merge selected bits from pattern, preserve others
-        ld      e,a
+__gpx_span_setup::
+        ;; mask_first = 0xFF >> (x0 & 7)
+        ld      a,b
+        and     #0x07
+        ld      l,a
+        ld      a,#0xff
+        jr      z,.ss_first_done
+.ss_first_lp:
+        srl     a
+        dec     l
+        jr      nz,.ss_first_lp
+.ss_first_done:
+        ld      0(iy),a
+
+        ;; mask_last = 0xFF << (7 - (x1 & 7))
         ld      a,c
-        cpl
-        and     (hl)
-        ld      d,a
-        ld      a,e
-        and     c
-        or      d
-        ld      (hl),a
-        pop     bc
+        and     #0x07
+        ld      l,a
+        ld      a,#7
+        sub     l
+        ld      l,a
+        ld      a,#0xff
+        jr      z,.ss_last_done
+.ss_last_lp:
+        add     a,a
+        dec     l
+        jr      nz,.ss_last_lp
+.ss_last_done:
+        ld      1(iy),a
+
+        ;; count = (x1 >> 3) - (x0 >> 3) + 1
+        ld      a,b
+        rrca
+        rrca
+        rrca
+        and     #0x1f
+        ld      l,a                    ;; byte_lo
+        ld      a,c
+        rrca
+        rrca
+        rrca
+        and     #0x1f
+        sub     l
+        inc     a
+        ld      2(iy),a
+
+        ;; Plot selectors: set FF/00, clear FF/FF, xor 00/FF. Pattern 0-bits
+        ;; never reach the destination in any of them.
+        ld      a,e                    ;; mode
+        bit     0,a
+        ld      b,#0xff
+        ld      c,#0x00
+        jr      z,.ss_cpy
+        ld      b,#0x00                ;; BM_XOR ignores the color
+        ld      c,#0xff
+        jr      .ss_store
+.ss_cpy:
+        ld      a,d                    ;; color
+        bit     0,a
+        jr      nz,.ss_store           ;; CO_FORE: set
+        ld      c,#0xff                ;; CO_BACK: clear
+.ss_store:
+        ld      3(iy),b
+        ld      4(iy),c
+        ld      a,l                    ;; A = byte_lo
         ret
 
-ghl_apply_xor_mask:
-        push    bc
-        ;; BM_XOR: toggle selected bits only
+        ;; ------------------------------------------------------------
+        ;; __gpx_span_row
+        ;;
+        ;; Apply one byte-aligned pattern across a horizontal run of bytes.
+        ;; Every value that is constant for the run lives in the descriptor,
+        ;; so a caller filling many rows pays the setup once instead of once
+        ;; per row.
+        ;;
+        ;;   HL = first destination byte of the run
+        ;;   A  = pattern byte, already rotated onto the byte grid
+        ;;   IY = span descriptor:
+        ;;        +0 mask_first  coverage of the first byte
+        ;;        +1 mask_last   coverage of the last byte
+        ;;        +2 count       bytes in the run, >= 1
+        ;;        +3 sel_or      plot selectors, see below
+        ;;        +4 sel_xor
+        ;;
+        ;; Each byte becomes  dest = (dest | (m & sel_or)) ^ (m & sel_xor)
+        ;; with m = pattern & coverage: set FF/00, clear FF/FF, xor 00/FF.
+        ;;
+        ;; Clobbers A, BC, DE; preserves HL, IX and IY, so a caller filling
+        ;; many rows can keep the row pointer in HL and step it.
+        ;; ------------------------------------------------------------
+__gpx_span_row::
+        push    hl
+        call    .sr_run
+        pop     hl
+        ret
+
+.sr_run:
+        ld      c,a                    ;; C = pattern, live for the whole run
+        ld      b,2(iy)                ;; B = byte count
+        dec     b
+        jr      z,.sr_single
+
+        ld      a,0(iy)
         and     c
-        xor     (hl)
+        call    .sr_apply
+
+        dec     b
+        jr      z,.sr_last
+
+        ;; Middle bytes are fully covered, so the selectors fold into the
+        ;; pattern once for the whole run instead of once per byte.
+        ld      a,c
+        and     3(iy)
+        ld      d,a
+        ld      a,c
+        and     4(iy)
+        ld      e,a
+        or      a
+        jr      nz,.sr_mid_loop
+        ld      a,d
+        inc     a
+        jr      nz,.sr_mid_loop
+.sr_mid_store:                         ;; solid set: a plain store per byte
+        inc     hl
+        ld      (hl),#0xff
+        djnz    .sr_mid_store
+        jr      .sr_last
+.sr_mid_loop:
+        inc     hl
+        ld      a,(hl)
+        or      d
+        xor     e
         ld      (hl),a
-        pop     bc
+        djnz    .sr_mid_loop
+
+.sr_last:
+        inc     hl
+        ld      a,1(iy)
+        and     c
+        jr      .sr_apply ;; tail: its ret goes to our caller
+
+.sr_single:
+        ld      a,0(iy)
+        and     1(iy)
+        and     c
+        ;; fall through
+
+.sr_apply:
+        ;; A = m
+        ld      e,a
+        and     3(iy)
+        or      (hl)
+        ld      d,a
+        ld      a,e
+        and     4(iy)
+        xor     d
+        ld      (hl),a
         ret

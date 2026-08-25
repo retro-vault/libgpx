@@ -39,7 +39,5 @@ void main(void)
     gpx_draw_line(gpx, 10, 110, 25, 110, CO_FORE, BM_CPY, 0x72, (const rect_t *)0);
     gpx_draw_line(gpx, 10, 111, 25, 111, CO_FORE, BM_CPY, 0xA5, (const rect_t *)0);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

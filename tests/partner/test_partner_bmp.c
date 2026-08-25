@@ -38,7 +38,5 @@ void main(void)
     rect_t clip_out = {200, 150, 240, 170};
     gpx_draw_bmp(gpx, 60, 30, (bmp_t *)tiny_data, &clip_out);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

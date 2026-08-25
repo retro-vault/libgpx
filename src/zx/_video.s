@@ -8,6 +8,8 @@
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
         .globl  __vid_prevrow
+        .globl  __vid_nextrow_carry
+        .globl  __vid_prevrow_carry
 
         .area   _CODE
 
@@ -44,18 +46,20 @@ __vid_nextrow::
         inc     h
         ld      a,h
         and     #0x07
-        jr      nz,.vn_done
+        ret     nz                     ;; seven rows in eight end here
 
+        ;; Hot loops inline the three instructions above and enter here with
+        ;; `call z`, paying the call only on the one row in eight that
+        ;; crosses a character cell.
+__vid_nextrow_carry::
         ld      a,l
         add     a,#0x20
         ld      l,a
-        jr      c,.vn_done
+        ret     c
 
         ld      a,h
         sub     #0x08
         ld      h,a
-
-.vn_done:
         ret
 
         ;; __vid_prevrow
@@ -67,16 +71,15 @@ __vid_prevrow::
         ld      a,h
         and     #0x07
         cp      #0x07
-        jr      nz,.vp_done
+        ret     nz                     ;; seven rows in eight end here
 
+__vid_prevrow_carry::
         ld      a,l
         sub     #0x20
         ld      l,a
-        jr      c,.vp_done
+        ret     c
 
         ld      a,h
         add     a,#0x08
         ld      h,a
-
-.vp_done:
         ret

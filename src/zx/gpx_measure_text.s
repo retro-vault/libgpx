@@ -25,11 +25,11 @@
 _gpx_measure_text::
         ld      a,h                     ;; text != NULL ?
         or      l
-        jp      z,.mt_zero
+        jr      z,.mt_zero
 
         ld      a,d                     ;; font != NULL ?
         or      e
-        jp      z,.mt_zero
+        jr      z,.mt_zero
 
         push    ix
         push    de

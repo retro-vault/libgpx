@@ -16,6 +16,7 @@
         .globl  __gpx_ffshr
         .globl  __rect_cmp16s_lt
         .globl  __vid_rowaddr
+        .globl  __vid_nextrow
 
         .equ    SCRHEIGHT, 192
         .equ    BMP_SIG_ENC_MASK, 0xF0
@@ -57,24 +58,18 @@
         .equ    L_RMASK,            46
         .equ    L_SRCSPAN,          47
         .equ    L_DSTSPAN,          48
-        .equ    L_DSTLAST,          49
         .equ    L_SRCROW,           50
         .equ    L_SRCROW_OR,        52
         .equ    L_SRCPTR,           54
         .equ    L_SRCPTR_OR,        56
         .equ    L_DSTPTR,           58
         .equ    L_ROWCNT,           60
-        .equ    L_BYTECNT,          61
         .equ    L_YCUR,             62
-        .equ    L_OLD,              63
-        .equ    L_KEEP,             64
         .equ    L_INSIDE,           65
         .equ    L_FORE,             66
         .equ    L_ROT,              67
         .equ    L_REMAINDER,        68
-        .equ    L_DRAW,             69
         .equ    L_REMAINDER_OR,     70
-        .equ    L_ORBITS,           71
         .equ    L_IS_MASKED,        72
         .equ    L_DRAWMODE,         73
         ;; 2-byte source window state (replaces the old rotate+remainder carry):
@@ -144,7 +139,9 @@ gb_core:
 
         ;; Precompute compositor behaviour once per call.
         ;; DRAWMODE:
-        ;;   0 = legacy public gpx_draw_bmp semantics (skip source zero bits)
+        ;;   0 = public gpx_draw_bmp semantics, plain source: out = old | src
+        ;;   4 = public gpx_draw_bmp semantics, masked source: the AND plane
+        ;;       is the only case where the compositor reads it at all
         ;;   1 = BM_CPY + CO_FORE (copy source bits)
         ;;   2 = BM_CPY + CO_BACK (copy inverted source bits)
         ;;   3 = BM_XOR
@@ -209,11 +206,23 @@ gb_mode_select:
  gb_sig_unmasked:
         xor     a
         ld      L_IS_MASKED(iy),a
-        jr      gb_sig_parse
+        jr      gb_sig_need_and
 
  gb_sig_masked:
         ld      a,#1
         ld      L_IS_MASKED(iy),a
+
+ gb_sig_need_and:
+        ;; Public semantics on a masked source is the one case that reads the
+        ;; AND plane; fold it into the mode so the byte loop tests once.
+        ld      a,L_DRAWMODE(iy)
+        or      a
+        jr      nz,gb_sig_parse
+        ld      a,L_IS_MASKED(iy)
+        or      a
+        jr      z,gb_sig_parse
+        ld      a,#4
+        ld      L_DRAWMODE(iy),a
 
  gb_sig_parse:
         ld      a,(hl)
@@ -275,9 +284,7 @@ gb_mode_select:
 
         ;; Intersect with optional clip rectangle when present.
         ld      a,L_CLIP(iy)
-        ld      b,a
-        ld      a,L_CLIP+1(iy)
-        or      b
+        or      L_CLIP+1(iy)
         jr      z,gb_clip_ready
 
         LD16HL  L_CLIP
@@ -290,9 +297,8 @@ gb_mode_select:
         push    hl
         ld      hl,#0
         call    __rect_cmp16s_lt       ;; 0 < clip_x0 ?
-        pop     hl
-        or      a
-        jr      z,gb_clip_y0_load
+        pop     hl                     ;; does not disturb the compare's carry
+        jr      nc,gb_clip_y0_load
         ST16DE  L_CLIP_X0
 
  gb_clip_y0_load:
@@ -304,9 +310,8 @@ gb_mode_select:
         push    hl
         ld      hl,#0
         call    __rect_cmp16s_lt       ;; 0 < clip_y0 ?
-        pop     hl
-        or      a
-        jr      z,gb_clip_x1_load
+        pop     hl                     ;; does not disturb the compare's carry
+        jr      nc,gb_clip_x1_load
         ST16DE  L_CLIP_Y0
 
  gb_clip_x1_load:
@@ -322,9 +327,8 @@ gb_mode_select:
         ld      h,b
         ld      de,#255
         call    __rect_cmp16s_lt       ;; clip_x1 < 255 ?
-        pop     hl
-        or      a
-        jr      z,gb_clip_y1_load
+        pop     hl                     ;; does not disturb the compare's carry
+        jr      nc,gb_clip_y1_load
         ld      a,c
         ld      L_CLIP_X1(iy),a
         ld      a,b
@@ -341,8 +345,7 @@ gb_mode_select:
         ld      h,b
         ld      de,#(SCRHEIGHT-1)
         call    __rect_cmp16s_lt       ;; clip_y1 < 191 ?
-        or      a
-        jr      z,gb_clip_ready
+        jr      nc,gb_clip_ready
         ld      l,c
         ld      h,b
         ST16HL  L_CLIP_Y1
@@ -352,39 +355,33 @@ gb_mode_select:
         LD16HL  L_CLIP_X1
         LD16DE  L_CLIP_X0
         call    __rect_cmp16s_lt
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         LD16HL  L_CLIP_Y1
         LD16DE  L_CLIP_Y0
         call    __rect_cmp16s_lt
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         ;; Reject if draw rect does not intersect clip rect.
         LD16HL  L_XEND
         LD16DE  L_CLIP_X0
         call    __rect_cmp16s_lt       ;; draw_x1 < clip_x0 ?
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         LD16HL  L_CLIP_X1
         LD16DE  L_X
         call    __rect_cmp16s_lt       ;; clip_x1 < draw_x0 ?
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         LD16HL  L_YEND
         LD16DE  L_CLIP_Y0
         call    __rect_cmp16s_lt       ;; draw_y1 < clip_y0 ?
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         LD16HL  L_CLIP_Y1
         LD16DE  L_Y
         call    __rect_cmp16s_lt       ;; clip_y1 < draw_y0 ?
-        or      a
-        jp      nz,gb_exit
+        jp      c,gb_exit
 
         ;; vis rect = draw rect clamped to effective clip, via shared
         ;; gb_max16 / gb_min16 (HL=result; cmp preserves HL/DE).
@@ -494,8 +491,6 @@ gb_mode_select:
         ld      a,L_DBIT(iy)
         call    gb_span
         ld      L_DSTSPAN(iy),a
-        dec     a
-        ld      L_DSTLAST(iy),a
 
         ;; Source row pointers + independent row strides.
         LD16HL  L_BPTR
@@ -536,15 +531,18 @@ gb_mode_select:
         jr      z,gb_rows_skip_x
 
  gb_rows_skip_loop:
-        LD16HL  L_SRCROW
-        LD16DE  L_ROWSTRIDE_AND
-        add     hl,de
-        ST16HL  L_SRCROW
-
-        LD16HL  L_SRCROW_OR
-        LD16DE  L_ROWSTRIDE_OR
-        add     hl,de
-        ST16HL  L_SRCROW_OR
+        ld      a,L_ROWSTRIDE_AND(iy)
+        add     a,L_SRCROW(iy)
+        ld      L_SRCROW(iy),a
+        jr      nc,gb_skip_or
+        inc     L_SRCROW+1(iy)
+ gb_skip_or:
+        ld      a,L_ROWSTRIDE_OR(iy)
+        add     a,L_SRCROW_OR(iy)
+        ld      L_SRCROW_OR(iy),a
+        jr      nc,gb_skip_next
+        inc     L_SRCROW_OR+1(iy)
+ gb_skip_next:
 
         ld      a,L_SRCY(iy)
         dec     a
@@ -572,56 +570,65 @@ gb_mode_select:
         ST16HL  L_SRCROW
 
  gb_rows_ready:
-        xor     a
-        ld      L_ROWCNT(iy),a
-        ld      a,L_VISY0(iy)
-        ld      L_YCUR(iy),a
-
- gb_row_loop:
-        ;; done when rowcnt == vish
-        ld      a,L_ROWCNT(iy)
-        ld      b,a
         ld      a,L_VISH(iy)
-        cp      b
+        or      a
         jp      z,gb_exit
+        ld      L_ROWCNT(iy),a         ;; counts down
 
-        ;; row destination base + xbyte
-        ld      a,L_YCUR(iy)
-        ld      b,a
+        ;; The destination row address is derived once here and then stepped:
+        ;; consecutive display rows are one __vid_nextrow apart, which is far
+        ;; cheaper than rebuilding the interleaved address from y every row.
+        ;; The row base low byte is a multiple of 0x20 and xbyte is 0..31, so
+        ;; the add cannot carry.
+        ld      b,L_VISY0(iy)
         call    __vid_rowaddr
         ld      a,L_XBYTE(iy)
         add     a,l
-        ld      l,a
-        ST16HL  L_DSTPTR
+        ld      l,a                    ;; HL now rides through the row loop
 
+ gb_row_loop:
         ;; Source row pointers live in the alternate bank: HL'=AND, DE'=OR.
         ;; (IY is not swapped by exx, so IY-relative loads still work here.)
+        ;; HL' is only a pointer when the AND plane is live; otherwise the
+        ;; byte loop uses it as a shift window, so there is nothing to load.
+        ld      a,L_DRAWMODE(iy)
+        cp      #4
+        jr      nz,gb_row_or_only
         exx
         LD16HL  L_SRCROW
         LD16DE  L_SRCROW_OR
         exx
+        jr      gb_row_ptrs_done
+ gb_row_or_only:
+        exx
+        LD16DE  L_SRCROW_OR
+        exx
+ gb_row_ptrs_done:
 
-        ;; per-row: reset bytecnt + source counter, prime window prev bytes
-        xor     a
-        ld      L_BYTECNT(iy),a
+        ;; per-row: reset the source counter, prime the window prev bytes
         ld      a,L_SRCSPAN(iy)
         ld      L_SRCREMAIN(iy),a
 
         ;; hb0 = (dbit > srcbit) ? -1 : 0
-        ld      a,L_DBIT(iy)
-        ld      b,a
         ld      a,L_SRCBIT(iy)
-        cp      b                      ;; C if srcbit < dbit => dbit>srcbit => hb0=-1
+        cp      L_DBIT(iy)             ;; C if srcbit < dbit => dbit>srcbit => hb0=-1
         jr      c,gb_prime_default
 
-        ;; hb0 = 0: prev = first source byte (consume one from each plane)
+        ;; hb0 = 0: prev = first source byte (consume one from each live plane)
+        ld      a,L_DRAWMODE(iy)
+        cp      #4
+        jr      nz,gb_prime_or_only
         exx
         ld      a,(hl)                 ;; AND plane (HL')
         inc     hl
         ld      L_REMAINDER(iy),a      ;; prevA  (IY works inside exx)
+        exx
+ gb_prime_or_only:
+        exx
         ld      a,(de)                 ;; OR plane (DE')
         inc     de
-        ld      L_REMAINDER_OR(iy),a   ;; prevO
+        ld      c,a                    ;; C' = prevO for the fast path
+        ld      L_REMAINDER_OR(iy),a   ;; prevO for the masked path
         exx
         ld      a,L_SRCREMAIN(iy)
         dec     a
@@ -634,49 +641,101 @@ gb_mode_select:
         ld      L_REMAINDER(iy),a
         xor     a
         ld      L_REMAINDER_OR(iy),a
+        exx
+        ld      c,a                    ;; C' = prevO for the fast path
+        exx
 
  gb_dst_init:
-        ;; Pin DSTPTR in HL for the whole byte loop (no per-byte IY load/store).
-        LD16HL  L_DSTPTR
 
- gb_col_loop_compose:
-        ld      a,L_BYTECNT(iy)
-        ld      c,a
+        ;; The left and right edge masks only ever apply to the first and
+        ;; last byte of the span, so the run is walked in three phases and
+        ;; the middle bytes carry no edge handling at all. The destination
+        ;; byte stays addressed by HL and is read through (hl) at 7 T-states.
         ld      a,L_DSTSPAN(iy)
-        cp      c
-        jp      z,gb_next_row
+        dec     a
+        jr      z,gb_span_single
 
-        ;; old destination byte (HL = DSTPTR)
-        ld      a,(hl)
-        ld      L_OLD(iy),a
-
-        ;; keep mask for outside bits (left/right edges)
-        xor     a
-        ld      L_KEEP(iy),a
-
-        ld      a,c
-        or      a
-        jr      nz,gb_not_first
+        ;; --- first byte ---
         ld      a,L_LMASK(iy)
-        ld      L_KEEP(iy),a
-
- gb_not_first:
-        ld      a,L_DSTLAST(iy)
-        cp      c
-        jr      nz,gb_keep_ready
-        ld      a,L_KEEP(iy)
-        ld      b,a
-        ld      a,L_RMASK(iy)
-        or      b
-        ld      L_KEEP(iy),a
-
- gb_keep_ready:
-        ld      a,L_KEEP(iy)
         cpl
         ld      L_INSIDE(iy),a
+        call    gb_byte
 
-        ;; --- 2-byte source window (HL holds DSTPTR; source ptrs read via DE) ---
-        ;; gb_win does the (prev:curA)<<sub gather in D:E so HL is never touched.
+        ;; --- middle bytes, entirely inside the visible span ---
+        ld      a,L_DSTSPAN(iy)
+        sub     #2
+        jr      z,gb_span_last
+        ld      b,a
+        ld      a,#0xff
+        ld      L_INSIDE(iy),a
+ gb_mid_loop:
+        push    bc
+        call    gb_byte
+        pop     bc
+        djnz    gb_mid_loop
+
+ gb_span_last:
+        ld      a,L_RMASK(iy)
+        cpl
+        ld      L_INSIDE(iy),a
+        call    gb_byte
+        jp      gb_next_row
+
+ gb_span_single:
+        ld      a,L_LMASK(iy)
+        or      L_RMASK(iy)
+        cpl
+        ld      L_INSIDE(iy),a
+        call    gb_byte
+        jp      gb_next_row
+
+        ;; ------------------------------------------------------------
+        ;; gb_byte: compose one destination byte at (HL) and advance HL.
+        ;; All state is in the caller's stack frame via IY, so this stays
+        ;; re-entrant. Clobbers A, BC, DE and the alternate bank.
+        ;;
+        ;; The AND plane is live only for a masked bitmap drawn with the
+        ;; default public semantics. Every other draw leaves HL' free, so the
+        ;; two-byte source window can shift there with add hl,hl and the
+        ;; previous source byte can stay in C' instead of the workspace.
+        ;; ------------------------------------------------------------
+ gb_byte:
+        ld      a,L_DRAWMODE(iy)
+        cp      #4
+        jp      z,gb_byte_masked
+
+        ld      a,L_SRCREMAIN(iy)
+        or      a
+        jr      z,gb_fast_pad
+        dec     a
+        ld      L_SRCREMAIN(iy),a
+        exx
+        ld      a,(de)                 ;; curO from the OR pointer in DE'
+        inc     de
+        jr      gb_fast_have
+ gb_fast_pad:
+        exx
+        xor     a                      ;; past the source span: zero fill
+ gb_fast_have:
+        ld      h,c                    ;; H = prevO
+        ld      l,a                    ;; L = curO
+        ld      c,a                    ;; C' = prevO for the next byte
+        ld      b,L_SUB(iy)            ;; IY is not swapped by exx
+        inc     b
+        dec     b
+        jr      z,gb_fast_done
+ gb_fast_lp:
+        add     hl,hl                  ;; 11T a step, against 16T in D:E
+        djnz    gb_fast_lp
+ gb_fast_done:
+        ld      a,h
+        exx
+        ld      e,a                    ;; E = ORBITS, straight into the compose
+        jr      gb_have_src
+
+ gb_byte_masked:
+        ;; Masked source, public semantics: both planes are live, so HL' and
+        ;; DE' are both taken and the window stages through D:E as before.
         ld      a,L_SRCREMAIN(iy)
         or      a
         jr      z,gb_cur_default
@@ -687,7 +746,6 @@ gb_mode_select:
         exx
         ld      c,a                    ;; curA
         ld      a,L_REMAINDER(iy)      ;; prevA
-        ;; inline gb_win: A=(prevA:curA)<<SUB hi  (FORE)
         ld      d,a
         ld      e,c
         ld      a,L_SUB(iy)
@@ -710,7 +768,6 @@ gb_mode_select:
         exx
         ld      c,a                    ;; curO
         ld      a,L_REMAINDER_OR(iy)   ;; prevO
-        ;; inline gb_win: A=(prevO:curO)<<SUB hi  (ORBITS)
         ld      d,a
         ld      e,c
         ld      a,L_SUB(iy)
@@ -722,19 +779,16 @@ gb_mode_select:
         rl      d
         djnz    gbw2_lp
  gbw2_done:
-        ld      a,d
-        ld      L_ORBITS(iy),a
         ld      a,c
         ld      L_REMAINDER_OR(iy),a   ;; prevO = curO
-
+        ld      e,d                    ;; E = ORBITS
         ld      a,L_SRCREMAIN(iy)
         dec     a
         ld      L_SRCREMAIN(iy),a
         jr      gb_have_src
 
  gb_cur_default:
-        ;; Cold path (only trailing transparent bytes past the source span):
-        ;; keep gb_win as a call here to avoid bloating for ~no speed gain.
+        ;; Cold path: trailing transparent bytes past the source span.
         ld      c,#0xff                ;; curA default (transparent)
         ld      a,L_REMAINDER(iy)
         call    gb_win
@@ -744,7 +798,7 @@ gb_mode_select:
         ld      c,#0x00                ;; curO default
         ld      a,L_REMAINDER_OR(iy)
         call    gb_win
-        ld      L_ORBITS(iy),a
+        ld      e,a                    ;; E = ORBITS
         ld      a,c
         ld      L_REMAINDER_OR(iy),a
 
@@ -753,105 +807,85 @@ gb_mode_select:
         or      a
         jr      nz,gb_mode_compose
 
-        ;; Default public semantics.
-        ld      a,L_FORE(iy)
-        ld      b,a
-        ld      a,L_INSIDE(iy)
-        and     b
-        ld      L_FORE(iy),a
-
-        ld      a,L_OLD(iy)
-        ld      b,a
-        ld      a,L_FORE(iy)
-        and     b
-        ld      L_DRAW(iy),a
-
-        ld      a,L_ORBITS(iy)
-        ld      b,a
-        ld      a,L_INSIDE(iy)
-        and     b
-        ld      b,a
-
-        ld      a,L_DRAW(iy)
-        or      b
-        ld      L_DRAW(iy),a
+        ;; Plain source, public semantics: draw = old | src. There is no AND
+        ;; plane to consult, so the compositor never reads one.
+        ld      a,e
+        or      (hl)
         jr      gb_store_out
 
  gb_mode_compose:
-        ;; Mode-aware semantics operate on source bits (OR plane) only.
-        ld      a,L_ORBITS(iy)
-        ld      b,a
-        ld      a,L_INSIDE(iy)
-        and     b
-        ld      L_ORBITS(iy),a
-
-        ld      a,L_DRAWMODE(iy)
+        cp      #4
+        jr      z,gb_mode_masked
         cp      #3
         jr      z,gb_mode_xor
         cp      #2
         jr      z,gb_mode_back
 
         ;; FORE copy: write source bits directly.
-        ld      a,L_ORBITS(iy)
-        ld      L_DRAW(iy),a
+        ld      a,e
+        jr      gb_store_out
+
+ gb_mode_masked:
+        ;; Masked source, public semantics: draw = (old & AND) | OR.
+        ld      a,L_FORE(iy)
+        and     (hl)
+        or      e
         jr      gb_store_out
 
  gb_mode_back:
         ;; BACK copy: write inverted source bits directly.
-        ld      a,L_ORBITS(iy)
+        ld      a,e
         cpl
-        ld      L_DRAW(iy),a
         jr      gb_store_out
 
  gb_mode_xor:
-        ;; XOR: flip OR bits only.
-        ld      a,L_OLD(iy)
-        ld      b,a
-        ld      a,L_ORBITS(iy)
-        xor     b
-        ld      L_DRAW(iy),a
+        ;; XOR: flip OR bits only. old ^ ((old ^ (old ^ src)) & inside)
+        ;; collapses to old ^ (src & inside), so this path skips the merge.
+        ld      a,e
+        and     L_INSIDE(iy)
+        xor     (hl)
+        jr      gb_store_byte
 
  gb_store_out:
-        ;; out = (old & keep) | (draw & inside)
-        ld      a,L_DRAW(iy)
-        ld      b,a
-        ld      a,L_INSIDE(iy)
-        and     b
-        ld      b,a
-
-        ld      a,L_OLD(iy)
-        ld      c,a
-        ld      a,L_KEEP(iy)
-        and     c
-        or      b
+        ;; A = draw; out = old ^ ((old ^ draw) & inside)
+        xor     (hl)
+        and     L_INSIDE(iy)
+        xor     (hl)
+ gb_store_byte:
         ld      (hl),a                 ;; HL = DSTPTR
         inc     hl                     ;; advance DSTPTR (kept in HL)
-
-        ld      a,L_BYTECNT(iy)
-        inc     a
-        ld      L_BYTECNT(iy),a
-        jp      gb_col_loop_compose
+        ret
 
  gb_next_row:
-        ;; advance source rows
-        LD16HL  L_SRCROW
-        LD16DE  L_ROWSTRIDE_AND
-        add     hl,de
-        ST16HL  L_SRCROW
-
-        LD16HL  L_SRCROW_OR
-        LD16DE  L_ROWSTRIDE_OR
-        add     hl,de
-        ST16HL  L_SRCROW_OR
-
-        ;; ycur++, rowcnt++
-        ld      a,L_YCUR(iy)
-        inc     a
-        ld      L_YCUR(iy),a
-
         ld      a,L_ROWCNT(iy)
-        inc     a
+        dec     a
         ld      L_ROWCNT(iy),a
+        jr      z,gb_exit
+
+        ;; Advance the source rows. A row stride is stride or 2*stride, at
+        ;; most 32, so this is an 8-bit add with a carry into the high byte
+        ;; rather than a full 16-bit add through DE.
+        ld      a,L_ROWSTRIDE_AND(iy)
+        add     a,L_SRCROW(iy)
+        ld      L_SRCROW(iy),a
+        jr      nc,gb_nr_or
+        inc     L_SRCROW+1(iy)
+ gb_nr_or:
+        ld      a,L_ROWSTRIDE_OR(iy)
+        add     a,L_SRCROW_OR(iy)
+        ld      L_SRCROW_OR(iy),a
+        jr      nc,gb_nr_dst
+        inc     L_SRCROW_OR+1(iy)
+ gb_nr_dst:
+        ;; The byte phases left HL one past the end of the span, so rewind by
+        ;; the span width and step a row: no workspace round-trip either way.
+        ld      a,l
+        sub     L_DSTSPAN(iy)
+        ld      l,a
+        jr      nc,gb_nr_step
+        dec     h
+ gb_nr_step:
+        call    __vid_nextrow
         jp      gb_row_loop
 
  gb_exit:
@@ -870,14 +904,12 @@ gb_mode_select:
         ;; __rect_cmp16s_lt preserves HL/DE (writes only A); A=1 when HL<DE.
  gb_max16:
         call    __rect_cmp16s_lt
-        or      a
-        ret     z                      ;; HL >= DE -> HL is the max
+        ret     nc                      ;; HL >= DE -> HL is the max
         ex      de,hl
         ret
  gb_min16:
         call    __rect_cmp16s_lt
-        or      a
-        ret     nz                     ;; HL < DE -> HL is the min
+        ret     c                     ;; HL < DE -> HL is the min
         ex      de,hl
         ret
 

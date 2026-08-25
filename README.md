@@ -22,19 +22,42 @@ The public API contract is defined in:
 - `include/libgpx.h`: public API and data formats.
 - `src/zx/`: ZX Spectrum implementation.
 - `src/partner/`: Partner WIP implementation.
-- `tests/`: emulator harness, ZX tests, visuals, coverage, size entry.
+- `mk/toolchain.mk`: shared toolchain and Docker image definitions.
+- `tests/`: test suites, benchmarks, visuals, coverage, size measurement.
 - `archive/`: old snapshots (not used by current build).
 - `build/`, `bin/`: generated artifacts.
+
+## Toolchain
+
+Everything is built with the [X Tools](https://hub.docker.com/r/wischner/xcc-z80-zx-spectrum)
+Z80 toolchain (`xcc`, `xas`, `xld`, `xar`) inside a pinned Docker image, so no
+host toolchain is needed:
+
+| Target | Image |
+|---|---|
+| ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
+| Iskra Delta Partner | `wischner/xcc-z80-idp` |
+
+The ZX image also ships `zx-spectrum-mcp`, the cycle-accurate emulator the ZX
+test suite drives over MCP, so tests need nothing beyond Docker and Python 3.
+
+Note that `xcc` uses `__asm__("...")` for inline assembly rather than SDCC's
+`__asm ... __endasm`.
 
 ## Build And Test Commands
 
 - `make build -j1`: build library plus ZX and Partner test binaries.
-- `make tests -j1`: run the host ZX emulator suite and Partner emulator tests.
+- `make tests -j1`: run the ZX differential suite on the emulator, then the Partner suite.
+- `make zx-tests -j1`: ZX suite only.
+- `make zx-bench -j1`: T-state benchmarks (`ARGS=--diff` to compare with the baseline).
+- `make lib-size -j1`: per-module code size (`ARGS=--diff` to compare with the baseline).
 - `make stub-visuals -j1`: render stub API scene artifacts to `bin/stub-visuals/`.
-- `make lib-visuals -j1`: render stacked real-vs-oracle comparisons to `bin/lib-visuals/`.
+- `make lib-visuals -j1`: render real and oracle screens to `bin/lib-visuals/`.
 - `make coverage -j1`: run host coverage and write `.gcov` files to `build/coverage/`.
-- `make lib-size -j1`: estimate library payload size using baseline subtraction.
 - `make clean`: remove generated build artifacts.
+
+See [tests/README.md](tests/README.md) for how the ZX suite works and how to
+add a scenario.
 
 ## Platform Notes (ZX)
 

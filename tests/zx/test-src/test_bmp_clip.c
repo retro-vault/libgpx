@@ -1,36 +1,62 @@
-#include "libgpx.h"
+#include "zxtest.h"
+#include "test_bitmaps.h"
 
-/* 1bpp bitmap clipped against sub-rectangles on each edge. */
-
-static const uint8_t solid16[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP, 2), 16, 12, 24, 0,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
-
+/* Bitmaps clipped on every side and corner. A left clip that does not fall
+ * on a byte boundary makes the blit advance the source by a partial byte,
+ * which is the case that historically broke the cross-byte carry. */
 void main(void)
 {
     gpx_t *gpx = gpx_create(GPXM_DEFAULT);
-    gpx_clrscr();
+    rect_t clip;
+    coord k;
 
-    /* clip cuts top-left */
-    rect_t c1 = {20, 20, 28, 26};
-    gpx_draw_bmp(gpx, 16, 16, (bmp_t *)solid16, &c1);
+    seed_screen_wash();
 
-    /* clip cuts bottom-right */
-    rect_t c2 = {64, 40, 72, 47};
-    gpx_draw_bmp(gpx, 60, 36, (bmp_t *)solid16, &c2);
+    /* A left clip at every offset 0..19 into a 20-wide bitmap. */
+    for (k = 0; k < 20; ++k) {
+        clip.x0 = (coord)(10 + k);
+        clip.y0 = (coord)(k * 5);
+        clip.x1 = 40;
+        clip.y1 = (coord)(k * 5 + 4);
+        gpx_draw_bmp(gpx, 10, (coord)(k * 5), (bmp_t *)bmp_w20, &clip);
+    }
 
-    /* clip strictly inside the bitmap */
-    rect_t c3 = {104, 64, 110, 70};
-    gpx_draw_bmp(gpx, 100, 60, (bmp_t *)solid16, &c3);
+    /* A right clip at every offset. */
+    for (k = 0; k < 20; ++k) {
+        clip.x0 = 60;
+        clip.y0 = (coord)(k * 5);
+        clip.x1 = (coord)(60 + k);
+        clip.y1 = (coord)(k * 5 + 4);
+        gpx_draw_bmp(gpx, 60, (coord)(k * 5), (bmp_t *)bmp_w20, &clip);
+    }
 
-    /* clip fully excludes the bitmap */
-    rect_t c4 = {0, 0, 5, 5};
-    gpx_draw_bmp(gpx, 150, 100, (bmp_t *)solid16, &c4);
+    /* Both edges clipped at once, leaving a narrow window that moves. */
+    for (k = 0; k < 16; ++k) {
+        clip.x0 = (coord)(110 + k);
+        clip.y0 = (coord)(100 + k * 5);
+        clip.x1 = (coord)(clip.x0 + 3);
+        clip.y1 = (coord)(clip.y0 + 4);
+        gpx_draw_bmp(gpx, 108, (coord)(100 + k * 5), (bmp_t *)bmp_w20,
+            &clip);
+    }
 
-    __asm
-        halt
-    __endasm;
+    /* Top and bottom clips at every row offset. */
+    for (k = 0; k < 6; ++k) {
+        clip.x0 = 160; clip.x1 = 180;
+        clip.y0 = (coord)(k * 8 + k);
+        clip.y1 = (coord)(k * 8 + 5);
+        gpx_draw_bmp(gpx, 160, (coord)(k * 8), (bmp_t *)bmp_w12, &clip);
+    }
+
+    /* Clip entirely outside the bitmap, and a swapped clip. */
+    clip.x0 = 0; clip.y0 = 0; clip.x1 = 5; clip.y1 = 5;
+    gpx_draw_bmp(gpx, 200, 150, (bmp_t *)bmp_w12, &clip);
+    clip.x0 = 220; clip.y0 = 170; clip.x1 = 200; clip.y1 = 150;
+    gpx_draw_bmp(gpx, 200, 150, (bmp_t *)bmp_w12, &clip);
+
+    /* Clip straddling the screen edge combined with a negative position. */
+    clip.x0 = -10; clip.y0 = 180; clip.x1 = 20; clip.y1 = 260;
+    gpx_draw_bmp(gpx, -5, 180, (bmp_t *)bmp_w20, &clip);
+
+    TEST_END();
 }

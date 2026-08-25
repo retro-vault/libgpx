@@ -1,7 +1,4 @@
         .module crt0
-        .globl  ___sdcc_heap_init
-        .globl  ___sdcc_heap
-        .globl  ___sdcc_heap_end
         .globl  _main
         .globl  _putchar
         .globl  _getchar
@@ -86,13 +83,9 @@ getchar_done:
         .area   _INITIALIZED
         .area   _DATA
         .area   _BSS
-        .area   _HEAP
-        .area   _HEAP_END
 
         .area _GSINIT
 gsinit:
-        call    ___sdcc_heap_init
-
         ld      de, #s__INITIALIZED
         ld      hl, #s__INITIALIZER
         ld      bc, #l__INITIALIZER
@@ -110,7 +103,3 @@ __store_sp:
         .word 1
         .ds 512
 __stack::
-        .area _HEAP
-___sdcc_heap::
-        .area _HEAP_END
-___sdcc_heap_end = 0xffff

@@ -4,6 +4,8 @@
 #define ZX_HEIGHT 192
 #define ZX_STRIDE (ZX_WIDTH / 8)
 #define ZX_SIZE (ZX_STRIDE * ZX_HEIGHT)
+#define ZX_ATTR_SIZE 0x300
+#define ZX_ATTR_DEFAULT 0x38 /* black ink, white paper */
 
 #ifndef GPX_STUB_HOST
 #define ZX_SCREEN_BASE 0x4000
@@ -283,12 +285,21 @@ dim gpx_height(void)
 void gpx_clrscr(void)
 {
     uint8_t *screen = zx_screen();
-    for (uint32_t i = 0; i < ZX_SIZE; ++i) {
+    uint16_t i;
+
+    for (i = 0; i < ZX_SIZE; ++i) {
         screen[i] = 0;
 #ifdef GPX_STUB_HOST
         ++zx_host_vram_writes;
 #endif
     }
+
+#ifndef GPX_STUB_HOST
+    /* Match the backend contract: black ink on white paper, white border. */
+    for (i = 0; i < ZX_ATTR_SIZE; ++i)
+        screen[ZX_SIZE + i] = ZX_ATTR_DEFAULT;
+    __asm__("ld a,#0x07\n\tout (#0xfe),a");
+#endif
 }
 
 void gpx_draw_pixel(
@@ -397,6 +408,32 @@ static int zx_clip_line(
     }
 }
 
+
+/* Narrow [lo,hi] to the range gpx_draw_pixel could possibly accept: the
+ * screen, and the clip rect when there is one. This is an iteration bound
+ * only -- every pattern phase below still refers to the caller's original
+ * origin -- but it also keeps `coord` from wrapping when a caller passes
+ * the extremes of the coordinate type. */
+static int zx_span_bounds(
+    coord lo, coord hi, coord limit,
+    const coord *clip_lo, const coord *clip_hi,
+    coord *out_lo, coord *out_hi)
+{
+    if (lo < 0)
+        lo = 0;
+    if (hi > limit)
+        hi = limit;
+    if (clip_lo != (const coord *)0) {
+        if (*clip_lo > lo)
+            lo = *clip_lo;
+        if (*clip_hi < hi)
+            hi = *clip_hi;
+    }
+    *out_lo = lo;
+    *out_hi = hi;
+    return lo <= hi;
+}
+
 uint8_t gpx_draw_hline(
     gpx_t *gpx, coord x0, coord x1, coord y,
     color c, bmode m, uint8_t lpatt, const rect_t *clip)
@@ -410,33 +447,32 @@ uint8_t gpx_draw_hline(
     }
 
     if (clip) {
-        rect_t cl = *clip;
-        if (cl.x0 > cl.x1) {
-            coord t = cl.x0;
-            cl.x0 = cl.x1;
-            cl.x1 = t;
-        }
-        if (cl.y0 > cl.y1) {
-            coord t = cl.y0;
-            cl.y0 = cl.y1;
-            cl.y1 = t;
-        }
+        /* A swapped clip rect admits no coordinate at all, the same way
+         * gpx_draw_pixel sees it. */
+        if (clip->x0 > clip->x1 || clip->y0 > clip->y1)
+            return original_lpatt;
+        if (y < clip->y0 || y > clip->y1)
+            return original_lpatt;
+    }
+    if (y < 0 || y >= ZX_HEIGHT)
+        return original_lpatt;
 
-        if (y < cl.y0 || y > cl.y1 || x1 < cl.x0 || x0 > cl.x1)
+    {
+        coord xlo;
+        coord xhi;
+        if (!zx_span_bounds(x0, x1, ZX_WIDTH - 1,
+                clip ? &clip->x0 : (const coord *)0,
+                clip ? &clip->x1 : (const coord *)0, &xlo, &xhi))
             return original_lpatt;
 
-        if (x0 < cl.x0) {
-            lpatt = zx_rotate_pattern_n(lpatt, (uint8_t)((cl.x0 - x0) & 7));
-            x0 = cl.x0;
-        }
-        if (x1 > cl.x1)
-            x1 = cl.x1;
-    }
+        lpatt = zx_rotate_pattern_n(lpatt,
+            (uint8_t)(((uint16_t)xlo - (uint16_t)x0) & 7));
 
-    for (coord x = x0; x <= x1; ++x) {
-        if (lpatt & 0x01)
-            gpx_draw_pixel(gpx, x, y, c, m, clip);
-        lpatt = zx_rotate_pattern(lpatt);
+        for (coord x = xlo; x <= xhi; ++x) {
+            if (lpatt & 0x01)
+                gpx_draw_pixel(gpx, x, y, c, m, clip);
+            lpatt = zx_rotate_pattern(lpatt);
+        }
     }
 
     return lpatt;
@@ -547,11 +583,25 @@ void gpx_draw_rectangle(
     }
 
     gpx_draw_hline(gpx, rect.x0, rect.x1, rect.y0, c, m, lpatt, clip);
-    gpx_draw_hline(gpx, rect.x0, rect.x1, rect.y1, c, m, lpatt, clip);
+    if (rect.y1 != rect.y0)
+        gpx_draw_hline(gpx, rect.x0, rect.x1, rect.y1, c, m, lpatt, clip);
 
-    for (coord y = rect.y0 + 1; y < rect.y1; ++y) {
-        gpx_draw_pixel(gpx, rect.x0, y, c, m, clip);
-        gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
+    {
+        coord ylo;
+        coord yhi;
+        if (zx_span_bounds(rect.y0, rect.y1, ZX_HEIGHT - 1,
+                clip ? &clip->y0 : (const coord *)0,
+                clip ? &clip->y1 : (const coord *)0, &ylo, &yhi)) {
+            /* The two horizontal edges are already drawn. */
+            if (ylo == rect.y0)
+                ++ylo;
+            if (yhi == rect.y1)
+                --yhi;
+            for (coord y = ylo; y <= yhi; ++y) {
+                gpx_draw_pixel(gpx, rect.x0, y, c, m, clip);
+                gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
+            }
+        }
     }
 }
 
@@ -575,12 +625,29 @@ void gpx_fill_rectangle(
         rect.y1 = temp;
     }
 
-    for (coord y = rect.y0; y <= rect.y1; ++y) {
-        uint8_t pattern = fpatt[(y - rect.y0) % fpatt_len];
-        for (coord x = rect.x0; x <= rect.x1; ++x) {
-            uint8_t mask = (uint8_t)(0x80 >> ((x - rect.x0) & 7));
-            if (pattern & mask)
-                gpx_draw_pixel(gpx, x, y, c, m, clip);
+    {
+        coord ylo;
+        coord yhi;
+        coord xlo;
+        coord xhi;
+        if (!zx_span_bounds(rect.y0, rect.y1, ZX_HEIGHT - 1,
+                clip ? &clip->y0 : (const coord *)0,
+                clip ? &clip->y1 : (const coord *)0, &ylo, &yhi))
+            return;
+        if (!zx_span_bounds(rect.x0, rect.x1, ZX_WIDTH - 1,
+                clip ? &clip->x0 : (const coord *)0,
+                clip ? &clip->x1 : (const coord *)0, &xlo, &xhi))
+            return;
+
+        for (coord y = ylo; y <= yhi; ++y) {
+            uint8_t pattern =
+                fpatt[((uint16_t)y - (uint16_t)rect.y0) % fpatt_len];
+            for (coord x = xlo; x <= xhi; ++x) {
+                uint8_t mask = (uint8_t)(0x80 >>
+                    (((uint16_t)x - (uint16_t)rect.x0) & 7));
+                if (pattern & mask)
+                    gpx_draw_pixel(gpx, x, y, c, m, clip);
+            }
         }
     }
 }

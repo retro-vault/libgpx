@@ -1,0 +1,81 @@
+{
+  "_gpx_bresenham_line": {
+    "_CODE": 1095
+  },
+  "_gpx_cursors": {
+    "_CODE": 130
+  },
+  "_gpx_font_envy": {
+    "_CODE": 1440
+  },
+  "_gpx_get_stock_bmp": {
+    "_CODE": 44
+  },
+  "_gpx_get_system_font": {
+    "_CODE": 4
+  },
+  "_gpx_get_tiny_font": {
+    "_CODE": 4
+  },
+  "_gpx_hline": {
+    "_CODE": 455
+  },
+  "_gpx_sprite_blit_raw": {
+    "_CODE": 570
+  },
+  "_gpx_store_background": {
+    "_CODE": 225
+  },
+  "_rect_helpers": {
+    "_CODE": 211
+  },
+  "_video": {
+    "_CODE": 53
+  },
+  "gpx_bmp": {
+    "_CODE": 1419
+  },
+  "gpx_clrscr": {
+    "_CODE": 49
+  },
+  "gpx_create": {
+    "_CODE": 11,
+    "_DATA": 7
+  },
+  "gpx_destroy": {
+    "_CODE": 1
+  },
+  "gpx_draw_line": {
+    "_CODE": 95
+  },
+  "gpx_draw_pixel": {
+    "_CODE": 156
+  },
+  "gpx_draw_rectangle": {
+    "_CODE": 247
+  },
+  "gpx_draw_text": {
+    "_CODE": 459
+  },
+  "gpx_fill_rectangle": {
+    "_CODE": 395
+  },
+  "gpx_height": {
+    "_CODE": 9
+  },
+  "gpx_hide_sprite": {
+    "_CODE": 34
+  },
+  "gpx_measure_text": {
+    "_CODE": 154
+  },
+  "gpx_set_page": {
+    "_CODE": 1
+  },
+  "gpx_show_sprite": {
+    "_CODE": 298
+  },
+  "gpx_width": {
+    "_CODE": 7
+  }
+}

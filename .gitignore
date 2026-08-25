@@ -2,7 +2,7 @@
 build/
 bin/
 
-# SDCC temporary files
+# Toolchain intermediates
 *.rel
 *.lst
 *.sym

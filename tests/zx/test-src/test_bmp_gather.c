@@ -74,7 +74,5 @@ void main(void)
         gpx_draw_bmp(gpx, (coord)(60 + dx), y, (bmp_t *)m13, &c);
     }
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }

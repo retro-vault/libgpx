@@ -3,10 +3,7 @@ BUILD_DIR ?= $(ROOT_DIR)/build
 BIN_DIR ?= $(ROOT_DIR)/bin
 BUILD_TMP ?= $(BUILD_DIR)/tmp
 
-DOCKER_SPEC ?= wischner/sdcc-z80-zx-spectrum
-DOCKER_PARTNER ?= wischner/sdcc-z80-idp
-DOCKER_USER ?= $(shell id -u):$(shell id -g)
-SDCC ?= /opt/sdcc/bin/sdcc
+include $(ROOT_DIR)/mk/toolchain.mk
 
 ZX_LIB_STAMP := $(BUILD_DIR)/zx/.lib-objs.stamp
 BIN_LIBGPX_LIB := $(BIN_DIR)/libgpx.lib
@@ -20,7 +17,6 @@ PARTNER_ASM_SRCS := $(wildcard $(ROOT_DIR)/src/partner/*.s)
 PARTNER_TEST_SRC := $(ROOT_DIR)/tests/partner/test_draw.c
 BUILD_PARTNER_TEST_IHX := $(BUILD_DIR)/partner/test_draw.ihx
 BIN_PARTNER_TEST_IHX := $(BIN_DIR)/partner/test_draw.ihx
-BIN_PARTNER_TEST_BIN := $(BIN_DIR)/partner/test_draw.bin
 
 .PHONY: build lib partner partner-lib zx-lib-objs partner-lib-objs clean
 .PRECIOUS: $(BUILD_DIR)/%/ $(BIN_DIR)/%/ $(BIN_DIR)/ $(BUILD_TMP)/
@@ -29,7 +25,7 @@ build: lib partner
 
 lib: $(BIN_LIBGPX_LIB)
 
-partner: $(BIN_PARTNER_TEST_IHX) $(BIN_PARTNER_TEST_BIN)
+partner: $(BIN_PARTNER_TEST_IHX)
 
 zx-lib-objs: $(ZX_LIB_STAMP)
 
@@ -50,52 +46,45 @@ $(BUILD_TMP)/:
 	mkdir -p $@
 
 $(ZX_LIB_STAMP): $(ZX_ASM_SRCS) $(ZX_C_SRCS) | $(BUILD_DIR)/zx/
-	mkdir -p $(BUILD_DIR)/zx
 	rm -f $(BUILD_DIR)/zx/*.rel
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_SPEC) sh -lc '\
+	$(ZXRUN) '\
 		set -e; \
 		for src in src/zx/*.s; do \
 			[ -e "$$src" ] || continue; \
-			base="$$(basename "$$src" .s)"; \
-			dest="build/zx/$$base.rel"; \
-			/opt/sdcc/bin/sdasz80 -o "$$dest" "$$src"; \
+			$(XAS) -o "build/zx/$$(basename "$$src" .s).rel" "$$src"; \
 		done; \
 		for src in src/zx/*.c; do \
 			[ -e "$$src" ] || continue; \
-			base="$$(basename "$$src" .c)"; \
-			case "$$base" in _rect_helpers|shape_ref) continue;; esac; \
-			dest="build/zx/$$base.rel"; \
-			/opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o "$$dest" "$$src"; \
+			$(XCC) $(XCFLAGS) -c -o "build/zx/$$(basename "$$src" .c).rel" "$$src"; \
 		done'
 	touch $@
 
 $(BIN_LIBGPX_LIB): $(ZX_LIB_STAMP) | $(BIN_DIR)/
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_SPEC) sh -lc '/opt/sdcc/bin/sdar -rc "bin/libgpx.lib" build/zx/*.rel'
+	rm -f $(BIN_LIBGPX_LIB)
+	$(ZXRUN) '$(XAR) rc "bin/libgpx.lib" build/zx/*.rel'
 
 $(PARTNER_LIB_STAMP): $(PARTNER_ASM_SRCS) | $(PARTNER_LIB_BUILD_DIR)/
-	mkdir -p $(PARTNER_LIB_BUILD_DIR)
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_PARTNER) sh -lc '\
+	rm -f $(PARTNER_LIB_BUILD_DIR)/*.rel
+	$(IDPRUN) '\
 		set -e; \
 		for src in src/partner/*.s; do \
 			[ -e "$$src" ] || continue; \
-			base="$$(basename "$$src" .s)"; \
-			dest="build/partner-lib/$$base.rel"; \
-			/opt/sdcc/bin/sdasz80 -o "$$dest" "$$src"; \
+			$(XAS) -o "build/partner-lib/$$(basename "$$src" .s).rel" "$$src"; \
 		done'
 	touch $@
 
 $(BIN_PARTNER_LIBGPX_LIB): $(PARTNER_LIB_STAMP) | $(BIN_DIR)/partner/
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_PARTNER) sh -lc '/opt/sdcc/bin/sdar -rc "bin/partner/libgpx.lib" build/partner-lib/*.rel'
+	rm -f $(BIN_PARTNER_LIBGPX_LIB)
+	$(IDPRUN) '$(XAR) rc "bin/partner/libgpx.lib" build/partner-lib/*.rel'
 
 $(BUILD_PARTNER_TEST_IHX): $(PARTNER_TEST_SRC) $(ROOT_DIR)/tests/partner/gpx_stub.c | $(BUILD_DIR)/partner/ $(BUILD_TMP)/
-	mkdir -p $(BUILD_DIR)/partner $(BUILD_TMP)
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_PARTNER) sh -lc 'set -e; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o build/tmp/test_draw.rel tests/partner/test_draw.c; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -Iinclude -c -o build/tmp/gpx_stub.rel tests/partner/gpx_stub.c; /opt/sdcc/bin/sdcc -mz80 --no-std-crt0 -o build/partner/test_draw.ihx build/tmp/test_draw.rel build/tmp/gpx_stub.rel'
+	$(IDPRUN) 'set -e; \
+		$(XCC) $(XCFLAGS) -c -o build/tmp/test_draw.rel tests/partner/test_draw.c; \
+		$(XCC) $(XCFLAGS) -c -o build/tmp/gpx_stub.rel tests/partner/gpx_stub.c; \
+		$(XCC) $(XLDFLAGS) -o build/partner/test_draw.ihx build/tmp/test_draw.rel build/tmp/gpx_stub.rel -Wl,--oformat=ihx'
 
 $(BIN_PARTNER_TEST_IHX): $(BUILD_PARTNER_TEST_IHX) | $(BIN_DIR)/partner/
 	cp "$<" "$@"
-
-$(BIN_PARTNER_TEST_BIN): $(BIN_PARTNER_TEST_IHX) | $(BIN_DIR)/partner/
-	docker run --rm -u $(DOCKER_USER) -v "$(ROOT_DIR)":/work -w /work $(DOCKER_PARTNER) sh -lc '/opt/sdcc/bin/sdobjcopy -I ihex -O binary "bin/partner/test_draw.ihx" "bin/partner/test_draw.bin"'
 
 clean:
 	rm -f $(BUILD_DIR)/zx/.lib-objs.stamp $(BIN_LIBGPX_LIB)

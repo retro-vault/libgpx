@@ -117,7 +117,7 @@ _gpx_draw_line::
         ld      h,(hl)
         ld      l,a                    ;; HL = x1
         call    __rect_cmp16s_lt       ;; x1 < x0 ?
-        jr      nz,.gl_bres
+        jr      c,.gl_bres
         jp      __gpx_hline
 
 .gl_bres:

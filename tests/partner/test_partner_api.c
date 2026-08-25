@@ -152,9 +152,7 @@ void main(void)
     if (ok)
         mark(gpx, 10, 0);
 
-    __asm
-        halt
-    __endasm;
+    __asm__("halt");
 }
 
 static void mark(gpx_t *gpx, coord x, coord y)
