@@ -2,9 +2,9 @@
   "bench_bmp": 25253439,
   "bench_clrscr": 1993355,
   "bench_fill": 7510306,
-  "bench_line": 16697857,
-  "bench_pixel": 6666605,
-  "bench_rect": 5703250,
+  "bench_line": 15234814,
+  "bench_pixel": 6356693,
+  "bench_rect": 5513457,
   "bench_sprite": 10632066,
   "bench_text": 27191338
 }

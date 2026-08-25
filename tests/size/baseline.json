@@ -1,6 +1,6 @@
 {
   "_gpx_bresenham_line": {
-    "_CODE": 1095
+    "_CODE": 1130
   },
   "_gpx_cursors": {
     "_CODE": 130
@@ -49,7 +49,7 @@
     "_CODE": 95
   },
   "gpx_draw_pixel": {
-    "_CODE": 156
+    "_CODE": 164
   },
   "gpx_draw_rectangle": {
     "_CODE": 247

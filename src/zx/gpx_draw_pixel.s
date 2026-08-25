@@ -150,6 +150,18 @@ __gpx_plot_raw:
         ld      b,l
 
 .pr_plot_common:
+        ;; mask = 0x80 >> (x & 7), from a table while HL is still free.
+        ;; __vid_rowaddr preserves BC and DE, so the mask rides in C across it.
+        ld      a,e
+        and     #0x07
+        ld      hl,#.pr_mask_tab
+        add     a,l
+        ld      l,a
+        jr      nc,.pr_mask_hi
+        inc     h
+.pr_mask_hi:
+        ld      c,(hl)
+
         ;; HL = row base for y (B); __vid_rowaddr preserves DE (x)
         call    __vid_rowaddr
         ld      a,e
@@ -161,17 +173,7 @@ __gpx_plot_raw:
         jr      nc,.pr_ptr_ok
         inc     h
 .pr_ptr_ok:
-        ;; mask = 0x80 >> (x & 7)
-        ld      a,e
-        and     #0x07
-        ld      b,a
-        ld      a,#0x80
-        jr      z,.pr_mask_ready
-.pr_mask_loop:
-        srl     a
-        djnz    .pr_mask_loop
-.pr_mask_ready:
-        ld      e,a                    ;; E = mask
+        ld      e,c                    ;; E = mask
         pop     af                     ;; A = packed color/mode
 
         bit     1,a
@@ -201,3 +203,6 @@ __gpx_plot_raw:
 .pr_reject:
         pop     af
         ret
+
+.pr_mask_tab:
+        .db     0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01

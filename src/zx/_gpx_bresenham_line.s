@@ -343,13 +343,22 @@ __gpx_bresenham_line::
         ld      b,L_DX(ix)             ;; steps = dx
         ld      a,b
         or      a
-        jr      z,.bl_last             ;; clipped to a single pixel
-        jr      .bx_loop
+        jp      z,.bl_last             ;; clipped to a single pixel
+        ;; The x direction is fixed for the whole line, so it selects the
+        ;; raster once here instead of being re-read from A' every pixel.
+        ex      af,af'
+        bit     0,a
+        jr      nz,.bx_go_left         ;; branch before swapping the flags back
+        ex      af,af'
+        jr      .bxr_loop
+.bx_go_left:
+        ex      af,af'
+        jr      .bxl_loop
 .bl_go_y:
         ld      b,L_DY(ix)             ;; steps = dy (>0: dy>dx>=0)
         ld      a,L_DX(ix)
         or      a
-        jr      nz,.by_loop ;; genuine diagonal
+        jp      nz,.by_loop ;; genuine diagonal
         ex      af,af'
         bit     1,a                    ;; vertical: upward?
         jr      nz,.bl_go_vup
@@ -361,56 +370,81 @@ __gpx_bresenham_line::
 
         ;; ---- x-major raster: B=steps C=patt D/E=masks HL=vram ----
         ;; alt: HL'=err DE'=dx BC'=dy; A' bit0=left bit1=up
-.bx_loop:
-        bit     0,c
-        jr      z,.bx_np
+        ;; ---- x-major rasters: B=steps C=patt D/E=masks HL=vram ----
+        ;; alt: HL'=err DE'=dx BC'=dy; A' bit1=up. Two variants, one per x
+        ;; direction, so the only per-pixel branch left is the y step.
+.bxr_loop:
+        rrc     c                      ;; carry = pattern bit, C rotated for
+        jr      nc,.bxr_loop_np           ;; the next step in the same op
         ld      a,(hl)
         or      d
         xor     e
         ld      (hl),a
-.bx_np:
+.bxr_loop_np:
         exx
         or      a
         sbc     hl,bc                  ;; err -= dy
         exx                            ;; flags survive exx
-        jp      p,.bx_xadv             ;; err >= 0: no y step
+        jp      p,.bxr_loop_xadv          ;; err >= 0: no y step
         exx
         add     hl,de                  ;; err += dx
         exx
         ex      af,af'
         bit     1,a
-        jr      nz,.bx_yup
+        jr      nz,.bxr_loop_yup
         ex      af,af'
         call    __vid_nextrow
-        jr      .bx_xadv
-.bx_yup:
+        jr      .bxr_loop_xadv
+.bxr_loop_yup:
         ex      af,af'
         call    __vid_prevrow
-.bx_xadv:
-        ex      af,af'
-        bit     0,a
-        jr      nz,.bx_xleft
-        ex      af,af'
+.bxr_loop_xadv:
         ld      a,d
         or      e                      ;; A = live mask
         rrc     d
         rrc     e
         rrca                           ;; carry = old bit0 (wrap right)
-        jr      nc,.bx_rot
+        jr      nc,.bxr_loop_rot
         inc     hl
-        jr      .bx_rot
-.bx_xleft:
+.bxr_loop_rot:
+        djnz    .bxr_loop
+        jp      .bl_last               ;; do NOT fall through into the left variant
+
+.bxl_loop:
+        rrc     c                      ;; carry = pattern bit, C rotated for
+        jr      nc,.bxl_loop_np           ;; the next step in the same op
+        ld      a,(hl)
+        or      d
+        xor     e
+        ld      (hl),a
+.bxl_loop_np:
+        exx
+        or      a
+        sbc     hl,bc                  ;; err -= dy
+        exx                            ;; flags survive exx
+        jp      p,.bxl_loop_xadv          ;; err >= 0: no y step
+        exx
+        add     hl,de                  ;; err += dx
+        exx
         ex      af,af'
+        bit     1,a
+        jr      nz,.bxl_loop_yup
+        ex      af,af'
+        call    __vid_nextrow
+        jr      .bxl_loop_xadv
+.bxl_loop_yup:
+        ex      af,af'
+        call    __vid_prevrow
+.bxl_loop_xadv:
         ld      a,d
         or      e
         rlc     d
         rlc     e
         rlca                           ;; carry = old bit7 (wrap left)
-        jr      nc,.bx_rot
+        jr      nc,.bxl_loop_rot
         dec     hl
-.bx_rot:
-        rrc     c                      ;; rotate pattern
-        djnz    .bx_loop
+.bxl_loop_rot:
+        djnz    .bxl_loop
 
         ;; ---- shared tail: final pixel + return pattern ----
 .bl_last:
@@ -435,8 +469,8 @@ __gpx_bresenham_line::
 
         ;; ---- y-major raster ----
 .by_loop:
-        bit     0,c
-        jr      z,.by_np
+        rrc     c                      ;; carry = pattern bit, C rotated for
+        jr      nc,.by_np                ;; the next step in the same op
         ld      a,(hl)
         or      d
         xor     e
@@ -491,7 +525,6 @@ __gpx_bresenham_line::
         cp      #0x07
         call    z,__vid_prevrow_carry
 .by_rot:
-        rrc     c
         djnz    .by_loop
         jr      .bl_last
 
@@ -500,8 +533,8 @@ __gpx_bresenham_line::
         ;; bookkeeping is needed: plot, next row, rotate pattern.
         ;; B=steps C=patt D/E=masks HL=vram. ~105 T/pixel.
 .bv_loop:
-        bit     0,c
-        jr      z,.bv_np
+        rrc     c                      ;; carry = pattern bit, C rotated for
+        jr      nc,.bv_np                ;; the next step in the same op
         ld      a,(hl)
         or      d
         xor     e
@@ -511,7 +544,6 @@ __gpx_bresenham_line::
         ld      a,h
         and     #0x07
         call    z,__vid_nextrow_carry
-        rrc     c
         djnz    .bv_loop
         jr      .bl_last
 
