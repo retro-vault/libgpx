@@ -35,10 +35,6 @@
         .equ    L_BSTRIDE,          10
         .equ    L_ROWSTRIDE_AND,    12
         .equ    L_ROWSTRIDE_OR,     14
-        .equ    L_CLIP_X0,          16
-        .equ    L_CLIP_X1,          18
-        .equ    L_CLIP_Y0,          20
-        .equ    L_CLIP_Y1,          22
         .equ    L_XEND,             24
         .equ    L_YEND,             26
         .equ    L_VISX0,            28
@@ -268,146 +264,157 @@ gb_mode_select:
         adc     a,#0
         ld      L_YEND+1(iy),a
 
-        ;; Effective clip = screen rect.
+        ;; Clamp the draw rect to the screen. The screen bounds are compile
+        ;; time constants, so this is a handful of sign and range tests
+        ;; instead of copying a screen rect into the workspace and running
+        ;; four generic 16-bit clamps against it. The result is on-screen, so
+        ;; the high bytes are all zero from here on.
+
+        ;; visx0 = max(x, 0); x > 255 means the bitmap starts past the edge
+        ld      a,L_XHI(iy)
+        or      a
+        jr      z,gb_sx0_on
+        jp      p,gb_exit
+        xor     a                      ;; x < 0: start at column 0
+        jr      gb_sx0_store
+ gb_sx0_on:
+        ld      a,L_X(iy)
+ gb_sx0_store:
+        ld      L_VISX0(iy),a
         xor     a
-        ld      l,a
-        ld      h,a
-        ST16HL  L_CLIP_X0
-        ST16HL  L_CLIP_Y0
+        ld      L_VISX0+1(iy),a
 
-        ld      l,#255
-        ld      h,#0
-        ST16HL  L_CLIP_X1
-        ld      l,#(SCRHEIGHT-1)
-        ld      h,#0
-        ST16HL  L_CLIP_Y1
+        ;; visx1 = min(xend, 255); xend < 0 means it ends before the edge
+        ld      a,L_XEND+1(iy)
+        or      a
+        jr      z,gb_sx1_on
+        jp      m,gb_exit
+        ld      a,#255
+        jr      gb_sx1_store
+ gb_sx1_on:
+        ld      a,L_XEND(iy)
+ gb_sx1_store:
+        ld      L_VISX1(iy),a
+        xor     a
+        ld      L_VISX1+1(iy),a
 
-        ;; Intersect with optional clip rectangle when present.
+        ;; visy0 = max(y, 0); y past the bottom means nothing visible
+        ld      a,L_YHI(iy)
+        or      a
+        jr      z,gb_sy0_on
+        jp      p,gb_exit
+        xor     a
+        jr      gb_sy0_store
+ gb_sy0_on:
+        ld      a,L_Y(iy)
+        cp      #SCRHEIGHT
+        jp      nc,gb_exit
+ gb_sy0_store:
+        ld      L_VISY0(iy),a
+        xor     a
+        ld      L_VISY0+1(iy),a
+
+        ;; visy1 = min(yend, 191)
+        ld      a,L_YEND+1(iy)
+        or      a
+        jr      z,gb_sy1_on
+        jp      m,gb_exit
+        ld      a,#(SCRHEIGHT-1)
+        jr      gb_sy1_store
+ gb_sy1_on:
+        ld      a,L_YEND(iy)
+        cp      #SCRHEIGHT
+        jr      c,gb_sy1_store
+        ld      a,#(SCRHEIGHT-1)
+ gb_sy1_store:
+        ld      L_VISY1(iy),a
+        xor     a
+        ld      L_VISY1+1(iy),a
+
+        ;; No clip rect: the on-screen rect is already the visible rect.
         ld      a,L_CLIP(iy)
         or      L_CLIP+1(iy)
-        jr      z,gb_clip_ready
+        jp      z,gb_skips
 
+        ;; Narrow by the caller's clip rect, read straight through the
+        ;; pointer in rect_t order (x0, y0, x1, y1) so it is walked once.
+        ;;
+        ;; The visible rect is already on-screen, so each bound is an 8-bit
+        ;; value: only the clip's own 16-bit range needs a sign test, and the
+        ;; comparison itself is a plain `cp`. That replaces four generic
+        ;; 16-bit clamp calls and two 16-bit inversion tests.
         LD16HL  L_CLIP
 
-        ;; max(screen_x0, clip->x0)
-        ld      e,(hl)
+        ld      e,(hl)                 ;; visx0 = max(visx0, clip->x0)
         inc     hl
         ld      d,(hl)
         inc     hl
-        push    hl
-        ld      hl,#0
-        call    __rect_cmp16s_lt       ;; 0 < clip_x0 ?
-        pop     hl                     ;; does not disturb the compare's carry
-        jr      nc,gb_clip_y0_load
-        ST16DE  L_CLIP_X0
+        ld      a,d
+        or      a
+        jr      z,gb_cx0_8
+        jp      p,gb_exit              ;; clip x0 > 255: nothing visible
+        jr      gb_cy0                 ;; clip x0 < 0: visx0 unchanged
+ gb_cx0_8:
+        ld      a,e
+        cp      L_VISX0(iy)
+        jr      c,gb_cy0
+        ld      L_VISX0(iy),a
 
- gb_clip_y0_load:
-        ;; max(screen_y0, clip->y0)
-        ld      e,(hl)
+ gb_cy0:
+        ld      e,(hl)                 ;; visy0 = max(visy0, clip->y0)
         inc     hl
         ld      d,(hl)
         inc     hl
-        push    hl
-        ld      hl,#0
-        call    __rect_cmp16s_lt       ;; 0 < clip_y0 ?
-        pop     hl                     ;; does not disturb the compare's carry
-        jr      nc,gb_clip_x1_load
-        ST16DE  L_CLIP_Y0
+        ld      a,d
+        or      a
+        jr      z,gb_cy0_8
+        jp      p,gb_exit
+        jr      gb_cx1
+ gb_cy0_8:
+        ld      a,e
+        cp      L_VISY0(iy)
+        jr      c,gb_cx1
+        ld      L_VISY0(iy),a
 
- gb_clip_x1_load:
-        ;; min(screen_x1, clip->x1)
-        ld      e,(hl)
+ gb_cx1:
+        ld      e,(hl)                 ;; visx1 = min(visx1, clip->x1)
         inc     hl
         ld      d,(hl)
         inc     hl
-        ld      c,e
-        ld      b,d
-        push    hl
-        ld      l,c
-        ld      h,b
-        ld      de,#255
-        call    __rect_cmp16s_lt       ;; clip_x1 < 255 ?
-        pop     hl                     ;; does not disturb the compare's carry
-        jr      nc,gb_clip_y1_load
-        ld      a,c
-        ld      L_CLIP_X1(iy),a
-        ld      a,b
-        ld      L_CLIP_X1+1(iy),a
+        ld      a,d
+        or      a
+        jr      z,gb_cx1_8
+        jp      m,gb_exit              ;; clip x1 < 0: nothing visible
+        jr      gb_cy1                 ;; clip x1 > 255: visx1 unchanged
+ gb_cx1_8:
+        ld      a,e
+        cp      L_VISX1(iy)
+        jr      nc,gb_cy1
+        ld      L_VISX1(iy),a
 
- gb_clip_y1_load:
-        ;; min(screen_y1, clip->y1)
-        ld      e,(hl)
+ gb_cy1:
+        ld      e,(hl)                 ;; visy1 = min(visy1, clip->y1)
         inc     hl
         ld      d,(hl)
-        ld      c,e
-        ld      b,d
-        ld      l,c
-        ld      h,b
-        ld      de,#(SCRHEIGHT-1)
-        call    __rect_cmp16s_lt       ;; clip_y1 < 191 ?
-        jr      nc,gb_clip_ready
-        ld      l,c
-        ld      h,b
-        ST16HL  L_CLIP_Y1
+        ld      a,d
+        or      a
+        jr      z,gb_cy1_8
+        jp      m,gb_exit
+        jr      gb_clip_test
+ gb_cy1_8:
+        ld      a,e
+        cp      L_VISY1(iy)
+        jr      nc,gb_clip_test
+        ld      L_VISY1(iy),a
 
- gb_clip_ready:
-        ;; Empty effective clip -> nothing visible.
-        LD16HL  L_CLIP_X1
-        LD16DE  L_CLIP_X0
-        call    __rect_cmp16s_lt
+ gb_clip_test:
+        ;; nothing visible if either clamp inverted the span
+        ld      a,L_VISX1(iy)
+        cp      L_VISX0(iy)
         jp      c,gb_exit
-
-        LD16HL  L_CLIP_Y1
-        LD16DE  L_CLIP_Y0
-        call    __rect_cmp16s_lt
+        ld      a,L_VISY1(iy)
+        cp      L_VISY0(iy)
         jp      c,gb_exit
-
-        ;; Reject if draw rect does not intersect clip rect.
-        LD16HL  L_XEND
-        LD16DE  L_CLIP_X0
-        call    __rect_cmp16s_lt       ;; draw_x1 < clip_x0 ?
-        jp      c,gb_exit
-
-        LD16HL  L_CLIP_X1
-        LD16DE  L_X
-        call    __rect_cmp16s_lt       ;; clip_x1 < draw_x0 ?
-        jp      c,gb_exit
-
-        LD16HL  L_YEND
-        LD16DE  L_CLIP_Y0
-        call    __rect_cmp16s_lt       ;; draw_y1 < clip_y0 ?
-        jp      c,gb_exit
-
-        LD16HL  L_CLIP_Y1
-        LD16DE  L_Y
-        call    __rect_cmp16s_lt       ;; clip_y1 < draw_y0 ?
-        jp      c,gb_exit
-
-        ;; vis rect = draw rect clamped to effective clip, via shared
-        ;; gb_max16 / gb_min16 (HL=result; cmp preserves HL/DE).
-        ;; visx0 = max(draw_x0, clip_x0)
-        LD16HL  L_X
-        LD16DE  L_CLIP_X0
-        call    gb_max16
-        ST16HL  L_VISX0
-
-        ;; visy0 = max(draw_y0, clip_y0)
-        LD16HL  L_Y
-        LD16DE  L_CLIP_Y0
-        call    gb_max16
-        ST16HL  L_VISY0
-
-        ;; visx1 = min(draw_x1, clip_x1)
-        LD16HL  L_XEND
-        LD16DE  L_CLIP_X1
-        call    gb_min16
-        ST16HL  L_VISX1
-
-        ;; visy1 = min(draw_y1, clip_y1)
-        LD16HL  L_YEND
-        LD16DE  L_CLIP_Y1
-        call    gb_min16
-        ST16HL  L_VISY1
 
  gb_skips:
         ;; Source skip is the clipped-away left/top part.
@@ -440,6 +447,7 @@ gb_mode_select:
         ld      b,a
         and     #0x07
         ld      L_DBIT(iy),a
+        ld      c,a                    ;; dbit rides in C through this block
         ld      a,b
         srl     a
         srl     a
@@ -451,6 +459,7 @@ gb_mode_select:
         ld      b,a
         and     #0x07
         ld      L_SRCBIT(iy),a
+        ld      e,a                    ;; srcbit rides in E
         ld      a,b
         srl     a
         srl     a
@@ -458,8 +467,8 @@ gb_mode_select:
         ld      L_SRCBYTE(iy),a
 
         ;; rshift = (dbit - srcbit) & 7
-        ld      a,L_DBIT(iy)
-        sub     L_SRCBIT(iy)
+        ld      a,c
+        sub     e
         and     #0x07
         ld      L_RSHIFT(iy),a
 
@@ -469,14 +478,14 @@ gb_mode_select:
         ld      L_SUB(iy),a
 
         ;; lmask = ~(0xff >> dbit)   (dbit=0 -> ~0xff = 0, same formula)
-        ld      a,L_DBIT(iy)
+        ld      a,c
         call    __gpx_ffshr
         cpl
         ld      L_LMASK(iy),a
 
         ;; rmask = 0xff >> ((dbit + visw) & 7), with 0 -> 0
         ld      a,L_VISW(iy)
-        add     a,L_DBIT(iy)
+        add     a,c
         and     #0x07
         jr      z,gb_rmask_zero
         call    __gpx_ffshr
@@ -485,10 +494,10 @@ gb_mode_select:
 
  gb_rmask_done:
         ;; srcspan = (srcbit + visw + 7) >> 3 ; dstspan = (dbit + visw + 7) >> 3
-        ld      a,L_SRCBIT(iy)
+        ld      a,e
         call    gb_span
         ld      L_SRCSPAN(iy),a
-        ld      a,L_DBIT(iy)
+        ld      a,c
         call    gb_span
         ld      L_DSTSPAN(iy),a
 
@@ -902,17 +911,6 @@ gb_mode_select:
 
         ;; gb_max16 / gb_min16: HL = signed max/min(HL, DE).
         ;; __rect_cmp16s_lt preserves HL/DE (writes only A); A=1 when HL<DE.
- gb_max16:
-        call    __rect_cmp16s_lt
-        ret     nc                      ;; HL >= DE -> HL is the max
-        ex      de,hl
-        ret
- gb_min16:
-        call    __rect_cmp16s_lt
-        ret     c                     ;; HL < DE -> HL is the min
-        ex      de,hl
-        ret
-
         ;; gb_win: A=prev, C=cur -> A = high byte of (prev:cur) << SUB.
         ;; Uses D,E,B; leaves HL (DSTPTR) and C (cur) intact. Used by the cold
         ;; trailing-transparent path; the hot SRCREMAIN path inlines this body.
@@ -932,19 +930,22 @@ gb_mode_select:
         ret
 
         ;; __gpx_ffshr: A = 0xff >> A (A = 0..7; 0 -> 0xff). Clobbers B.
+        ;; A = 0xFF >> A, for A in 0..7. A table costs eight bytes and beats
+        ;; the shift loop it replaces at every shift count.
 __gpx_ffshr::
-        or      a
-        jr      z,gb_ffshr_ff
-        ld      b,a
-        ld      a,#0xff
- gb_ffshr_lp:
-        srl     a
-        djnz    gb_ffshr_lp
-        ret
- gb_ffshr_ff:
-        ld      a,#0xff
+        push    hl
+        ld      hl,#gb_ffshr_tab
+        add     a,l
+        ld      l,a
+        jr      nc,gb_ffshr_hi
+        inc     h
+ gb_ffshr_hi:
+        ld      a,(hl)
+        pop     hl
         ret
 
+ gb_ffshr_tab:
+        .db     0xff,0x7f,0x3f,0x1f,0x0f,0x07,0x03,0x01
         ;; gb_span: A = bit (0..7) -> A = (bit + L_VISW + 7) >> 3
  gb_span:
         ld      h,#0
