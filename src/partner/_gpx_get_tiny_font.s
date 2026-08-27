@@ -1,17 +1,38 @@
         ;; _gpx_get_tiny_font.s
         ;;
         ;; Return Partner tiny font blob.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module _gpx_get_tiny_font
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_get_tiny_font
-        .globl  _gpx_font_12x16_tiny
+        .globl  _gpx_font_unscii_8_tiny
 
         .area   _CODE
 
-        ;; const font_t *gpx_get_tiny_font(void)
-        ;;   DE = font pointer
+        ;; ------------------------------------------------------------
+        ;; _gpx_get_tiny_font
+        ;; The platform small font. The Partner ships one native Unscii-8
+        ;; vector face and returns it for both requests, so callers must read
+        ;; glyph_height and advance from the header rather than assuming a
+        ;; size.
+        ;;
+        ;; Signature:
+        ;;   const font_t *gpx_get_tiny_font(void)
+        ;;
+        ;; Return:
+        ;;   DE = font_t*, never NULL
+        ;;
+        ;; Clobbers:
+        ;;   DE
+        ;;
+        ;; References:
+        ;;   _gpx_font_unscii_8_tiny
 _gpx_get_tiny_font::
-        ld      de,#_gpx_font_12x16_tiny
+        ld      de,#_gpx_font_unscii_8_tiny
         ret

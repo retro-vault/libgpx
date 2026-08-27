@@ -3,6 +3,11 @@
         ;; Signed 16-bit rectangle helpers:
         ;;  - __rect_cmp16s_lt
         ;;  - __rect_unpack_norm
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module _rect_helpers
         .optsdcc -mz80 sdcccall(1)
@@ -14,11 +19,11 @@
 
         ;; ------------------------------------------------------------
         ;; __rect_cmp16s_lt
-        ;; Input:
+        ;; Arguments:
         ;;   HL = a
         ;;   DE = b
         ;;
-        ;; Output:
+        ;; Return:
         ;;   A = 1 when (a < b), else 0
         ;;
         ;; Clobbers:
@@ -58,11 +63,11 @@ __rect_cmp16s_lt:
         ;;   [-1..-2] x0, [-3..-4] x1, [-5..-6] y0, [-7..-8] y1
         ;; and normalize so x0<=x1 and y0<=y1.
         ;;
-        ;; Input:
+        ;; Arguments:
         ;;   DE = const rect_t *src
         ;;   HL = caller frame base (IX)
         ;;
-        ;; Output:
+        ;; Return:
         ;;   normalized rectangle written to caller frame
         ;;
         ;; Clobbers:

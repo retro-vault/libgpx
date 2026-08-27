@@ -2,9 +2,22 @@
         ;;
         ;; Partner line drawing with optional Cohen-Sutherland clipping.
         ;;
-        ;; Pattern policy:
-        ;;   known Partner hardware patterns -> EF9367 vector styles
-        ;;   else -> software Bresenham using pixel command
+        ;; Pattern policy: only a solid line goes to the EF9367 vector
+        ;; generator. Every other pattern is walked pixel by pixel in
+        ;; software, exactly as the ZX backend does.
+        ;;
+        ;; The chip can dot, dash and dash-dot a vector itself via CTRL2, and
+        ;; this used to map lpatt onto those styles. It cannot be used: the
+        ;; hardware styles are fixed shapes that do not match the lpatt byte
+        ;; that selected them (CTRL2 "dotted" is 2 on 2 off, while lpatt 0xAA
+        ;; is 1 on 1 off), and a hardware-styled vector cannot report back how
+        ;; far the pattern rotated, so chained segments lose phase. Both would
+        ;; make the same program draw differently on the two backends.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_draw_line
         .optsdcc -mz80 sdcccall(1)
@@ -16,17 +29,16 @@
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_set_color
         .globl  __ef9367_set_line_style
-        .globl  __ef9367_set_xy
+        .globl  __ef9367_set_xy_fast
+        .globl  __gpx_draw_vector
+        .globl  __gpx_hw_style_from_lpatt
+        .globl  __gpx_vec_x0
         .globl  __ef9367_get_delta_cmd
         .globl  __abs_hl
 
         .include "_ef9367-defs.inc"
 
         .equ    LPATT_SOLID,         0xFF
-        .equ    LPATT_DOTTED_A,      0xCC
-        .equ    LPATT_DOTTED_B,      0xAA
-        .equ    LPATT_DASHED,        0xF0
-        .equ    LPATT_DOT_DASH,      0xE4
 
         ;; locals (37 bytes)
         ;; -12..-11 x0
@@ -47,7 +59,22 @@
         .equ    S_LPATT,             -4
 
         .equ    LPATT_RET,           -2
-        .equ    VEC_CMD,             -1
+
+        ;; Clip-skip bookkeeping. A clipped patterned line must come out with
+        ;; the phase it would have had if the whole line had been drawn and
+        ;; the outside part simply not shown, so the pattern is pre-rotated
+        ;; by how far along the major axis clipping skipped. The axis is
+        ;; chosen from the original, pre-clip deltas, x winning ties -- the
+        ;; same rule the ZX backend uses.
+        .equ    SKIP_BASE_LO,        -37
+        .equ    SKIP_BASE_HI,        -36
+        .equ    SKIP_MAJOR_X,        -35
+
+        ;; Word offsets into the endpoint block __gpx_draw_vector is given.
+        .equ    VEC_X0,              0
+        .equ    VEC_Y0,              2
+        .equ    VEC_X1,              4
+        .equ    VEC_Y1,              6
 
         .area   _CODE
 
@@ -57,12 +84,12 @@
         ;;                       color c, bmode m, uint8_t lpatt,
         ;;                       const rect_t *clip)
         ;;
-        ;; Input:
+        ;; Arguments:
         ;;   HL = gpx (unused by this routine)
         ;;   DE = x0
         ;;   stack: y0, x1, y1, c, m, lpatt, clip
         ;;
-        ;; Output:
+        ;; Return:
         ;;   A = resulting lpatt
         ;;
         ;; Clobbers:
@@ -105,37 +132,117 @@ _gpx_draw_line::
         ld      d,14(ix)
         ld      a,e
         or      d
-        jr      z,.gdl_dispatch
+        jp      z,.gdl_dispatch
+
+        ;; Pick the skip axis and its origin before clipping moves them.
+        ld      l,S_X1_LO(ix)
+        ld      h,S_X1_HI(ix)
+        ld      e,S_X0_LO(ix)
+        ld      d,S_X0_HI(ix)
+        or      a
+        sbc     hl,de
+        call    __abs_hl                ; HL = |odx|
+        push    hl
+        ld      l,S_Y1_LO(ix)
+        ld      h,S_Y1_HI(ix)
+        ld      e,S_Y0_LO(ix)
+        ld      d,S_Y0_HI(ix)
+        or      a
+        sbc     hl,de
+        call    __abs_hl                ; HL = |ody|
+        pop     de                      ; DE = |odx|
+        or      a
+        sbc     hl,de                   ; |ody| - |odx|
+        jr      c,.gdl_skip_x           ; |ody| < |odx| -> x major
+        jr      z,.gdl_skip_x           ; tie           -> x major
+        xor     a                       ; y major
+        ld      SKIP_MAJOR_X(ix),a
+        ld      a,S_Y0_LO(ix)
+        ld      SKIP_BASE_LO(ix),a
+        ld      a,S_Y0_HI(ix)
+        ld      SKIP_BASE_HI(ix),a
+        jr      .gdl_skip_done
+.gdl_skip_x:
+        ld      a,#1
+        ld      SKIP_MAJOR_X(ix),a
+        ld      a,S_X0_LO(ix)
+        ld      SKIP_BASE_LO(ix),a
+        ld      a,S_X0_HI(ix)
+        ld      SKIP_BASE_HI(ix),a
+.gdl_skip_done:
 
         push    ix
         pop     hl
         ld      bc,#S_X0_LO
-        add     hl,bc                  ;; HL = &state.x0
+        add     hl,bc                   ; HL = &state.x0
+        ld      e,13(ix)                ; reload clip: the work above used DE
+        ld      d,14(ix)
         call    __gpx_cohen_sutherland
         or      a
-        jr      nz,.gdl_dispatch       ;; accepted
+        jr      z,.gdl_return           ; rejected by clip window
 
-        ;; Rejected by clip window.
-        jr      .gdl_return
+        ;; Accepted: advance the pattern past the skipped part.
+        ld      a,SKIP_MAJOR_X(ix)
+        or      a
+        jr      z,.gdl_skip_use_y
+        ld      l,S_X0_LO(ix)
+        ld      h,S_X0_HI(ix)
+        jr      .gdl_skip_have
+.gdl_skip_use_y:
+        ld      l,S_Y0_LO(ix)
+        ld      h,S_Y0_HI(ix)
+.gdl_skip_have:
+        ld      e,SKIP_BASE_LO(ix)
+        ld      d,SKIP_BASE_HI(ix)
+        or      a
+        sbc     hl,de
+        call    __abs_hl                ; HL = skipped major-axis distance
+        ld      a,l
+        and     #0x07
+        jr      z,.gdl_dispatch
+        ld      b,a
+        ld      a,LPATT_RET(ix)
+.gdl_skip_rot:
+        rrca
+        djnz    .gdl_skip_rot
+        ld      LPATT_RET(ix),a
+        jr      .gdl_dispatch
 
 .gdl_dispatch:
         ;; Apply requested blit mode and color once for this line.
-        ld      a,11(ix)               ;; m
+        ld      a,11(ix)                ; m
         call    __ef9367_set_blit_mode
 
-        ld      a,10(ix)               ;; c
+        ld      a,10(ix)                ; c
         call    __ef9367_set_color
 
-        ;; Pattern-based path selection:
-        ;; use EF9367 hardware style when pattern is recognized.
+        ;; A solid line goes to the EF9367 vector generator; every other
+        ;; pattern is walked in software (see the pattern policy above).
+        ;;
+        ;; For a slanted solid line the chip picks its own interior pixels,
+        ;; and they are not quite the ones the ZX backend's Bresenham picks
+        ;; -- about one pixel of disagreement along the run. That is a
+        ;; deliberate trade: walking diagonals in software here instead
+        ;; measured 84x slower (an 880-pixel diagonal goes from 5,686 to
+        ;; 477,576 T-states). Endpoints, clipping and every pattern still
+        ;; match the ZX backend exactly; only interior pixels of a slanted
+        ;; solid line differ.
         ld      a,S_LPATT(ix)
-        call    .gdl_hw_style_from_lpatt
+        call    __gpx_hw_style_from_lpatt
         jr      c,.gdl_draw_hw
         jr      .gdl_draw_bres
 
 .gdl_draw_hw:
         call    __ef9367_set_line_style
-        call    .gdl_draw_vector
+        ;; The frame already holds x0,y0,x1,y1 as four consecutive words in
+        ;; the order the renderer wants, so it draws straight out of there.
+        push    ix
+        pop     hl
+        ld      de,#S_X0_LO
+        add     hl,de
+        push    hl
+        pop     iy
+        call    __gpx_draw_vector
         jr      .gdl_return
 
 .gdl_draw_bres:
@@ -156,36 +263,23 @@ _gpx_draw_line::
         ret
 
         ;; ------------------------------------------------------------
-        ;; Map lpatt to EF9367 CR2 hardware vector style.
-        ;; Input:
+        ;; __gpx_hw_style_from_lpatt
+        ;; Decide whether lpatt can go to the EF9367 vector generator.
+        ;; Only a solid line can: see the pattern policy at the top of this
+        ;; file. Shared with gpx_fill_rectangle, which asks the same question
+        ;; per row.
+        ;;
+        ;; Arguments:
         ;;   A = lpatt
-        ;; Output:
+        ;; Return:
         ;;   if recognized: A = EF9367_CR2_* style, carry=1
         ;;   else:          A = original lpatt, carry=0
-.gdl_hw_style_from_lpatt:
-        ld      c,a
-
-        ;; solid
+        ;; Clobbers:
+        ;;   AF, BC
+__gpx_hw_style_from_lpatt:
         cp      #LPATT_SOLID
         jr      z,.gdl_hw_solid
-
-        ;; Match all rotated hardware-recognized patterns in one loop.
-        ld      b,#8
-.gdl_hw_rot_loop:
-        cp      #0x33
-        jr      z,.gdl_hw_dotted
-        cp      #LPATT_DOTTED_B
-        jr      z,.gdl_hw_dotted
-        cp      #LPATT_DASHED
-        jr      z,.gdl_hw_dashed
-        cp      #LPATT_DOT_DASH
-        jr      z,.gdl_hw_dot_dash
-        rrca
-        djnz    .gdl_hw_rot_loop
-
-        ;; unsupported custom pattern -> software path.
-        ld      a,c
-        or      a                      ;; clears carry
+        or      a                       ; clears carry: software path
         ret
 
 .gdl_hw_solid:
@@ -193,47 +287,49 @@ _gpx_draw_line::
         scf
         ret
 
-.gdl_hw_dotted:
-        ld      a,#EF9367_CR2_DOTTED
-        scf
-        ret
-
-.gdl_hw_dashed:
-        ld      a,#EF9367_CR2_DASHED
-        scf
-        ret
-
-.gdl_hw_dot_dash:
-        ld      a,#EF9367_CR2_DOT_DASH
-        scf
-        ret
-
         ;; ------------------------------------------------------------
-        ;; Draw clipped segment using EF9367 vector commands.
-        ;; Uses recursive halving in delta space for >255 projection.
-.gdl_draw_vector:
+        ;; __gpx_draw_vector
+        ;; Draw one solid vector between the endpoints in __gpx_vec_x0 ..
+        ;; __gpx_vec_y1, using EF9367 vector commands and recursive halving
+        ;; in delta space when a projection exceeds the 8-bit DELTA
+        ;; registers.
+        ;;
+        ;; The endpoints come in by pointer so both callers can hand over
+        ;; storage they already have: gpx_draw_line points at the clipped
+        ;; coordinates in its own frame, and the tiny-bitmap stroke renderer
+        ;; points at __gpx_vec_x0, reaching this directly instead of
+        ;; marshalling eleven bytes of arguments through the public entry.
+        ;;
+        ;; Colour, blit mode and line style must already be programmed.
+        ;;
+        ;; Arguments:
+        ;;   IY = &{x0, y0, x1, y1}, four consecutive words
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL
+__gpx_draw_vector::
         ;; dx = x1 - x0
-        ld      l,S_X1_LO(ix)
-        ld      h,S_X1_HI(ix)
-        ld      e,S_X0_LO(ix)
-        ld      d,S_X0_HI(ix)
+        ld      l,VEC_X1(iy)
+        ld      h,VEC_X1+1(iy)
+        ld      e,VEC_X0(iy)
+        ld      d,VEC_X0+1(iy)
         or      a
         sbc     hl,de
-        push    hl                     ;; save signed dx
+        push    hl                      ; save signed dx
 
         ;; Set origin to x0,y0.
-        ex      de,hl                  ;; HL = x0
-        ld      e,S_Y0_LO(ix)
-        ld      d,S_Y0_HI(ix)
-        call    __ef9367_set_xy
+        ex      de,hl                   ; HL = x0
+        ld      e,VEC_Y0(iy)
+        ld      d,VEC_Y0+1(iy)
+        call    __ef9367_set_xy_fast    ; keeps DE = y0
 
         ;; dy = y1 - y0
-        ld      l,S_Y1_LO(ix)
-        ld      h,S_Y1_HI(ix)
+        ld      l,VEC_Y1(iy)
+        ld      h,VEC_Y1+1(iy)
         or      a
-        sbc     hl,de                  ;; DE still y0
-        ex      de,hl                  ;; DE = signed dy
-        pop     hl                     ;; HL = signed dx
+        sbc     hl,de                   ; DE still y0
+        ex      de,hl                   ; DE = signed dy
+        pop     hl                      ; HL = signed dx
 
         ;; Degenerate point (dx=0 && dy=0).
         ld      a,h
@@ -252,20 +348,20 @@ _gpx_draw_line::
 .gdl_vec_not_point:
         ;; Build direction command and absolute deltas.
         call    __ef9367_get_delta_cmd
-        ld      VEC_CMD(ix),a
+        ld      (__gpx_vec_cmd),a
 
-        call    __abs_hl                ;; HL = abs(dx)
-        ex      de,hl                  ;; DE = abs(dx), HL = signed dy
-        call    __abs_hl                ;; HL = abs(dy)
+        call    __abs_hl                ; HL = abs(dx)
+        ex      de,hl                   ; DE = abs(dx), HL = signed dy
+        call    __abs_hl                ; HL = abs(dy)
 
         ;; Work queue: push pair as (dx,dy); pop as (dy,dx).
-        push    de                     ;; dx
-        push    hl                     ;; dy
-        ld      b,#1                   ;; pair count
+        push    de                      ; dx
+        push    hl                      ; dy
+        ld      b,#1                    ; pair count
 
 .gdl_vec_loop:
-        pop     de                     ;; dy
-        pop     hl                     ;; dx
+        pop     de                      ; dy
+        pop     hl                      ; dx
 
         ;; Fits EF9367 delta register when both high bytes are 0.
         ld      a,d
@@ -276,7 +372,7 @@ _gpx_draw_line::
         out     (#EF9367_DX),a
         ld      a,e
         out     (#EF9367_DY),a
-        ld      a,VEC_CMD(ix)
+        ld      a,(__gpx_vec_cmd)
         call    __ef9367_exec_cmd
         djnz    .gdl_vec_loop
         ret
@@ -289,11 +385,11 @@ _gpx_draw_line::
         ld      c,a
         srl     h
         rr      l
-        push    hl                     ;; dx1
+        push    hl                      ; dx1
         ld      a,c
         or      a
         jr      z,.gdl_vec_dx2_ready
-        inc     hl                     ;; dx2 = dx1 + 1
+        inc     hl                      ; dx2 = dx1 + 1
 .gdl_vec_dx2_ready:
 
         ld      a,e
@@ -301,16 +397,33 @@ _gpx_draw_line::
         ld      c,a
         srl     d
         rr      e
-        push    de                     ;; dy1
+        push    de                      ; dy1
         ld      a,c
         or      a
         jr      z,.gdl_vec_dy2_ready
-        inc     de                     ;; dy2 = dy1 + 1
+        inc     de                      ; dy2 = dy1 + 1
 .gdl_vec_dy2_ready:
 
-        push    hl                     ;; dx2
-        push    de                     ;; dy2
+        push    hl                      ; dx2
+        push    de                      ; dy2
         inc     b
         inc     b
         djnz    .gdl_vec_loop
         ret
+
+        .area   _DATA
+
+        ;; Endpoint scratch for callers that have no suitable block of their
+        ;; own (the tiny-bitmap stroke renderer), plus the direction command
+        ;; __gpx_draw_vector builds. gpx_draw_line points the renderer at its
+        ;; own frame instead and never touches the scratch.
+__gpx_vec_x0::
+        .dw     0x0000
+__gpx_vec_y0::
+        .dw     0x0000
+__gpx_vec_x1::
+        .dw     0x0000
+__gpx_vec_y1::
+        .dw     0x0000
+__gpx_vec_cmd::
+        .db     0x00

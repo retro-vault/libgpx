@@ -9,6 +9,11 @@
         ;; the core's register interface. Clip/bounds/plot behavior is byte
         ;; identical to the previous implementation (the oracle clips per pixel,
         ;; so this stays on the same path).
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_draw_pixel
         .optsdcc -mz80 sdcccall(1)
@@ -32,18 +37,24 @@
         ;; __gpx_plot_raw register interface (no IX frame, no epilogue).
         ;; Return address is parked in BC' while the stack is drained,
         ;; then pushed back so plot_raw's ret goes to the caller.
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, and the alternate set
+        ;;
+        ;; References:
+        ;;   __gpx_plot_raw
         ;; ------------------------------------------------------------
 _gpx_draw_pixel::
         exx
-        pop     bc                     ;; BC' = return address
+        pop     bc                      ; BC' = return address
         exx
-        pop     hl                     ;; HL = y
-        pop     af                     ;; A = m, F = c (carry = color bit0)
-        rla                            ;; A = (m<<1) | color
-        and     #0x03                  ;; packed flags
-        pop     bc                     ;; BC = clip
+        pop     hl                      ; HL = y
+        pop     af                      ; A = m, F = c (carry = color bit0)
+        rla                             ; A = (m<<1) | color
+        and     #0x03                   ; packed flags
+        pop     bc                      ; BC = clip
         exx
-        push    bc                     ;; return address back on stack
+        push    bc                      ; return address back on stack
         exx
         ;; fall through into __gpx_plot_raw (its ret returns to caller)
 
@@ -56,7 +67,7 @@ _gpx_draw_pixel::
         ;; Clobbers A, BC, DE, HL (and F). Preserves IX/IY.
         ;; ------------------------------------------------------------
 __gpx_plot_raw:
-        push    af                     ;; preserve packed color/mode (survives rowaddr)
+        push    af                      ; preserve packed color/mode (survives rowaddr)
 
         ;; x in [0,255]?  (hi byte must be 0)
         ld      a,d
@@ -73,71 +84,71 @@ __gpx_plot_raw:
         ;; optional clip (BC = rect ptr)
         ld      a,b
         or      c
-        jr      z,.pr_plot_nl          ;; no clip: y lo in L, x lo in E
+        jr      z,.pr_plot_nl           ; no clip: y lo in L, x lo in E
 
         ;; stash y lo in D (free, hi was 0), walk clip via HL
-        ld      d,l                    ;; D = y
+        ld      d,l                     ; D = y
         ld      h,b
-        ld      l,c                    ;; HL = clip ptr
+        ld      l,c                     ; HL = clip ptr
 
         ;; if (x < clip->x0) reject
-        ld      a,(hl)                 ;; x0 lo
+        ld      a,(hl)                  ; x0 lo
         inc     hl
-        ld      b,(hl)                 ;; x0 hi
-        inc     hl                     ;; HL -> &y0
+        ld      b,(hl)                  ; x0 hi
+        inc     hl                      ; HL -> &y0
         bit     7,b
-        jr      nz,.pr_cy0             ;; x0 < 0 => pass
-        ld      c,a                    ;; save x0 lo
+        jr      nz,.pr_cy0              ; x0 < 0 => pass
+        ld      c,a                     ; save x0 lo
         ld      a,b
         or      a
-        jr      nz,.pr_reject ;; x0 >= 256 => x < x0 => reject
-        ld      a,e                    ;; x
+        jr      nz,.pr_reject           ; x0 >= 256 => x < x0 => reject
+        ld      a,e                     ; x
         cp      c
-        jr      c,.pr_reject ;; x < x0
+        jr      c,.pr_reject            ; x < x0
 
 .pr_cy0:
         ;; if (y < clip->y0) reject
-        ld      a,(hl)                 ;; y0 lo
+        ld      a,(hl)                  ; y0 lo
         inc     hl
-        ld      b,(hl)                 ;; y0 hi
-        inc     hl                     ;; HL -> &x1
+        ld      b,(hl)                  ; y0 hi
+        inc     hl                      ; HL -> &x1
         bit     7,b
         jr      nz,.pr_cx1
         ld      c,a
         ld      a,b
         or      a
         jr      nz,.pr_reject
-        ld      a,d                    ;; y
+        ld      a,d                     ; y
         cp      c
         jr      c,.pr_reject
 
 .pr_cx1:
         ;; if (x > clip->x1) reject  (== clip->x1 < x)
-        ld      c,(hl)                 ;; x1 lo
+        ld      c,(hl)                  ; x1 lo
         inc     hl
-        ld      b,(hl)                 ;; x1 hi
-        inc     hl                     ;; HL -> &y1
+        ld      b,(hl)                  ; x1 hi
+        inc     hl                      ; HL -> &y1
         bit     7,b
-        jr      nz,.pr_reject ;; x1 < 0 => reject
+        jr      nz,.pr_reject           ; x1 < 0 => reject
         ld      a,b
         or      a
-        jr      nz,.pr_cy1             ;; x1 >= 256 => pass
-        ld      a,c                    ;; x1 lo
-        cp      e                      ;; x1 < x ?
+        jr      nz,.pr_cy1              ; x1 >= 256 => pass
+        ld      a,c                     ; x1 lo
+        cp      e                       ; x1 < x ?
         jr      c,.pr_reject
 
 .pr_cy1:
         ;; if (y > clip->y1) reject
-        ld      c,(hl)                 ;; y1 lo
+        ld      c,(hl)                  ; y1 lo
         inc     hl
-        ld      b,(hl)                 ;; y1 hi
+        ld      b,(hl)                  ; y1 hi
         bit     7,b
-        jr      nz,.pr_reject ;; y1 < 0 => reject
+        jr      nz,.pr_reject           ; y1 < 0 => reject
         ld      a,b
         or      a
-        jr      nz,.pr_plot            ;; y1 >= 256 => pass
-        ld      a,c                    ;; y1 lo
-        cp      d                      ;; y1 < y ?
+        jr      nz,.pr_plot             ; y1 >= 256 => pass
+        ld      a,c                     ; y1 lo
+        cp      d                       ; y1 < y ?
         jr      c,.pr_reject
 
 .pr_plot:
@@ -173,8 +184,8 @@ __gpx_plot_raw:
         jr      nc,.pr_ptr_ok
         inc     h
 .pr_ptr_ok:
-        ld      e,c                    ;; E = mask
-        pop     af                     ;; A = packed color/mode
+        ld      e,c                     ; E = mask
+        pop     af                      ; A = packed color/mode
 
         bit     1,a
         jr      nz,.pr_xor

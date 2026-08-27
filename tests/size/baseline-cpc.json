@@ -1,0 +1,96 @@
+{
+  "_gpx_bresenham_line": {
+    "_CODE": 1735
+  },
+  "_gpx_cursors": {
+    "_CODE": 130
+  },
+  "_gpx_font_envy": {
+    "_CODE": 1440
+  },
+  "_gpx_get_stock_bmp": {
+    "_CODE": 44
+  },
+  "_gpx_get_system_font": {
+    "_CODE": 4
+  },
+  "_gpx_get_tiny_font": {
+    "_CODE": 4
+  },
+  "_gpx_hline": {
+    "_CODE": 839,
+    "_DATA": 2
+  },
+  "_gpx_mode": {
+    "_CODE": 8,
+    "_DATA": 5
+  },
+  "_gpx_store_background": {
+    "_CODE": 274
+  },
+  "_rect_helpers": {
+    "_CODE": 203,
+    "_DATA": 8
+  },
+  "_video": {
+    "_CODE": 64
+  },
+  "crt0-cpc": {
+    "_BSS": 512,
+    "_CODE": 11,
+    "_DATA": 0,
+    "_GSFINAL": 1,
+    "_GSINIT": 15,
+    "_HOME": 0,
+    "_INITFINAL": 0,
+    "_INITIALIZED": 0,
+    "_INITIALIZER": 0
+  },
+  "gpx_bmp": {
+    "_CODE": 1585
+  },
+  "gpx_clrscr": {
+    "_CODE": 49,
+    "_DATA": 2
+  },
+  "gpx_create": {
+    "_CODE": 134,
+    "_DATA": 9
+  },
+  "gpx_destroy": {
+    "_CODE": 1
+  },
+  "gpx_draw_line": {
+    "_CODE": 95
+  },
+  "gpx_draw_pixel": {
+    "_CODE": 179
+  },
+  "gpx_draw_rectangle": {
+    "_CODE": 247
+  },
+  "gpx_draw_text": {
+    "_CODE": 497
+  },
+  "gpx_fill_rectangle": {
+    "_CODE": 401
+  },
+  "gpx_height": {
+    "_CODE": 9
+  },
+  "gpx_measure_text": {
+    "_CODE": 154
+  },
+  "gpx_set_page": {
+    "_CODE": 1
+  },
+  "gpx_set_text_background": {
+    "_CODE": 30
+  },
+  "gpx_show_sprite": {
+    "_CODE": 236
+  },
+  "gpx_width": {
+    "_CODE": 7
+  }
+}

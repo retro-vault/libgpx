@@ -1,0 +1,12 @@
+{
+ "bench_clrscr 320x200": 1116500,
+ "bench_clrscr 640x200": 1116500,
+ "bench_fill 320x200": 13278732,
+ "bench_fill 640x200": 10924916,
+ "bench_line 320x200": 7049604,
+ "bench_line 640x200": 9323456,
+ "bench_sprite 320x200": 8028056,
+ "bench_sprite 640x200": 6538648,
+ "bench_text 320x200": 44665676,
+ "bench_text 640x200": 35730956
+}

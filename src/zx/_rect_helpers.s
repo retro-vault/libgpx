@@ -1,6 +1,11 @@
         ;; _rect_helpers.s
         ;;
         ;; Minimal signed 16-bit compare helper.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module _rect_helpers
         .optsdcc -mz80 sdcccall(1)
@@ -22,7 +27,7 @@
         ;; already unwound to [ret][args]. Clobbers DE/HL.
         ;; ------------------------------------------------------------
 __ret_clean11:
-        pop     de                     ;; return address
+        pop     de                      ; return address
         ld      hl,#11
         add     hl,sp
         ld      sp,hl
@@ -68,37 +73,37 @@ __clip_seg:
         ;; seg_hi < clip_lo or clip_hi < seg_lo, the clamped span is inverted
         ;; by construction. Five signed compares become three.
         ld      b,h
-        ld      c,l                    ;; BC = seg_lo
-        push    de                     ;; stack: [seg_hi]
+        ld      c,l                     ; BC = seg_lo
+        push    de                      ; stack: [seg_hi]
 
         ;; seg_lo = max(seg_lo, clip_lo)
         ld      e,0(iy)
-        ld      d,1(iy)                ;; DE = clip_lo, HL = seg_lo
+        ld      d,1(iy)                 ; DE = clip_lo, HL = seg_lo
         call    __rect_cmp16s_lt
         jr      nc,.cs_lo_ok
         ld      c,e
-        ld      b,d                    ;; seg_lo = clip_lo
+        ld      b,d                     ; seg_lo = clip_lo
 .cs_lo_ok:
-        pop     de                     ;; DE = seg_hi
+        pop     de                      ; DE = seg_hi
 
         ;; seg_hi = min(seg_hi, clip_hi)
         ld      l,4(iy)
-        ld      h,5(iy)                ;; HL = clip_hi
-        call    __rect_cmp16s_lt       ;; clip_hi < seg_hi ?
+        ld      h,5(iy)                 ; HL = clip_hi
+        call    __rect_cmp16s_lt        ; clip_hi < seg_hi ?
         jr      nc,.cs_hi_ok
         ld      e,l
-        ld      d,h                    ;; seg_hi = clip_hi
+        ld      d,h                     ; seg_hi = clip_hi
 .cs_hi_ok:
 
         ;; inverted span => nothing visible on this axis
         ld      l,e
-        ld      h,d                    ;; HL = seg_hi
+        ld      h,d                     ; HL = seg_hi
         ld      e,c
-        ld      d,b                    ;; DE = seg_lo
-        call    __rect_cmp16s_lt       ;; seg_hi < seg_lo ?
-        ex      de,hl                  ;; HL = seg_lo, DE = seg_hi
-        ret     c                      ;; carry already set => reject
-        or      a                      ;; carry clear => keep
+        ld      d,b                     ; DE = seg_lo
+        call    __rect_cmp16s_lt        ; seg_hi < seg_lo ?
+        ex      de,hl                   ; HL = seg_lo, DE = seg_hi
+        ret     c                       ; carry already set => reject
+        or      a                       ; carry clear => keep
         ret
 
 
@@ -123,18 +128,18 @@ __rect_cmp16s_lt:
 .rc_wide:
         ld      a,h
         xor     d
-        jp      m,.rc_diff             ;; signs differ
+        jp      m,.rc_diff              ; signs differ
         ld      a,h
         cp      d
-        ret     nz                     ;; carry = (hi < hi)
+        ret     nz                      ; carry = (hi < hi)
         ld      a,l
         cp      e
-        ret                            ;; carry = (lo < lo)
+        ret                             ; carry = (lo < lo)
 
 .rc_diff:
         ;; different signs: the negative one is the smaller
         ld      a,h
-        rlca                           ;; carry = sign bit of HL
+        rlca                            ; carry = sign bit of HL
         ret
 
         ;; ------------------------------------------------------------

@@ -1,6 +1,11 @@
         ;; gpx_measure_text.s
         ;;
         ;; Measure text width from serialized font_t data.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_measure_text
         .optsdcc -mz80 sdcccall(1)
@@ -18,45 +23,45 @@
 
         ;; ------------------------------------------------------------
         ;; coord gpx_measure_text(const char *text, const font_t *font)
-        ;; Input:
+        ;; Arguments:
         ;;   HL = text
         ;;   DE = font
         ;;
-        ;; Output:
+        ;; Return:
         ;;   DE = measured width
         ;;
         ;; Clobbers:
         ;;   AF, BC, DE, HL, IX, IY
 _gpx_measure_text::
-        ld      a,h                     ;; text != NULL ?
+        ld      a,h                     ; text != NULL ?
         or      l
         jp      z,.mt_zero
 
-        ld      a,d                     ;; font != NULL ?
+        ld      a,d                     ; font != NULL ?
         or      e
         jp      z,.mt_zero
 
         push    ix
         push    iy
         push    de
-        pop     ix                      ;; IX = font
+        pop     ix                      ; IX = font
         push    hl
-        pop     iy                      ;; IY = text
+        pop     iy                      ; IY = text
 
-        ld      bc,#0x0000              ;; BC = accumulated width
+        ld      bc,#0x0000              ; BC = accumulated width
 
 .mt_loop:
-        ld      a,0(iy)                 ;; ch = *text
+        ld      a,0(iy)                 ; ch = *text
         or      a
         jr      z,.mt_done
         inc     iy
 
-        cp      1(ix)                   ;; ch < first_ascii ?
+        cp      1(ix)                   ; ch < first_ascii ?
         jr      c,.mt_add_empty
 
-        ld      d,a                     ;; D = ch
-        ld      a,2(ix)                 ;; last_ascii
-        cp      d                       ;; last_ascii < ch ?
+        ld      d,a                     ; D = ch
+        ld      a,2(ix)                 ; last_ascii
+        cp      d                       ; last_ascii < ch ?
         jr      c,.mt_add_empty
 
         ;; idx = (ch - first_ascii) * 2
@@ -78,20 +83,20 @@ _gpx_measure_text::
         and     #FONT_FLAG_OFFSETS_BE
         jr      nz,.mt_read_be
 
-        ld      e,(hl)                  ;; little-endian
+        ld      e,(hl)                  ; little-endian
         inc     hl
         ld      d,(hl)
         jr      .mt_have_off
 
 .mt_read_be:
-        ld      d,(hl)                  ;; big-endian
+        ld      d,(hl)                  ; big-endian
         inc     hl
         ld      e,(hl)
 
 .mt_have_off:
         ld      a,d
         or      e
-        jr      z,.mt_add_empty         ;; missing glyph
+        jr      z,.mt_add_empty         ; missing glyph
 
         ;; HL = glyph bmp_t*
         push    ix
@@ -106,16 +111,25 @@ _gpx_measure_text::
         cp      #BMP_SIG_1BPP_MASK
         jr      z,.mt_w8
         cp      #BMP_SIG_TINY
-        jr      z,.mt_w8
+        jr      z,.mt_tiny_w8
         cp      #BMP_SIG_TINY_MASK
-        jr      z,.mt_w8
+        jr      z,.mt_tiny_w8
         jr      .mt_add_empty
 
+.mt_tiny_w8:
+        ;; Legacy Tiny font glyph headers store width-1.
+        inc     hl
+        ld      e,(hl)
+        inc     e
+        ld      d,#0x00
+        jr      .mt_have_width
+
 .mt_w8:
-        inc     hl                      ;; +1 => width
+        inc     hl                      ; +1 => width
         ld      e,(hl)
         ld      d,#0x00
 
+.mt_have_width:
         ld      a,d
         or      e
         jr      z,.mt_add_empty
@@ -138,7 +152,7 @@ _gpx_measure_text::
 
 .mt_add_empty:
         ld      a,c
-        add     a,3(ix)                 ;; empty_width
+        add     a,3(ix)                 ; empty_width
         ld      c,a
         jr      nc,.mt_loop
         inc     b

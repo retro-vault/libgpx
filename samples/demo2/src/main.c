@@ -1,13 +1,22 @@
 #include "libgpx.h"
 
+/* The Amstrad CPC has two display modes behind one library, so the manual's
+ * screenshots are taken twice from this one source. Machines with a single
+ * layout accept the argument and ignore it. */
+#ifndef DEMO_MODE
+#define DEMO_MODE GPXM_DEFAULT
+#endif
+
 /*
- * demo2 -- Iskra Delta Partner hardware smoke test for libgpx.
+ * demo2 -- fixed-size hardware smoke test for libgpx.
  *
- * Exercises the whole public API in one picture, laid out so the screen
- * can be verified against this checklist on real hardware. The two
- * pattern squares double as a built-in self-check: a cursor sprite was
- * shown AND hidden over the RIGHT one, so both squares must look
- * pixel-for-pixel identical.
+ * Exercises the whole public API in one 1024x256 picture, laid out so the
+ * Partner screen can be verified against this checklist on real hardware.
+ * The same source also runs on the 256x192 ZX Spectrum, where physical-screen
+ * clipping leaves only the top-left of the picture visible. The two pattern
+ * squares double as a built-in self-check: a cursor sprite was shown AND
+ * hidden over the RIGHT one, so both squares must look pixel-for-pixel
+ * identical on the Partner.
  *
  *   1. title text with an underline of the measured text width
  *   2. eight-way octant star (hardware vector generator, every quadrant)
@@ -21,7 +30,7 @@
  *      only the part inside its small outlined window may appear
  *   8. full-screen border
  *
- * Build:  make -C samples/demo2      -> bin/demo2/demo2.com (CP/M TPA)
+ * Build:  make -C samples/demo2 build -> bin/demo2/demo2.tap and demo2.com
  * Exit:   the demo parks in an endless loop; reset the machine.
  */
 
@@ -31,7 +40,7 @@ static uint8_t bg_clip[GPX_SPRITE_BG_SIZE];
 
 void main(void)
 {
-    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    gpx_t *gpx = gpx_create(DEMO_MODE);
     const font_t *font = gpx_get_system_font();
     rect_t win = {620, 60, 940, 180};
     rect_t spr_win = {150, 196, 185, 220};

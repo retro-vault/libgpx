@@ -23,6 +23,34 @@ void check(bool condition, const std::string &message, int &failures)
     }
 }
 
+/* A fill takes its pattern MSB-first from the rectangle's own left edge, and
+   its row from the rectangle's own top edge -- both measured on the
+   unclipped rectangle, so clipping never shifts the pattern. Same rule as
+   the ZX backend. Checking every pixel of the visible span states that rule
+   directly instead of transcribing a handful of expected pixels. */
+void check_fill(const std::vector<uint8_t> &screen,
+                int rx0, int ry0, int rx1, int ry1,
+                const int *clip,
+                const uint8_t *fpatt, int len,
+                int width, int height, int &failures, const char *label)
+{
+    int vx0 = rx0, vy0 = ry0, vx1 = rx1, vy1 = ry1;
+    if (clip) {
+        if (clip[0] > vx0) vx0 = clip[0];
+        if (clip[1] > vy0) vy0 = clip[1];
+        if (clip[2] < vx1) vx1 = clip[2];
+        if (clip[3] < vy1) vy1 = clip[3];
+    }
+    for (int y = vy0; y <= vy1; ++y) {
+        uint8_t p = fpatt[(y - ry0) % len];
+        for (int x = vx0; x <= vx1; ++x) {
+            bool expected = ((p >> (7 - ((x - rx0) & 7))) & 1) != 0;
+            check(pixel_on(screen, x, y, width, height) == expected,
+                  label, failures);
+        }
+    }
+}
+
 } // namespace
 
 int main()
@@ -74,75 +102,29 @@ int main()
     check(!pixel_on(screen, 30, 13, width, height), "rect1 leaked below clip", failures);
     check(!pixel_on(screen, 18, 10, width, height), "rect1 unclipped left side drawn", failures);
 
-    // Unclipped fill with fpatt={0x96,0x3A}, rendered through horizontal line fallback.
-    check(!pixel_on(screen, 30, 20, width, height), "fill0 row0 x0 should be off", failures);
-    check(pixel_on(screen, 31, 20, width, height), "fill0 row0 x1 should be on", failures);
-    check(pixel_on(screen, 32, 20, width, height), "fill0 row0 x2 should be on", failures);
-    check(!pixel_on(screen, 33, 20, width, height), "fill0 row0 x3 should be off", failures);
+    static const uint8_t fp0[2] = {0x96, 0x3A};
+    static const uint8_t fp2[4] = {0x96, 0x3A, 0xC5, 0x69};
+    static const uint8_t fp3[3] = {0x96, 0xA5, 0x69};
+    static const int fr1_clip[4] = {53, 32, 57, 34};
+    static const int fr3_clip[4] = {350, 120, 760, 210};
 
-    check(!pixel_on(screen, 30, 21, width, height), "fill0 row1 x0 should be off", failures);
-    check(pixel_on(screen, 31, 21, width, height), "fill0 row1 x1 should be on", failures);
-    check(!pixel_on(screen, 32, 21, width, height), "fill0 row1 x2 should be off", failures);
-    check(pixel_on(screen, 33, 21, width, height), "fill0 row1 x3 should be on", failures);
+    check_fill(screen, 30, 20, 38, 24, nullptr, fp0, 2,
+               width, height, failures, "fill0 mismatch");
+    check_fill(screen, 50, 30, 57, 34, fr1_clip, fp0, 2,
+               width, height, failures, "fill1 mismatch");
+    check_fill(screen, 120, 40, 320, 190, nullptr, fp2, 4,
+               width, height, failures, "fill2 mismatch");
+    check_fill(screen, 300, 100, 900, 240, fr3_clip, fp3, 3,
+               width, height, failures, "fill3 mismatch");
 
-    // Clipped fill: verify x/y phase rotation after pre-clipping.
-    check(!pixel_on(screen, 53, 32, width, height), "fill1 row0 x0 phase mismatch", failures);
-    check(pixel_on(screen, 54, 32, width, height), "fill1 row0 x1 phase mismatch", failures);
-    check(!pixel_on(screen, 55, 32, width, height), "fill1 row0 x2 phase mismatch", failures);
-    check(!pixel_on(screen, 56, 32, width, height), "fill1 row0 x3 phase mismatch", failures);
-    check(pixel_on(screen, 57, 32, width, height), "fill1 row0 x4 phase mismatch", failures);
-
-    check(pixel_on(screen, 53, 33, width, height), "fill1 row1 x0 phase mismatch", failures);
-    check(pixel_on(screen, 54, 33, width, height), "fill1 row1 x1 phase mismatch", failures);
-    check(pixel_on(screen, 55, 33, width, height), "fill1 row1 x2 phase mismatch", failures);
-    check(!pixel_on(screen, 56, 33, width, height), "fill1 row1 x3 phase mismatch", failures);
-    check(!pixel_on(screen, 57, 33, width, height), "fill1 row1 x4 phase mismatch", failures);
-
+    /* Nothing may escape a clip window or a rectangle's own bounds. */
     check(!pixel_on(screen, 52, 32, width, height), "fill1 leaked left of clip", failures);
     check(!pixel_on(screen, 53, 31, width, height), "fill1 leaked above clip", failures);
-
-    // Large unclipped fill (fr2): verify repeating 4-row pattern over a wider area.
-    check(!pixel_on(screen, 120, 40, width, height), "fill2 row0 x0 should be off", failures);
-    check(pixel_on(screen, 121, 40, width, height), "fill2 row0 x1 should be on", failures);
-    check(pixel_on(screen, 122, 40, width, height), "fill2 row0 x2 should be on", failures);
-    check(!pixel_on(screen, 123, 40, width, height), "fill2 row0 x3 should be off", failures);
-    check(pixel_on(screen, 124, 40, width, height), "fill2 row0 x4 should be on", failures);
-    check(pixel_on(screen, 319, 40, width, height), "fill2 row0 right edge-1 should be on", failures);
-    check(!pixel_on(screen, 320, 40, width, height), "fill2 row0 right edge should be off", failures);
-
-    check(!pixel_on(screen, 120, 41, width, height), "fill2 row1 x0 should be off", failures);
-    check(pixel_on(screen, 121, 41, width, height), "fill2 row1 x1 should be on", failures);
-    check(!pixel_on(screen, 122, 41, width, height), "fill2 row1 x2 should be off", failures);
-    check(pixel_on(screen, 123, 41, width, height), "fill2 row1 x3 should be on", failures);
-    check(pixel_on(screen, 124, 41, width, height), "fill2 row1 x4 should be on", failures);
-
     check(!pixel_on(screen, 119, 40, width, height), "fill2 leaked left", failures);
     check(!pixel_on(screen, 321, 40, width, height), "fill2 leaked right", failures);
     check(!pixel_on(screen, 200, 39, width, height), "fill2 leaked above", failures);
-
-    // Large clipped fill (fr3): verify x/y phase after clipping on a wide span.
-    check(!pixel_on(screen, 350, 120, width, height), "fill3 row0 x0 phase mismatch", failures);
-    check(pixel_on(screen, 351, 120, width, height), "fill3 row0 x1 phase mismatch", failures);
-    check(!pixel_on(screen, 352, 120, width, height), "fill3 row0 x2 phase mismatch", failures);
-    check(pixel_on(screen, 353, 120, width, height), "fill3 row0 x3 phase mismatch", failures);
-    check(pixel_on(screen, 354, 120, width, height), "fill3 row0 x4 phase mismatch", failures);
-
-    check(pixel_on(screen, 350, 121, width, height), "fill3 row1 x0 phase mismatch", failures);
-    check(!pixel_on(screen, 351, 121, width, height), "fill3 row1 x1 phase mismatch", failures);
-    check(pixel_on(screen, 352, 121, width, height), "fill3 row1 x2 phase mismatch", failures);
-    check(!pixel_on(screen, 353, 121, width, height), "fill3 row1 x3 phase mismatch", failures);
-
-    check(pixel_on(screen, 350, 122, width, height), "fill3 row2 x0 phase mismatch", failures);
-    check(!pixel_on(screen, 351, 122, width, height), "fill3 row2 x1 phase mismatch", failures);
-    check(!pixel_on(screen, 352, 122, width, height), "fill3 row2 x2 phase mismatch", failures);
-    check(pixel_on(screen, 353, 122, width, height), "fill3 row2 x3 phase mismatch", failures);
-
-    check(pixel_on(screen, 759, 120, width, height), "fill3 far right x-1 mismatch", failures);
-    check(!pixel_on(screen, 760, 120, width, height), "fill3 far right edge mismatch", failures);
-    check(pixel_on(screen, 351, 210, width, height), "fill3 bottom row phase mismatch", failures);
-
-    check(!pixel_on(screen, 349, 120, width, height), "fill3 leaked left of clip", failures);
-    check(!pixel_on(screen, 761, 120, width, height), "fill3 leaked right of clip", failures);
+    check(!pixel_on(screen, 349, 150, width, height), "fill3 leaked left of clip", failures);
+    check(!pixel_on(screen, 761, 150, width, height), "fill3 leaked right of clip", failures);
     check(!pixel_on(screen, 500, 119, width, height), "fill3 leaked above clip", failures);
     check(!pixel_on(screen, 500, 211, width, height), "fill3 leaked below clip", failures);
 

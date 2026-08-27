@@ -3,13 +3,35 @@
  *
  * Low-level 1-bit-per-pixel (1bpp) graphics primitives.  Defines
  * the platform-independent drawing API: pixels, lines, rectangles,
- * circles, polygons, and bitmaps.  Each platform supplies its own
- * gpx.c that implements these against its native framebuffer.
+ * text, bitmaps and sprites.  Every function declared here is
+ * implemented by each backend under src/ in hand-written Z80
+ * assembly -- against a packed framebuffer on the ZX Spectrum, and
+ * against the EF9367 drawing processor on the Iskra Delta Partner,
+ * whose display memory the CPU cannot read at all.
  *
  * NOTES: All drawing functions accept an optional clip rectangle.
  * Pass NULL to disable clipping.  Colors are 1bpp values: CO_FORE
- * sets a pixel, CO_BACK clears it.  BM_XOR inverts the existing
- * pixel regardless of the color argument.
+ * sets a pixel, CO_BACK clears it.  BM_XOR inverts the existing pixel
+ * regardless of the color argument.
+ *
+ * The backends are held to identical behaviour, so a program built on
+ * this API draws the same picture on either machine.  Two differences
+ * are unavoidable and expected.  Bitmap and font payloads are per
+ * platform -- the ZX takes rasters, the Partner takes vector move
+ * streams -- so glyphs and sprite artwork differ by design.  And the
+ * interior pixels of a slanted solid line differ by about one pixel,
+ * because the Partner hands those to the EF9367's own vector
+ * generator; endpoints, clipping and every line pattern still match
+ * exactly.  tests/conformance checks all of this.
+ *
+ * Line patterns (lpatt) are applied one bit per pixel, LSB first from
+ * the line's start, and gpx_draw_line returns the pattern rotated by
+ * however many pixels it drew so segments can be chained.  Clipping
+ * does not shift the phase: a clipped line lights the same pixels it
+ * would have if the whole line had been drawn and the outside part
+ * simply not shown.  Fill patterns (fpatt) instead run MSB first from
+ * the rectangle's own left edge, one byte per row from its top edge,
+ * both measured before clipping.
  *
  * GPL2 License (see: LICENSE)
  * copyright (c) 2026 tomaz stih
@@ -35,6 +57,12 @@ typedef uint8_t color;
 #define BM_XOR 0x01 /* xor with existing framebuffer content */
 typedef uint8_t bmode;
 
+/* Text cell background policy. Opaque text paints glyph boxes and spacing
+ * in the inverse text color; transparent text draws glyph ink only. */
+#define GPX_TEXT_BG_OPAQUE      0x00
+#define GPX_TEXT_BG_TRANSPARENT 0x01
+typedef uint8_t textbg;
+
 /* 2-D point in screen coordinates. */
 typedef struct point_s
 {
@@ -57,10 +85,13 @@ typedef struct rect_s
 /* Bitmap signature byte:
  * bits 7..4 = encoding
  * bits 3..0 = stride encoding (stored as stride-1, valid range 0..15 => stride 1..16). */
-/* Known encoding ids (signature high nibble). */
+/* Known encoding ids (signature high nibble).
+ * Not every backend decodes every encoding: the ZX backend handles the
+ * two 1bpp forms, the Partner backend the two tiny move-stream forms. */
 #define BMP_ENC_1BPP            0x0 /* 0000: standard 1bpp */
 #define BMP_ENC_1BPP_MASK       0x1 /* 0001: masked 1bpp (AND/OR) */
 #define BMP_ENC_TINY            0x2 /* 0010: tiny move-stream bitmap */
+#define BMP_ENC_TINY_MASK       0x3 /* 0011: tiny move-stream, with mask strokes */
 
 /* Helpers for signature byte handling. */
 #define BMP_SIG(enc) ((uint8_t)(((enc) & 0x0F) << 4)) /* default stride=1 */
@@ -115,7 +146,10 @@ typedef struct sprite_s
     const rect_t *clip;
 } sprite_t;
 
-/* Font header flags (byte 0). */
+/* Font header flags (byte 0). Only FONT_FLAG_OFFSETS_BE changes how the
+ * backends read a font; the other two describe the asset for tools and
+ * are not branched on at render time, so clearing PROPORTIONAL does not
+ * select a fixed-width path. */
 #define FONT_FLAG_PROPORTIONAL 0x01 /* Variable-width glyphs. */
 #define FONT_FLAG_OFFSETS_BE 0x02 /* Offset table uses big-endian uint16_t. */
 #define FONT_FLAG_VECTOR 0x04 /* 1=vector font, 0=bitmap font. */
@@ -164,7 +198,9 @@ extern bmp_t *gpx_get_stock_bmp(const uint8_t which);
 /* Measure text width in pixels for a serialized font. */
 extern coord gpx_measure_text(const char *text, const font_t *font);
 
-/* Draw text at (x, y) in desktop coordinates. */
+/* Draw text at (x, y) in desktop coordinates. The context's
+ * text_background policy applies to glyph boxes, missing glyph cells,
+ * and the advance between adjacent characters. */
 extern void gpx_draw_text(
     gpx_t *gpx, coord x, coord y,
     const char *text, const font_t *font,
@@ -174,17 +210,29 @@ extern void gpx_draw_text(
  * The actual framebuffer pointer is managed by the platform. */
 struct gpx_s
 {
-    dim width;       /* Display width in pixels. */
-    dim height;      /* Display height in pixels. */
-    uint8_t pages;   /* Number of framebuffer pages available. */
+    dim width;               /* Display width in pixels. */
+    dim height;              /* Display height in pixels. */
+    uint8_t pages;           /* Number of framebuffer pages available. */
+    textbg text_background;  /* Opaque or transparent text cells. */
 };
 
-/* Graphics initialisation mode. */
+/* Graphics initialisation mode. Mode numbers beyond the default are
+ * platform-specific: the Partner takes 1 for its 1024x512 layout, and
+ * the ZX Spectrum has one fixed mode and ignores the argument. Read
+ * the geometry back from the returned gpx_t rather than assuming it. */
 #define GPXM_DEFAULT 0
+/* Amstrad CPC display modes. One library serves both: the mode is chosen
+ * here, at gpx_create() time, and gpx_width() reports it afterwards.
+ * Backends with a single layout accept these and ignore them. */
+#define GPXM_CPC_640X200 0
+#define GPXM_CPC_320X200 1
 typedef uint8_t gmode;
 
 /* Initialise the platform graphics subsystem and return a gpx_t. */
 extern gpx_t *gpx_create(gmode mode);
+
+/* Select whether text clears its cell background or leaves it transparent. */
+extern void gpx_set_text_background(gpx_t *gpx, textbg background);
 
 /* Tear down the graphics subsystem and free the gpx_t. */
 extern void gpx_destroy(gpx_t *gpx);
@@ -213,7 +261,8 @@ extern void gpx_draw_pixel(
     color c, bmode m, const rect_t *clip);
 
 /* Draw a line from (x0,y0) to (x1,y1) using Bresenham's algorithm.
- * lpatt is an 8-bit dash pattern (0xFF = solid).
+ * lpatt is an 8-bit dash pattern (0xFF = solid), applied one bit per
+ * pixel LSB-first from (x0,y0).
  * Returns the rotated pattern byte at the point where the line stopped,
  * so callers can chain patterns seamlessly across multiple segments.
  * Clipped to clip if non-NULL. */
@@ -221,8 +270,9 @@ extern uint8_t gpx_draw_line(
     gpx_t *gpx, coord x0, coord y0, coord x1, coord y1,
     color c, bmode m, uint8_t lpatt, const rect_t *clip);
 
-/* Blit a packed 1bpp bitmap at (x, y).
- * Pixels set to 1 are drawn in CO_FORE; zero pixels are skipped.
+/* Blit a bitmap at (x, y), in whichever encoding its signature names.
+ * For the 1bpp forms, pixels set to 1 are drawn in CO_FORE and zero
+ * pixels are skipped; the tiny forms carry their own per-stroke color.
  * Clipped to clip if non-NULL. */
 extern void gpx_draw_bmp(
     gpx_t *gpx, coord x, coord y,
@@ -242,7 +292,9 @@ extern void gpx_draw_rectangle(
     color c, bmode m, uint8_t lpatt, const rect_t *clip);
 
 /* Fill rectangle r using repeating fill pattern fpatt[fpatt_len].
- * Pattern bytes are applied row-by-row; fpatt_len must be >= 1. */
+ * One byte per row from r's top edge, applied MSB-first from r's left
+ * edge; both are measured on the unclipped rectangle, so clipping never
+ * shifts the pattern. fpatt_len must be >= 1. */
 extern void gpx_fill_rectangle(
     gpx_t *gpx, rect_t *r,
     color c, bmode m,

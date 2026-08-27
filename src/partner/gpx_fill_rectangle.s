@@ -5,6 +5,11 @@
         ;;  - clips once (screen + optional clip)
         ;;  - emits raw horizontal lines (no per-line clipping)
         ;;  - keeps fill pattern phase stable under clipping
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_fill_rectangle
         .optsdcc -mz80 sdcccall(1)
@@ -13,6 +18,15 @@
         .globl  _gpx_draw_line
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
+        .globl  __gpx_draw_vector
+        .globl  __gpx_hw_style_from_lpatt
+        .globl  __gpx_vec_x0
+        .globl  __gpx_vec_y0
+        .globl  __gpx_vec_x1
+        .globl  __gpx_vec_y1
+        .globl  __ef9367_set_blit_mode
+        .globl  __ef9367_set_color
+        .globl  __ef9367_set_line_style
 
         .area   _CODE
 
@@ -60,7 +74,7 @@
         ;;   uint8_t *fpatt, uint8_t fpatt_len,
         ;;   const rect_t *clip)
         ;;
-        ;; Input:
+        ;; Arguments:
         ;;   HL = gpx
         ;;   DE = r
         ;;   stack: c, m, fpatt, fpatt_len, clip
@@ -73,8 +87,8 @@ _gpx_fill_rectangle::
         add     ix,sp
 
         ;; preserve register arguments across local stack allocation
-        ld      b,h                     ;; gpx hi
-        ld      c,l                     ;; gpx lo
+        ld      b,h                     ; gpx hi
+        ld      c,l                     ; gpx lo
 
         ld      hl,#-32
         add     hl,sp
@@ -145,10 +159,10 @@ _gpx_fill_rectangle::
         ;; screen high bounds from gpx->width-1 and gpx->height-1
         ld      l,R_GPX_LO(ix)
         ld      h,R_GPX_HI(ix)
-        ld      e,(hl)                 ;; width lo
+        ld      e,(hl)                  ; width lo
         inc     hl
-        ld      d,(hl)                 ;; width hi
-        dec     de                     ;; width-1
+        ld      d,(hl)                  ; width hi
+        dec     de                      ; width-1
 
         ;; if ((width-1) < vis.x1) vis.x1 = width-1
         push    de
@@ -167,10 +181,10 @@ _gpx_fill_rectangle::
         ld      h,R_GPX_HI(ix)
         inc     hl
         inc     hl
-        ld      e,(hl)                 ;; height lo
+        ld      e,(hl)                  ; height lo
         inc     hl
-        ld      d,(hl)                 ;; height hi
-        dec     de                     ;; height-1
+        ld      d,(hl)                  ; height hi
+        dec     de                      ; height-1
 
         ;; if ((height-1) < vis.y1) vis.y1 = height-1
         push    de
@@ -360,7 +374,7 @@ _gpx_fill_rectangle::
         or      a
         sbc     hl,de
 
-        ld      e,8(ix)                ;; fpatt_len
+        ld      e,8(ix)                 ; fpatt_len
         ld      d,#0x00
 .fr_mod_loop:
         ld      a,h
@@ -389,6 +403,24 @@ _gpx_fill_rectangle::
         ld      a,V_Y0_HI(ix)
         ld      Y_CUR_HI(ix),a
 
+        ;; Blit mode and colour are the same for every row, so program them
+        ;; once. Only the line style can change from row to row, because each
+        ;; row takes its own byte out of the fill pattern.
+        ld      a,5(ix)                 ; m
+        call    __ef9367_set_blit_mode
+        ld      a,4(ix)                 ; c
+        call    __ef9367_set_color
+
+        ;; Every row spans the same x range, so the horizontal endpoints go
+        ;; into the shared vector block once. Only y changes per row. The
+        ;; software fallback below never touches this block, so it survives.
+        ld      l,V_X0_LO(ix)
+        ld      h,V_X0_HI(ix)
+        ld      (__gpx_vec_x0),hl
+        ld      l,V_X1_LO(ix)
+        ld      h,V_X1_HI(ix)
+        ld      (__gpx_vec_x1),hl
+
 .fr_row_loop:
         ;; row pattern = fpatt[row_idx]
         ld      l,6(ix)
@@ -399,45 +431,78 @@ _gpx_fill_rectangle::
         ld      a,(hl)
         ld      ROW_PATT(ix),a
 
-        ;; rotate row pattern right by xrot
-        ld      a,X_ROT(ix)
-        ld      TMP_CNT(ix),a
-.fr_rot_loop:
-        ld      a,TMP_CNT(ix)
-        or      a
-        jr      z,.fr_rot_done
-        dec     a
-        ld      TMP_CNT(ix),a
+        ;; A fill takes its pattern MSB-first from the rectangle's left edge
+        ;; -- the same way the ZX backend does it, and the same way the
+        ;; bitmap payloads in this library are laid out. The row renderer
+        ;; below consumes a pattern LSB-first, the way a line's lpatt
+        ;; rotates, so reverse the byte here. Doing it on this side keeps
+        ;; both backends drawing identical fills.
         ld      a,ROW_PATT(ix)
-        rrca
+        ld      c,a
+        ld      b,#8
+.fr_rev_loop:
+        rr      c                       ; next source bit, low end first
+        rla                             ; ...lands at the high end of A
+        djnz    .fr_rev_loop
         ld      ROW_PATT(ix),a
-        jr      .fr_rot_loop
+
+        ;; Rotate the row pattern right by xrot. Both the pattern and the
+        ;; count stay in registers: spilling each to the frame cost over a
+        ;; hundred T-states per bit, and this runs for every row of a fill.
+        ld      a,ROW_PATT(ix)
+        ld      b,X_ROT(ix)
+        inc     b                       ; djnz form: xrot 0 means no rotate
+        jr      .fr_rot_test
+.fr_rot_loop:
+        rrca
+.fr_rot_test:
+        djnz    .fr_rot_loop
+        ld      ROW_PATT(ix),a
 .fr_rot_done:
+        ;; A row is a horizontal line the fill has already clipped, so when
+        ;; its pattern byte maps to a hardware vector style there is nothing
+        ;; left for the public entry to decide. Going straight to the
+        ;; renderer skips eleven bytes of argument marshalling, a 37-byte
+        ;; frame, the clip test and the pattern dispatch, once per row.
+        ld      a,ROW_PATT(ix)
+        call    __gpx_hw_style_from_lpatt
+        jr      nc,.fr_row_software     ; needs the Bresenham fallback
+        call    __ef9367_set_line_style
+
+        ld      l,Y_CUR_LO(ix)
+        ld      h,Y_CUR_HI(ix)
+        ld      (__gpx_vec_y0),hl
+        ld      (__gpx_vec_y1),hl       ; horizontal: y1 == y0
+        ld      iy,#__gpx_vec_x0
+        call    __gpx_draw_vector
+        jr      .fr_row_done
+
+.fr_row_software:
         ;; gpx_draw_line(gpx, vis.x0, ycur, vis.x1, ycur, c, m, rowpatt, NULL)
         ld      hl,#0x0000
-        push    hl                     ;; clip = NULL
+        push    hl                      ; clip = NULL
 
         ld      a,ROW_PATT(ix)
         dec     sp
         ld      hl,#0
         add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        ld      (hl),a                  ; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
         ld      l,Y_CUR_LO(ix)
         ld      h,Y_CUR_HI(ix)
-        push    hl                     ;; y1
+        push    hl                      ; y1
 
         ld      l,V_X1_LO(ix)
         ld      h,V_X1_HI(ix)
-        push    hl                     ;; x1
+        push    hl                      ; x1
 
         ld      l,Y_CUR_LO(ix)
         ld      h,Y_CUR_HI(ix)
-        push    hl                     ;; y0
+        push    hl                      ; y0
 
         ld      l,R_GPX_LO(ix)
         ld      h,R_GPX_HI(ix)
@@ -445,6 +510,7 @@ _gpx_fill_rectangle::
         ld      d,V_X0_HI(ix)
         call    _gpx_draw_line
 
+.fr_row_done:
         ;; if (ycur == vis.y1) done
         ld      a,Y_CUR_LO(ix)
         cp      V_Y1_LO(ix)

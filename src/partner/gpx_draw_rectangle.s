@@ -4,6 +4,11 @@
         ;;  - normalizes rectangle coordinates
         ;;  - top/bottom use requested pattern
         ;;  - left/right are solid and exclude corners
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_draw_rectangle
         .optsdcc -mz80 sdcccall(1)
@@ -20,7 +25,7 @@
         ;;   gpx_t *gpx, rect_t *r,
         ;;   color c, bmode m, uint8_t lpatt, const rect_t *clip)
         ;;
-        ;; Input:
+        ;; Arguments:
         ;;   HL = gpx
         ;;   DE = r
         ;;   stack: c, m, lpatt, clip
@@ -33,8 +38,8 @@ _gpx_draw_rectangle::
         add     ix,sp
 
         ;; preserve gpx pointer across local stack allocation
-        ld      b,h                     ;; gpx hi
-        ld      c,l                     ;; gpx lo
+        ld      b,h                     ; gpx hi
+        ld      c,l                     ; gpx lo
 
         ;; locals (14 bytes)
         ;; -1..-2   x0
@@ -65,29 +70,29 @@ _gpx_draw_rectangle::
         ;; top edge
         ld      l,7(ix)
         ld      h,8(ix)
-        push    hl                     ;; clip
+        push    hl                      ; clip
 
         ld      a,6(ix)
         dec     sp
         ld      hl,#0
         add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        ld      (hl),a                  ; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
         ld      l,-5(ix)
         ld      h,-6(ix)
-        push    hl                     ;; y1 = y0
+        push    hl                      ; y1 = y0
 
         ld      l,-3(ix)
         ld      h,-4(ix)
-        push    hl                     ;; x1
+        push    hl                      ; x1
 
         ld      l,-5(ix)
         ld      h,-6(ix)
-        push    hl                     ;; y0
+        push    hl                      ; y0
 
         ld      l,-9(ix)
         ld      h,-10(ix)
@@ -98,29 +103,29 @@ _gpx_draw_rectangle::
         ;; bottom edge
         ld      l,7(ix)
         ld      h,8(ix)
-        push    hl                     ;; clip
+        push    hl                      ; clip
 
         ld      a,6(ix)
         dec     sp
         ld      hl,#0
         add     hl,sp
-        ld      (hl),a                 ;; lpatt
+        ld      (hl),a                  ; lpatt
 
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
         ld      l,-7(ix)
         ld      h,-8(ix)
-        push    hl                     ;; y1 = y0
+        push    hl                      ; y1 = y0
 
         ld      l,-3(ix)
         ld      h,-4(ix)
-        push    hl                     ;; x1
+        push    hl                      ; x1
 
         ld      l,-7(ix)
         ld      h,-8(ix)
-        push    hl                     ;; y0
+        push    hl                      ; y0
 
         ld      l,-9(ix)
         ld      h,-10(ix)
@@ -154,29 +159,29 @@ _gpx_draw_rectangle::
         ;; left side, solid
         ld      l,7(ix)
         ld      h,8(ix)
-        push    hl                     ;; clip
+        push    hl                      ; clip
 
         ld      a,#0xFF
         dec     sp
         ld      hl,#0
         add     hl,sp
-        ld      (hl),a                 ;; lpatt solid
+        ld      (hl),a                  ; lpatt solid
 
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
         ld      l,-13(ix)
         ld      h,-14(ix)
-        push    hl                     ;; y1
+        push    hl                      ; y1
 
         ld      l,-1(ix)
         ld      h,-2(ix)
-        push    hl                     ;; x1 = x0
+        push    hl                      ; x1 = x0
 
         ld      l,-11(ix)
         ld      h,-12(ix)
-        push    hl                     ;; y0
+        push    hl                      ; y0
 
         ld      l,-9(ix)
         ld      h,-10(ix)
@@ -187,29 +192,29 @@ _gpx_draw_rectangle::
         ;; right side, solid
         ld      l,7(ix)
         ld      h,8(ix)
-        push    hl                     ;; clip
+        push    hl                      ; clip
 
         ld      a,#0xFF
         dec     sp
         ld      hl,#0
         add     hl,sp
-        ld      (hl),a                 ;; lpatt solid
+        ld      (hl),a                  ; lpatt solid
 
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
         ld      l,-13(ix)
         ld      h,-14(ix)
-        push    hl                     ;; y1
+        push    hl                      ; y1
 
         ld      l,-3(ix)
         ld      h,-4(ix)
-        push    hl                     ;; x1 = x1
+        push    hl                      ; x1 = x1
 
         ld      l,-11(ix)
         ld      h,-12(ix)
-        push    hl                     ;; y0
+        push    hl                      ; y0
 
         ld      l,-9(ix)
         ld      h,-10(ix)

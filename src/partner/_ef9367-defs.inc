@@ -102,21 +102,42 @@
 
 
         ;; --------------------------------------------------------------------
-        ;; TODO: understand why these are here for Iskra Delta Partner
+        ;; GDP board control lines. These are not EF9367 registers: they are
+        ;; the local Z80 PIO (U22) on the graphics daughtercard, whose port A
+        ;; drives the board-level inputs of the EF9367 (page selects, XOR
+        ;; write mode, and the two format bits that pick 256 or 512 lines).
+        ;;
+        ;; Port A must be put in mode 0 (all bits output) before any of it
+        ;; drives anything -- after a PIO reset the port is in input mode and
+        ;; every write to the data register is latched but never presented to
+        ;; the board. The boot ROM does this at 0x0170; gpx_create repeats it
+        ;; so the library also works on a bare machine.
         ;; --------------------------------------------------------------------
 
-        ;; --- 0x30 - R/W:PIO gr. common register -----------------------------
-        .equ    PIO_GR_CMN,             0x30
-        .equ    PIO_GR_CMN_DISP_PG,     0x01    ; display page of memory
-        .equ    PIO_GR_CMN_WR_PG,       0x02    ; write page of memory
-        .equ    PIO_GR_CMN_XOR_MODE,    0x04    ; write mode (xor)
-        ;; bits 3-4 are resolution
-        .equ    PIO_GR_CMN_1024x512,    0x18    ; hires    
+        ;; --- 0x30..0x33 - GDP board PIO (U22) -------------------------------
+        .equ    PIO_GR_A_DAT,           0x30    ; port A data (board control)
+        .equ    PIO_GR_A_CMD,           0x31    ; port A control
+        .equ    PIO_GR_B_DAT,           0x32    ; port B data
+        .equ    PIO_GR_B_CMD,           0x33    ; port B control
+        .equ    PIO_CW_INT_DISABLE,     0x07    ; int control word, EI clear
+        .equ    PIO_CW_MODE_OUTPUT,     0x0F    ; mode word, mode 0 (output)
+
+        ;; --- port A bit map (see PARTNER-HARDWARE-SCHEMATICS.md 8.3) --------
+        .equ    PIO_GR_CMN,             PIO_GR_A_DAT
+        .equ    PIO_GR_CMN_DISP_PG,     0x01    ; RBNK: displayed page
+        .equ    PIO_GR_CMN_WR_PG,       0x02    ; WBNK: page drawing goes to
+        .equ    PIO_GR_CMN_XOR_MODE,    0x04    ; XORM: XOR write mode
+        ;; bits 3-4 are FM0/FM1, the format (line count) selects
+        .equ    PIO_GR_CMN_1024x512,    0x18    ; hires
         .equ    PIO_GR_CMN_1024x256,    0x00    ; lores
-        .equ    PIO_GR_CMD_RES_MSK,     0xE7    ; resolutio mask    
-        .equ    PIO_GR_CMN_EF9367I,     0x20    ; RO:EF9367 interrupt 
-        .equ    PIO_GR_CMN_AVDINT,      0x40    ; RO:avd interrupt
-        .equ    PIO_GR_CMN_SCRL_MDE,    0x80    ; scroll mode
+        .equ    PIO_GR_CMD_RES_MSK,     0xE7    ; keep all but the format bits
+        .equ    PIO_GR_CMN_EF9367I,     0x20    ; GDPINT: EF9367 VB (input)
+        .equ    PIO_GR_CMN_AVDINT,      0x40    ; AVDINT: AVDC irq (input)
+        .equ    PIO_GR_CMN_SCRL_MDE,    0x80    ; SCRLM: scroll mode
+
+        ;; Port A reads back the output latch in mode 0, so the two input
+        ;; bits above are not visible there. The library keeps its own shadow
+        ;; of the latch (__ef9367_gr_cmn) and never reads the port.
 
         ;; --- 0x32 - RW:PIO common text attributes ---------------------------
         .equ    PIO_GR_AT,              0x32

@@ -1,6 +1,11 @@
         ;; _video.s
         ;;
         ;; ZX Spectrum VRAM row helpers shared by line/pixel routines.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module _video
         .optsdcc -mz80 sdcccall(1)
@@ -13,9 +18,20 @@
 
         .area   _CODE
 
+        ;; ------------------------------------------------------------
         ;; __vid_rowaddr
-        ;;   B  = y (0..191)
-        ;;   HL = row base address in ZX pixel VRAM (0x4000..0x57E0)
+        ;; Base address of a pixel row in ZX display memory. The Spectrum
+        ;; interleaves rows, so this is a bit shuffle rather than a
+        ;; multiply.
+        ;;
+        ;; Arguments:
+        ;;   B = y (0..191)
+        ;;
+        ;; Return:
+        ;;   HL = row base in pixel VRAM (0x4000..0x57E0)
+        ;;
+        ;; Clobbers:
+        ;;   AF, HL
 __vid_rowaddr::
         ld      a,b
         and     #0x07
@@ -37,20 +53,40 @@ __vid_rowaddr::
         ld      l,a
         ret
 
+        ;; ------------------------------------------------------------
         ;; __vid_nextrow
-        ;;   HL = current row base
-        ;;   HL = next row base
-        ;; Works on x-offset pointers too (bits 0..4 of L untouched).
-        ;; Clobbers A only; preserves BC/DE and the alternate set.
+        ;; Step a VRAM pointer down one pixel row. Works on pointers that
+        ;; already carry an x offset, because bits 0..4 of L are untouched.
+        ;;
+        ;; Arguments:
+        ;;   HL = current row base, or a row pointer with an x offset
+        ;;
+        ;; Return:
+        ;;   HL = the same pointer one pixel row further down
+        ;;
+        ;; Clobbers:
+        ;;   AF
 __vid_nextrow::
         inc     h
         ld      a,h
         and     #0x07
-        ret     nz                     ;; seven rows in eight end here
+        ret     nz                      ; seven rows in eight end here
 
-        ;; Hot loops inline the three instructions above and enter here with
-        ;; `call z`, paying the call only on the one row in eight that
-        ;; crosses a character cell.
+        ;; ------------------------------------------------------------
+        ;; __vid_nextrow_carry
+        ;; The character-cell crossing half of __vid_nextrow. Hot loops
+        ;; inline the common three instructions and enter here with
+        ;; `call z`, paying a call only on the one row in eight that
+        ;; leaves the current cell.
+        ;;
+        ;; Arguments:
+        ;;   HL = row pointer whose low three row bits have just wrapped
+        ;;
+        ;; Return:
+        ;;   HL = pointer to the first row of the next character cell
+        ;;
+        ;; Clobbers:
+        ;;   AF
 __vid_nextrow_carry::
         ld      a,l
         add     a,#0x20
@@ -62,17 +98,39 @@ __vid_nextrow_carry::
         ld      h,a
         ret
 
+        ;; ------------------------------------------------------------
         ;; __vid_prevrow
-        ;;   HL = current row (or x-offset) address
-        ;;   HL = address one pixel row up
-        ;; Exact inverse of __vid_nextrow. Clobbers A only.
+        ;; Step a VRAM pointer up one pixel row; the exact inverse of
+        ;; __vid_nextrow, and equally safe on x-offset pointers.
+        ;;
+        ;; Arguments:
+        ;;   HL = current row base, or a row pointer with an x offset
+        ;;
+        ;; Return:
+        ;;   HL = the same pointer one pixel row further up
+        ;;
+        ;; Clobbers:
+        ;;   AF
 __vid_prevrow::
         dec     h
         ld      a,h
         and     #0x07
         cp      #0x07
-        ret     nz                     ;; seven rows in eight end here
+        ret     nz                      ; seven rows in eight end here
 
+        ;; ------------------------------------------------------------
+        ;; __vid_prevrow_carry
+        ;; The character-cell crossing half of __vid_prevrow, entered the
+        ;; same way __vid_nextrow_carry is.
+        ;;
+        ;; Arguments:
+        ;;   HL = row pointer whose low three row bits have just wrapped
+        ;;
+        ;; Return:
+        ;;   HL = pointer to the last row of the previous character cell
+        ;;
+        ;; Clobbers:
+        ;;   AF
 __vid_prevrow_carry::
         ld      a,l
         sub     #0x20

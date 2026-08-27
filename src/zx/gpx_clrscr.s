@@ -2,6 +2,11 @@
         ;;
         ;; ZX Spectrum clear-screen primitive.
         ;; Clears pixel VRAM, restores default attributes and black border.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_clrscr
         .optsdcc -mz80 sdcccall(1)
@@ -14,7 +19,19 @@
 
         .area   _CODE
 
-        ;; void gpx_clrscr(void)
+        ;; ------------------------------------------------------------
+        ;; _gpx_clrscr
+        ;; Clear the screen: blank the 6K pixel area, set every attribute
+        ;; cell to black ink on white paper, and match the border to it.
+        ;;
+        ;; Signature:
+        ;;   void gpx_clrscr(void)
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, HL
+        ;;
+        ;; References:
+        ;;   .cls_pages
 _gpx_clrscr::
         ;; clear pixel area (0x4000..0x57ff): 24 whole pages
         ld      hl,#VMEMBEG
@@ -44,7 +61,7 @@ _gpx_clrscr::
         ;; increments, which is why `inc l` is enough inside a page.
         ;; ------------------------------------------------------------
 .cls_pages:
-        ld      c,#0x20                ;; 32 x 8 bytes = one page
+        ld      c,#0x20                 ; 32 x 8 bytes = one page
 .cls_row:
         ld      (hl),a
         inc     l

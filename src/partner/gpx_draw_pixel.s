@@ -1,6 +1,11 @@
         ;; gpx_draw_pixel.s
         ;;
         ;; Partner pixel primitive with optional clipping.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_draw_pixel
         .optsdcc -mz80 sdcccall(1)
@@ -15,7 +20,7 @@
         .include "_ef9367-defs.inc"
 
         .equ    EF9367_CMD_PLOT,       0x80
-        .equ    SCRWIDTH_HI,           0x04      ;; x < 1024
+        .equ    SCRWIDTH_HI,           0x04 ; x < 1024
 
         ;; locals (4 bytes)
         .equ    P_X_LO,               -4
@@ -67,11 +72,11 @@ _gpx_draw_pixel::
         bit     7,a
         jp      nz,.dpx_exit
         ld      l,P_Y_LO(ix)
-        ld      h,P_Y_HI(ix)           ;; HL = y
-        ld      de,(__gdata+2)          ;; DE = height
+        ld      h,P_Y_HI(ix)            ; HL = y
+        ld      de,(__gdata+2)          ; DE = height
         or      a
-        sbc     hl,de                  ;; y - height
-        jp      nc,.dpx_exit           ;; reject when y >= height
+        sbc     hl,de                   ; y - height
+        jp      nc,.dpx_exit            ; reject when y >= height
 
         ;; Clip check when clip != NULL.
         ld      e,8(ix)
@@ -81,7 +86,7 @@ _gpx_draw_pixel::
         jr      z,.dpx_draw
 
         push    de
-        pop     iy                     ;; IY = clip
+        pop     iy                      ; IY = clip
 
         ;; reject if (x < clip->x0)
         ld      l,P_X_LO(ix)
@@ -121,9 +126,9 @@ _gpx_draw_pixel::
 
 .dpx_draw:
         ;; Apply mode/color and emit one hardware plot command.
-        ld      a,7(ix)                ;; bmode
+        ld      a,7(ix)                 ; bmode
         call    __ef9367_set_blit_mode
-        ld      a,6(ix)                ;; color
+        ld      a,6(ix)                 ; color
         call    __ef9367_set_color
         ld      l,P_X_LO(ix)
         ld      h,P_X_HI(ix)
@@ -147,11 +152,11 @@ _gpx_draw_pixel::
 
         ;; ------------------------------------------------------------
         ;; uint8_t dpx_cmp16s_lt(coord a, coord b)
-        ;; Input:
+        ;; Arguments:
         ;;   HL = a
         ;;   DE = b
         ;;
-        ;; Output:
+        ;; Return:
         ;;   A = 1 if (a < b), else 0
         ;;
         ;; Clobbers:

@@ -7,6 +7,11 @@
         ;; initializers (GSINIT) so initialized statics hold their values,
         ;; runs on a private stack, and warm-boots back to CP/M should
         ;; main() ever return.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-07-13   TS
 
         .module crt0
         .globl  _main
@@ -15,13 +20,28 @@
         .globl  l__INITIALIZER
 
         .area   _CODE
+        ;; ------------------------------------------------------------
+        ;; init
+        ;; Program entry. Sets up a private stack, copies the C
+        ;; initializers so initialized statics hold their values, calls
+        ;; main(), and hands control back to the host when it returns.
+        ;;
+        ;; Arguments:
+        ;;   none
+        ;;
+        ;; Clobbers:
+        ;;   everything; nothing is live on entry
+        ;;
+        ;; References:
+        ;;   _main
+        ;;   .gsinit
 init::
         ld      (#__store_sp),sp
         ld      sp,#__stack
-        call    gsinit
+        call    .gsinit
         call    _main
         ld      sp,(#__store_sp)
-        jp      0x0000                  ;; CP/M warm boot
+        jp      0x0000                  ; CP/M warm boot
 
         .area   _GSINIT
         .area   _GSFINAL
@@ -33,15 +53,15 @@ init::
         .area   _BSS
 
         .area   _GSINIT
-gsinit:
+.gsinit:
         ld      de, #s__INITIALIZED
         ld      hl, #s__INITIALIZER
         ld      bc, #l__INITIALIZER
         ld      a, b
         or      a, c
-        jr      z, gsinit_none
+        jr      z, .gsinit_none
         ldir
-gsinit_none:
+.gsinit_none:
         .area   _GSFINAL
         ret
 

@@ -1,0 +1,59 @@
+{
+  "mcpServers": {
+    "partner": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-u",
+        "1000:1000",
+        "-v",
+        "/home/tstih/data/retro-vault/libgpx:/work",
+        "-w",
+        "/work",
+        "wischner/xcc-z80-idp:latest",
+        "idp-mcp",
+        "--model",
+        "gdp"
+      ],
+      "env": {}
+    },
+    "spectrum": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-u",
+        "1000:1000",
+        "-v",
+        "/home/tstih/data/retro-vault/libgpx:/work",
+        "-w",
+        "/work",
+        "wischner/xcc-z80-zx-spectrum:latest",
+        "zx-spectrum-mcp",
+        "--rom",
+        "/opt/zx-spectrum-mcp/share/zx-spectrum-mcp/roms/48.rom"
+      ],
+      "env": {}
+    },
+    "cpc": {
+      "type": "stdio",
+      "command": "/home/tstih/data/retro-vault/amstrad-cpc-mcp/bin/bin/amstrad-cpc-mcp",
+      "args": [
+        "--model",
+        "cpc6128",
+        "--os-rom",
+        "/home/tstih/data/retro-vault/amstrad-cpc-mcp/data/roms/cpc6128-os.rom",
+        "--basic-rom",
+        "/home/tstih/data/retro-vault/amstrad-cpc-mcp/data/roms/cpc6128-basic.rom",
+        "--amsdos-rom",
+        "/home/tstih/data/retro-vault/amstrad-cpc-mcp/data/roms/amsdos.rom"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -5,6 +5,11 @@
         ;; Frame-less: args are peeked SP-relative (no IX), so the fast
         ;; hline/vline/bresenham targets receive the caller frame untouched
         ;; via tail jumps.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_draw_line
         .optsdcc -mz80 sdcccall(1)
@@ -36,13 +41,25 @@
         ;; Arguments:
         ;;   HL = gpx (unused), DE = x0
         ;;   stack: [ret][y0 @2][x1 @4][y1 @6][c @8][m @9][lpatt @10][clip @11]
+        ;;
+        ;; Return:
+        ;;   A = the pattern rotated by the number of pixels drawn, so
+        ;;       chained segments keep their phase
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY, and the alternate set
+        ;;
+        ;; References:
+        ;;   __gpx_hline
+        ;;   __gpx_bresenham_line
+        ;;   __gpx_plot_raw
 _gpx_draw_line::
         ld      hl,#2
-        add     hl,sp                  ;; HL -> y0
+        add     hl,sp                   ; HL -> y0
         ld      c,(hl)
         inc     hl
-        ld      b,(hl)                 ;; BC = y0
-        inc     hl                     ;; HL -> x1
+        ld      b,(hl)                  ; BC = y0
+        inc     hl                      ; HL -> x1
 
         ;; x0 == x1 ?
         ld      a,(hl)
@@ -54,10 +71,10 @@ _gpx_draw_line::
         jr      nz,.gl_not_v
 
         ;; y0 == y1 ?
-        inc     hl                     ;; HL -> y1
+        inc     hl                      ; HL -> y1
         ld      a,(hl)
         cp      c
-        jr      nz,.gl_bres            ;; vertical: bres has a fast path
+        jr      nz,.gl_bres             ; vertical: bres has a fast path
         inc     hl
         ld      a,(hl)
         cp      b
@@ -65,42 +82,42 @@ _gpx_draw_line::
 
         ;; single pixel: honor lpatt bit0
         ld      hl,#10
-        add     hl,sp                  ;; HL -> lpatt
+        add     hl,sp                   ; HL -> lpatt
         ld      a,(hl)
         and     #0x01
         jr      z,.gl_single_done
 
         ;; call gpx_draw_pixel(gpx, x0, y0, c, m, clip); DE = x0 stays live
-        inc     hl                     ;; HL -> clip
+        inc     hl                      ; HL -> clip
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
         ld      l,a
-        push    hl                     ;; clip
+        push    hl                      ; clip
 
-        ld      hl,#10                 ;; c,m moved down by the push
+        ld      hl,#10                  ; c,m moved down by the push
         add     hl,sp
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
         ld      l,a
-        push    hl                     ;; c,m
+        push    hl                      ; c,m
 
-        push    bc                     ;; y0
+        push    bc                      ; y0
 
-        call    _gpx_draw_pixel        ;; pops its 6 arg bytes
+        call    _gpx_draw_pixel         ; pops its 6 arg bytes
 
 .gl_single_done:
         ;; degenerate line: return lpatt unrotated
         ld      hl,#10
         add     hl,sp
         ld      a,(hl)
-        jp      __ret_clean11          ;; callee cleanup: 11 bytes
+        jp      __ret_clean11           ; callee cleanup: 11 bytes
 
 .gl_not_v:
         ;; y0 == y1 ?
         ld      hl,#6
-        add     hl,sp                  ;; HL -> y1
+        add     hl,sp                   ; HL -> y1
         ld      a,(hl)
         cp      c
         jr      nz,.gl_bres
@@ -115,8 +132,8 @@ _gpx_draw_line::
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
-        ld      l,a                    ;; HL = x1
-        call    __rect_cmp16s_lt       ;; x1 < x0 ?
+        ld      l,a                     ; HL = x1
+        call    __rect_cmp16s_lt        ; x1 < x0 ?
         jr      c,.gl_bres
         jp      __gpx_hline
 

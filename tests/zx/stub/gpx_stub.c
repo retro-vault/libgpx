@@ -257,8 +257,15 @@ gpx_t *gpx_create(gmode mode)
     zx_gpx.width = ZX_WIDTH;
     zx_gpx.height = ZX_HEIGHT;
     zx_gpx.pages = 1;
+    zx_gpx.text_background = GPX_TEXT_BG_OPAQUE;
     gpx_clrscr();
     return &zx_gpx;
+}
+
+void gpx_set_text_background(gpx_t *gpx, textbg background)
+{
+    if (gpx)
+        gpx->text_background = (textbg)(background & 1);
 }
 
 void gpx_destroy(gpx_t *gpx)
@@ -790,7 +797,7 @@ void gpx_draw_bmp(
 
 static void zx_draw_bmp_mode(
     gpx_t *gpx, coord x, coord y, bmp_t *b,
-    color c, bmode m, const rect_t *clip)
+    color c, bmode m, int transparent, const rect_t *clip)
 {
     zx_bmp_view_t view;
     const rect_t *cl = zx_clip_or_default(clip);
@@ -812,6 +819,11 @@ static void zx_draw_bmp_mode(
                 /* BM_XOR: flip only the source set bits (DRAWMODE 3). */
                 if (bit)
                     gpx_draw_pixel(gpx, px, py, c, m, cl);
+            } else if (transparent) {
+                /* Transparent copy: source set bits take the text color;
+                 * source zeroes preserve the destination. */
+                if (bit)
+                    gpx_draw_pixel(gpx, px, py, c, BM_CPY, cl);
             } else {
                 /* BM_CPY mode-aware (DRAWMODE 1/2): OPAQUE copy of the source
                  * bits over the glyph width -- zero bits are written too, not
@@ -975,9 +987,7 @@ coord gpx_measure_text(const char *text, const font_t *font)
     return (coord)width;
 }
 
-/* Fill the inter-character / missing-glyph gap with the inverse text color,
- * opaque (BM_CPY) — matches the real backend's .dt_fill_inv_span. The gap is
- * NOT left transparent. */
+/* Fill an inter-character / missing-glyph gap with the inverse text color. */
 static void zx_text_gap(
     gpx_t *gpx, coord x, coord y, uint8_t w, uint8_t h,
     color c, const rect_t *clip)
@@ -1005,6 +1015,7 @@ void gpx_draw_text(
     uint8_t empty_width;
     uint8_t advance;
     uint8_t glyph_height;
+    int transparent;
 
     if (text == (const char *)0 || font == (const font_t *)0)
         return;
@@ -1012,6 +1023,8 @@ void gpx_draw_text(
     empty_width = fraw[3];
     glyph_height = fraw[5];
     advance = fraw[6];
+    transparent = gpx &&
+        gpx->text_background == GPX_TEXT_BG_TRANSPARENT;
 
     while (*text) {
         uint8_t ch = (uint8_t)*text;
@@ -1019,15 +1032,21 @@ void gpx_draw_text(
         uint16_t gw = zx_glyph_width(glyph);
 
         if (gw == 0) {
-            zx_text_gap(gpx, xcur, y, empty_width, glyph_height, c, clip);
+            /* BM_XOR never fills the spacing: the gap fill is an opaque
+             * write, so filling it would stop a second identical draw from
+             * restoring the display. Partner leaves the gap alone too. */
+            if (!transparent && m != BM_XOR)
+                zx_text_gap(gpx, xcur, y, empty_width, glyph_height, c, clip);
             xcur = (coord)(xcur + empty_width);
             ++text;
             continue;
         }
 
-        zx_draw_bmp_mode(gpx, xcur, y, (bmp_t *)glyph, c, m, clip);
+        zx_draw_bmp_mode(gpx, xcur, y, (bmp_t *)glyph, c, m,
+            transparent, clip);
         xcur = (coord)(xcur + (coord)gw);
-        zx_text_gap(gpx, xcur, y, advance, glyph_height, c, clip);
+        if (!transparent && m != BM_XOR)
+            zx_text_gap(gpx, xcur, y, advance, glyph_height, c, clip);
         xcur = (coord)(xcur + advance);
         ++text;
     }

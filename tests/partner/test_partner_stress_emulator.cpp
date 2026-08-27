@@ -69,22 +69,6 @@ bool fallback_on(uint8_t lpatt, int step)
     return (v & 1) != 0;
 }
 
-bool hw_dotted_on(int step)
-{
-    return (step & 0x03) < 2;
-}
-
-bool hw_dashed_on(int step)
-{
-    return (step & 0x07) < 4;
-}
-
-bool hw_dot_dash_on(int step)
-{
-    int p = step & 0x0F;
-    return p < 10 || (p >= 12 && p < 14);
-}
-
 } // namespace
 
 int main()
@@ -148,10 +132,13 @@ int main()
         check(on == expected, "fallback lpatt 0xA5 mismatch", failures);
     }
 
+    /* Every pattern is literal now -- the EF9367's own CTRL2 styles are not
+       used, because their fixed shapes do not match the lpatt that would
+       select them and the ZX backend would draw something else. */
     for (int i = 0; i <= 100; ++i) {
-        check(pixel_on(screen, 20 + i, 481) == hw_dotted_on(i), "hw dotted mismatch", failures);
-        check(pixel_on(screen, 20 + i, 482) == hw_dashed_on(i), "hw dashed mismatch", failures);
-        check(pixel_on(screen, 20 + i, 483) == hw_dot_dash_on(i), "hw dot-dash mismatch", failures);
+        check(pixel_on(screen, 20 + i, 481) == fallback_on(0x33, i), "lpatt 0x33 mismatch", failures);
+        check(pixel_on(screen, 20 + i, 482) == fallback_on(0xF0, i), "lpatt 0xF0 mismatch", failures);
+        check(pixel_on(screen, 20 + i, 483) == fallback_on(0xE4, i), "lpatt 0xE4 mismatch", failures);
     }
 
     require_on(screen, 260, 20, "normalized rectangle top-left missing", failures);

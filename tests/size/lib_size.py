@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Report per-module code size of the ZX libgpx objects.
+"""Report per-module code size of a libgpx backend's objects.
 
 Sizes come straight from the `A <area> size <n>` records the assembler writes
 into each .rel, so a module's cost is exact and independent of link order.
 
-  make lib-size                    # current sizes
-  make lib-size ARGS="--save"      # record a baseline
-  make lib-size ARGS="--diff"      # compare against the recorded baseline
+  make lib-size                            # current sizes (ZX)
+  make lib-size ARGS="--save"              # record a baseline
+  make lib-size ARGS="--diff"              # compare against the baseline
+  make lib-size ARGS="--backend cpc"       # any backend with built objects
 """
 
 import argparse
@@ -17,8 +18,8 @@ import re
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OBJ_DIR = os.path.join(ROOT, "build", "zx")
-BASELINE = os.path.join(ROOT, "tests", "size", "baseline.json")
+# Each backend keeps its objects and its baseline separately.
+BACKENDS = {"zx": "zx", "partner": "partner-lib", "cpc": "cpc"}
 
 AREA_RE = re.compile(r"^A (\S+) size ([0-9A-Fa-f]+) flags")
 
@@ -74,11 +75,19 @@ def main():
     ap.add_argument("--diff", action="store_true",
                     help="compare current sizes against the saved baseline")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--backend", default="zx", choices=sorted(BACKENDS),
+                    help="which backend's objects to measure")
     args = ap.parse_args()
 
-    sizes = module_sizes(OBJ_DIR)
+    obj_dir = os.path.join(ROOT, "build", BACKENDS[args.backend])
+    baseline_path = os.path.join(
+        ROOT, "tests", "size",
+        "baseline.json" if args.backend == "zx"
+        else f"baseline-{args.backend}.json")
+
+    sizes = module_sizes(obj_dir)
     if not sizes:
-        print(f"no objects in {OBJ_DIR}; run 'make -C src zx-lib-objs' first",
+        print(f"no objects in {obj_dir}; build that backend first",
               file=sys.stderr)
         return 1
 
@@ -88,19 +97,19 @@ def main():
 
     baseline = None
     if args.diff:
-        if not os.path.exists(BASELINE):
-            print(f"no baseline at {BASELINE}; run with --save first",
+        if not os.path.exists(baseline_path):
+            print(f"no baseline at {baseline_path}; run with --save first",
                   file=sys.stderr)
             return 1
-        with open(BASELINE) as fh:
+        with open(baseline_path) as fh:
             baseline = json.load(fh)
 
     report(sizes, baseline)
 
     if args.save:
-        with open(BASELINE, "w") as fh:
+        with open(baseline_path, "w") as fh:
             json.dump(sizes, fh, indent=2, sort_keys=True)
-        print(f"\nbaseline written to {BASELINE}")
+        print(f"\nbaseline written to {baseline_path}")
     return 0
 
 

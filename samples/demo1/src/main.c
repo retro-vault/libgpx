@@ -1,5 +1,12 @@
 #include "libgpx.h"
 
+/* The Amstrad CPC has two display modes behind one library, so the manual's
+ * screenshots are taken twice from this one source. Machines with a single
+ * layout accept the argument and ignore it. */
+#ifndef DEMO_MODE
+#define DEMO_MODE GPXM_DEFAULT
+#endif
+
 static char *append_dim(char *dst, dim value)
 {
     char digits[5];
@@ -50,7 +57,7 @@ static sprite_t hand_sprite2 = {200, 96, 0, (bmp_t *)hand_bg2};
 
 int main(void)
 {
-    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    gpx_t *gpx = gpx_create(DEMO_MODE);
     const font_t *font = gpx_get_system_font();
     char width_line[16];
     char height_line[16];

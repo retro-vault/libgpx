@@ -85,6 +85,15 @@ static void test_context(void)
         (gpx0->width >> 3) == 32 &&
         (uint32_t)(gpx0->width >> 3) * (uint32_t)gpx0->height == 6144,
         "context pages/derived stride-size");
+    CHECK(gpx0->text_background == GPX_TEXT_BG_OPAQUE,
+        "context default text background");
+    gpx_set_text_background(gpx0, GPX_TEXT_BG_TRANSPARENT);
+    CHECK(gpx0->text_background == GPX_TEXT_BG_TRANSPARENT,
+        "set transparent text background");
+    gpx_set_text_background(gpx0, (textbg)0xFE);
+    CHECK(gpx0->text_background == GPX_TEXT_BG_OPAQUE,
+        "text background should normalize to one bit");
+    gpx_set_text_background((gpx_t *)0, GPX_TEXT_BG_TRANSPARENT);
     CHECK(gpx_width() == 256 && gpx_height() == 192, "gpx_width/gpx_height values");
 
     gpx_destroy(gpx0);
@@ -196,6 +205,8 @@ static void test_fonts_text_and_measure(void)
     const font_t *sys = gpx_get_system_font();
     const font_t *tiny = gpx_get_tiny_font();
     rect_t clip = {9, 8, 10, 12};
+    rect_t cell = {0, 0, 7, 4};
+    uint8_t solid = 0xFF;
 
     CHECK(sys != 0 && tiny != 0, "font getters should return non-null");
     CHECK(sys == tiny, "stub fonts should point to same blob");
@@ -229,6 +240,23 @@ static void test_fonts_text_and_measure(void)
     gpx_draw_text(g, 0, 0, "A", sys, CO_FORE, BM_CPY, (const rect_t *)0);
     gpx_draw_text(g, 0, 0, "A", sys, CO_FORE, BM_XOR, (const rect_t *)0);
     CHECK(!pixel_on(1, 0) && !pixel_on(0, 1), "draw_text XOR toggles glyph");
+
+    gpx_clrscr();
+    gpx_fill_rectangle(g, &cell, CO_FORE, BM_CPY, &solid, 1,
+        (const rect_t *)0);
+    gpx_set_text_background(g, GPX_TEXT_BG_OPAQUE);
+    gpx_draw_text(g, 0, 0, "AA", sys, CO_FORE, BM_CPY,
+        (const rect_t *)0);
+    CHECK(!pixel_on(0, 0) && !pixel_on(3, 0),
+        "opaque text should clear glyph background and spacing");
+
+    gpx_fill_rectangle(g, &cell, CO_FORE, BM_CPY, &solid, 1,
+        (const rect_t *)0);
+    gpx_set_text_background(g, GPX_TEXT_BG_TRANSPARENT);
+    gpx_draw_text(g, 0, 0, "AA", sys, CO_FORE, BM_CPY,
+        (const rect_t *)0);
+    CHECK(pixel_on(0, 0) && pixel_on(3, 0),
+        "transparent text should preserve glyph background and spacing");
 }
 
 static void test_stock_bitmaps_and_pages(void)

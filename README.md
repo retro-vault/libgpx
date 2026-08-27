@@ -1,592 +1,240 @@
 # libgpx
 
-`libgpx` is a hand-optimized 1-bit-per-pixel graphics library for Z80 targets.
+A 1-bit-per-pixel graphics library for Z80 machines, written entirely in
+hand-optimised assembly.
 
-Primary target today is ZX Spectrum (`src/zx`).
-Partner backend (`src/partner`) is still in progress.
+libgpx gives you pixels, lines, rectangles, pattern fills, text and
+sprites behind one API that behaves the same on every supported machine,
+so a program written against it draws the same picture wherever it runs.
 
-The public API contract is defined in:
-- `include/libgpx.h`
+**The full programming manual is
+[docs/manuals/PROGRAMMING-LIBGPX.md](docs/manuals/PROGRAMMING-LIBGPX.md)** —
+every function, its parameters, worked examples, complete programs and
+screenshots from both machines.
 
-## What This Project Gives You
+| Machine | Screen | Backend |
+|---|---|---|
+| ZX Spectrum 48K | 256 x 192 | `src/zx` |
+| Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` |
+| Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` |
 
-- A strict, portable drawing API for 1bpp framebuffers.
-- A ZX Spectrum backend implemented in hand-written Z80 assembly.
-- Emulator-based behavioral testing that compares:
-  - real backend output
-  - independent oracle/stub output
-- Size-focused build flow (ROM-oriented).
+The machines have almost nothing in common. The Spectrum has a packed
+framebuffer the CPU reads and writes directly; the Partner has an EF9367
+drawing coprocessor and display memory the CPU cannot read at all; the CPC
+interleaves its framebuffer into eight banks and changes how many pixels
+fit in a byte depending on the display mode. libgpx hides the difference.
 
-## Repository Layout
+The same program, unchanged, on three machines and four screen geometries:
 
-- `include/libgpx.h`: public API and data formats.
-- `src/zx/`: ZX Spectrum implementation.
-- `src/partner/`: Partner WIP implementation.
-- `mk/toolchain.mk`: shared toolchain and Docker image definitions.
-- `tests/`: test suites, benchmarks, visuals, coverage, size measurement.
-- `archive/`: old snapshots (not used by current build).
-- `build/`, `bin/`: generated artifacts.
+| | |
+|---|---|
+| ZX Spectrum, 256 x 192 | ![panels on the ZX Spectrum](docs/images/screenshots/panels-zx.png) |
+| Amstrad CPC, 640 x 200 | ![panels on the Amstrad CPC in mode 2](docs/images/screenshots/panels-cpc-640x200.png) |
+| Amstrad CPC, 320 x 200 | ![panels on the Amstrad CPC in mode 1](docs/images/screenshots/panels-cpc-320x200.png) |
 
-## Toolchain
+## Building
 
-Everything is built with the [X Tools](https://hub.docker.com/r/wischner/xcc-z80-zx-spectrum)
-Z80 toolchain (`xcc`, `xas`, `xld`, `xar`) inside a pinned Docker image, so no
-host toolchain is needed:
+Everything builds inside pinned Docker images carrying the X Tools Z80
+toolchain (`xcc`, `xas`, `xld`, `xar`, `xprog`) and an emulator, so
+Docker and Python 3 are the only requirements — no host toolchain.
 
-| Target | Image |
+| Machine | Image |
 |---|---|
 | ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
 | Iskra Delta Partner | `wischner/xcc-z80-idp` |
+| Amstrad CPC | `wischner/xcc-z80` |
 
-The ZX image also ships `zx-spectrum-mcp`, the cycle-accurate emulator the ZX
-test suite drives over MCP, so tests need nothing beyond Docker and Python 3.
-
-Note that `xcc` uses `__asm__("...")` for inline assembly rather than SDCC's
-`__asm ... __endasm`.
-
-## Build And Test Commands
-
-- `make build -j1`: build library plus ZX and Partner test binaries.
-- `make tests -j1`: run the ZX differential suite on the emulator, then the Partner suite.
-- `make zx-tests -j1`: ZX suite only.
-- `make zx-bench -j1`: T-state benchmarks (`ARGS=--diff` to compare with the baseline).
-- `make lib-size -j1`: per-module code size (`ARGS=--diff` to compare with the baseline).
-- `make stub-visuals -j1`: render stub API scene artifacts to `bin/stub-visuals/`.
-- `make lib-visuals -j1`: render real and oracle screens to `bin/lib-visuals/`.
-- `make coverage -j1`: run host coverage and write `.gcov` files to `build/coverage/`.
-- `make clean`: remove generated build artifacts.
-
-See [tests/README.md](tests/README.md) for how the ZX suite works and how to
-add a scenario.
-
-## Platform Notes (ZX)
-
-- Screen geometry: `256x192` pixels.
-- Pixel VRAM: `0x4000..0x57ff` (6144 bytes).
-- Attribute VRAM exists separately (`0x5800..`), but libgpx drawing primitives are 1bpp pixel operations.
-- Coordinates are signed (`coord`), but visible screen space is `[0..255] x [0..191]`.
-
-## API Conventions
-
-- `clip` parameters are optional rectangles (`rect_t *`).
-- `rect_t` corners are inclusive (`x0,y0` through `x1,y1`).
-- `CO_FORE` means set pixel bit, `CO_BACK` means clear pixel bit.
-- `BM_XOR` toggles destination bits regardless of `color`.
-- All rendering is clipped to the physical screen in ZX backend.
-
-## Types, Constants, And Structures
-
-## Primitive Types
-
-- `coord`: `int16_t` signed coordinate.
-- `dim`: `uint16_t` dimension.
-- `color`: `uint8_t` (`CO_FORE`, `CO_BACK`).
-- `bmode`: `uint8_t` (`BM_CPY`, `BM_XOR`).
-- `gmode`: `uint8_t` (`GPXM_DEFAULT` currently defined).
-
-## Color And Blit Constants
-
-- `CO_FORE = 0x01`
-- `CO_BACK = 0x00`
-- `BM_CPY = 0x00`
-- `BM_XOR = 0x01`
-
-## Geometry Structures
-
-```c
-typedef struct point_s {
-    coord x;
-    coord y;
-} point_t;
-
-typedef struct rect_s {
-    coord x0;
-    coord y0;
-    coord x1;
-    coord y1;
-} rect_t;
+```bash
+make lib           # bin/libgpx.lib          (ZX Spectrum)
+make partner-lib   # bin/partner/libgpx.lib  (Partner)
+make cpc-lib       # bin/cpc/libgpx.lib      (CPC, both display modes)
+make build         # all of them, plus the test binaries
+make clean
 ```
 
-Structure plain samples:
-
-```c
-point_t p = { .x = 12, .y = 34 };
-rect_t clip = { .x0 = 10, .y0 = 10, .x1 = 100, .y1 = 80 };
-```
-
-## Graphics Context (`gpx_t`)
-
-```c
-struct gpx_s {
-    uint16_t width;
-    uint16_t height;
-    uint8_t pages;
-};
-```
-
-Meaning:
-- `width`: pixel width.
-- `height`: pixel height.
-- `pages`: number of framebuffer pages available.
-
-On ZX this is `256, 192, 1`.
-Derived values can be computed as `stride = width / 8` and `size = stride * height`.
-
-## Bitmap Encoding Constants
-
-Signature helpers:
-- `BMP_SIG(enc)`
-- `BMP_ENC(sig)`
-- `BMP_STRIDE(sig)`
-- `BMP_SIG_STRIDE(enc, stride)`
-
-Encodings:
-- `BMP_ENC_1BPP`
-- `BMP_ENC_1BPP_MASK`
-- `BMP_ENC_TINY`
-- `S_BMP` (standard 1bpp signature)
-
-Bitmap structure:
-
-```c
-typedef struct bmp_s {
-    uint8_t signature;
-    uint8_t w;
-    uint8_t h;
-    uint16_t size;
-    uint8_t bitmap[];
-} bmp_t;
-```
-
-Notes:
-- bitmap encoding lives in the high nibble of `signature`
-- stride is encoded in the low nibble as `(stride - 1)`
-- masked 1bpp payloads store `(AND, OR)` row data in `bitmap[]`
-- some masked cursor assets append hotspot bytes after `bitmap[size]`
-
-Structure plain sample (static packed bitmap wrapper):
-
-```c
-struct bmp8x8_s {
-    uint8_t signature;
-    uint8_t w;
-    uint8_t h;
-    uint16_t size;
-    uint8_t bitmap[8];
-};
-
-static struct bmp8x8_s checker = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP, 1), 8, 8, 8,
-    {0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55}
-};
-```
-
-## Font Format (`font_t`)
-
-Header fields:
-
-- `flags`
-- `first_ascii`
-- `last_ascii`
-- `empty_width`
-- `max_glyph_width`
-- `glyph_height`
-- `advance`
-- `descent`
-- `data[]`
-
-Flags:
-- `FONT_FLAG_PROPORTIONAL`
-- `FONT_FLAG_OFFSETS_BE`
-- `FONT_FLAG_VECTOR`
-
-Serialized layout:
-- bytes `[0..7]`: header
-- bytes `[8..]`: glyph offset table + glyph bitmap payloads
-
-## Cursor/Stock IDs
-
-Stock bitmap IDs:
-- `GPXSB_CURSOR_CLASSIC`
-- `GPXSB_CURSOR_STD`
-- `GPXSB_CURSOR_HOURGLASS`
-- `GPXSB_CURSOR_CARET`
-- `GPXSB_CURSOR_HAND`
-
-## Public API Reference (`include/libgpx.h`)
-
-## Lifecycle
-
-### `gpx_t *gpx_create(gmode mode)`
-
-Purpose:
-- Initialize graphics subsystem/context.
-
-Parameters:
-- `mode`: initialization mode (`GPXM_DEFAULT` available).
-
-Returns:
-- context pointer (`gpx_t *`).
-
-Special cases:
-- ZX backend currently uses a static singleton context.
-- ZX backend currently clears screen during create.
-- On ZX, `mode` is currently ignored.
-
-Sample:
-
-```c
-gpx_t *g = gpx_create(GPXM_DEFAULT);
-```
-
-### `void gpx_destroy(gpx_t *gpx)`
-
-Purpose:
-- Tear down graphics context.
-
-Parameters:
-- `gpx`: context pointer.
-
-Returns:
-- no return value.
-
-Special cases:
-- ZX backend is static; destroy is effectively a no-op.
-- Passing `NULL` is safe in current ZX behavior.
-
-Sample:
-
-```c
-gpx_destroy(g);
-gpx_destroy(NULL);
-```
-
-### `void gpx_set_page(uint8_t op, uint8_t page)`
-
-Purpose:
-- Select display page and/or write page on paged backends.
-
-Parameters:
-- `op`: bitmask of `PG_DISPLAY`, `PG_WRITE`, or both.
-- `page`: target page id (`0` or `1` on Partner).
-
-Returns:
-- no return value.
-
-Notes:
-- Partner supports two pages (`gpx->pages == 2`).
-- ZX backend currently treats this call as a no-op (`gpx->pages == 1`).
-- Current Partner implementation is still WIP and only some page use-cases are exercised by tests.
-
-## Geometry/Screen
-
-### `dim gpx_width(void)`
-
-Purpose:
-- Get current display width.
-
-Returns:
-- width in pixels.
-
-Special cases:
-- ZX: `256` after normal init.
-
-### `dim gpx_height(void)`
-
-Purpose:
-- Get current display height.
-
-Returns:
-- height in pixels.
-
-Special cases:
-- ZX: `192` after normal init.
-
-### `void gpx_clrscr(void)`
-
-Purpose:
-- Clear active screen/framebuffer.
-
-Returns:
-- no return value.
-
-Special cases:
-- ZX clears pixel VRAM and resets attributes/border to defaults.
-
-Sample:
-
-```c
-gpx_clrscr();
-```
-
-## Cursor/Stock Assets
-
-### `bmp_t *gpx_get_stock_bmp(uint8_t which)`
-
-Purpose:
-- Resolve stock bitmap by ID.
-
-Parameters:
-- `which`: one of `GPXSB_*` values.
-
-Returns:
-- bitmap pointer, or `NULL` if unsupported.
-
-Special cases:
-- Invalid IDs return `NULL`.
-
-Sample:
-
-```c
-bmp_t *caret = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
-```
-
-## Fonts/Text
-
-### `const font_t *gpx_get_system_font(void)`
-
-Purpose:
-- Get default UI/system font.
-
-Returns:
-- font pointer.
-
-Sample:
-
-```c
-const font_t *sys = gpx_get_system_font();
-```
-
-### `const font_t *gpx_get_tiny_font(void)`
-
-Purpose:
-- Get tiny font for compact labels.
-
-Returns:
-- font pointer.
-
-Sample:
-
-```c
-const font_t *tiny = gpx_get_tiny_font();
-```
-
-### `coord gpx_measure_text(const char *text, const font_t *font)`
-
-Purpose:
-- Measure rendered text width in pixels.
-
-Parameters:
-- `text`: zero-terminated string.
-- `font`: font blob pointer.
-
-Returns:
-- measured width.
-
-Special cases:
-- `text == NULL` or `font == NULL` returns `0`.
-- Missing/non-representable glyphs use font `empty_width`.
-- Width accumulation uses glyph width + font `advance` for drawn glyphs.
-
-Sample:
-
-```c
-coord w = gpx_measure_text("HELLO", gpx_get_system_font());
-```
-
-### `void gpx_draw_text(gpx_t *gpx, coord x, coord y, const char *text, const font_t *font, color c, bmode m, const rect_t *clip)`
-
-Purpose:
-- Draw text using serialized font glyph bitmaps.
-
-Parameters:
-- `gpx`: graphics context.
-- `x`, `y`: text baseline/start position used by backend renderer.
-- `text`: zero-terminated string.
-- `font`: serialized font data.
-- `c`: draw color (`CO_FORE`/`CO_BACK`).
-- `m`: mode (`BM_CPY`/`BM_XOR`).
-- `clip`: optional clip rectangle.
-
-Returns:
-- no return value.
-
-Special cases:
-- `text == NULL` or `font == NULL` is a no-op.
-- Unsupported/missing glyph entries advance by `empty_width`.
-- Glyph draw path uses bitmap renderer (`gpx_draw_bmp`).
-
-Sample:
-
-```c
-const font_t *f = gpx_get_system_font();
-rect_t clip = {0, 0, 255, 191};
-gpx_draw_text(g, 8, 16, "HELLO", f, CO_FORE, BM_CPY, &clip);
-```
-
-## Primitives And Shapes
-
-### `void gpx_draw_pixel(gpx_t *gpx, coord x, coord y, color c, bmode m, const rect_t *clip)`
-
-Purpose:
-- Draw one pixel.
-
-Parameters:
-- `gpx`: graphics context.
-- `x`, `y`: pixel position.
-- `c`: `CO_FORE` to set, `CO_BACK` to clear.
-- `m`: `BM_CPY` or `BM_XOR`.
-- `clip`: optional clipping rectangle.
-
-Returns:
-- no return value.
-
-Special cases:
-- Out-of-screen coordinates are ignored.
-- Clip rejection skips draw.
-- In `BM_XOR`, color is ignored and destination is toggled.
-
-Sample:
-
-```c
-gpx_draw_pixel(g, 10, 10, CO_FORE, BM_CPY, NULL);
-```
-
-### `uint8_t gpx_draw_line(gpx_t *gpx, coord x0, coord y0, coord x1, coord y1, color c, bmode m, uint8_t lpatt, const rect_t *clip)`
-
-Purpose:
-- Draw line segment with optional pattern.
-
-Parameters:
-- `gpx`: graphics context.
-- `x0,y0,x1,y1`: endpoints.
-- `c`, `m`: color and blend mode.
-- `lpatt`: 8-bit line pattern (`0xFF` = solid).
-- `clip`: optional clipping rectangle.
-
-Returns:
-- rotated pattern state after drawing, for chaining segments.
-
-Special cases:
-- Degenerate line (`x0==x1 && y0==y1`) draws at most one pixel.
-- Internal dispatch uses optimized hline/vline/bresenham paths.
-
-Sample:
-
-```c
-uint8_t patt = 0xF0;
-patt = gpx_draw_line(g, 0, 0, 100, 30, CO_FORE, BM_CPY, patt, NULL);
-patt = gpx_draw_line(g, 100, 30, 140, 50, CO_FORE, BM_CPY, patt, NULL);
-```
-
-### `void gpx_draw_rectangle(gpx_t *gpx, rect_t *r, color c, bmode m, uint8_t lpatt, const rect_t *clip)`
-
-Purpose:
-- Draw rectangle outline.
-
-Parameters:
-- `gpx`: graphics context.
-- `r`: rectangle (inclusive corners).
-- `c`, `m`: color and blend mode.
-- `lpatt`: line pattern.
-- `clip`: optional clipping rectangle.
-
-Returns:
-- no return value.
-
-Special cases:
-- ZX normalizes rectangle coordinates (`x0/x1`, `y0/y1`) internally.
-- ZX top/bottom use `lpatt`; left/right are drawn solid in current backend.
-- `r == NULL` is a no-op.
-
-Sample:
-
-```c
-rect_t r = {40, 20, 120, 80};
-gpx_draw_rectangle(g, &r, CO_FORE, BM_CPY, 0xFF, NULL);
-```
-
-### `void gpx_fill_rectangle(gpx_t *gpx, rect_t *r, color c, bmode m, uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)`
-
-Purpose:
-- Fill rectangle using repeating row-pattern bytes.
-
-Parameters:
-- `gpx`: graphics context.
-- `r`: rectangle (inclusive corners).
-- `c`, `m`: color and blend mode.
-- `fpatt`: row pattern table.
-- `fpatt_len`: number of pattern rows.
-- `clip`: optional clipping rectangle.
-
-Returns:
-- no return value.
-
-Special cases:
-- `fpatt_len == 0` is a no-op.
-- ZX normalizes rectangle coordinates internally.
-- Pattern is consumed MSB-first from `x0`, row-by-row.
-
-Sample:
-
-```c
-uint8_t pat[2] = {0xAA, 0x55};
-rect_t r = {10, 10, 60, 40};
-gpx_fill_rectangle(g, &r, CO_FORE, BM_CPY, pat, 2, NULL);
-```
-
-### `void gpx_draw_bmp(gpx_t *gpx, coord x, coord y, bmp_t *b, const rect_t *clip)`
-
-Purpose:
-- Blit bitmap at position.
-
-Parameters:
-- `gpx`: graphics context.
-- `x`, `y`: top-left destination.
-- `b`: source bitmap.
-- `clip`: optional clipping rectangle.
-
-Returns:
-- no return value.
-
-Special cases:
-- `b == NULL` is a no-op.
-- ZX currently supports `BMP_ENC_1BPP` and `BMP_ENC_1BPP_MASK`.
-- Unclipped, in-range unmasked blits use a fast path; clipped/masked/edge cases use fallback.
-- Partner currently accepts tiny move-stream bitmaps (`BMP_ENC_TINY`) and stock tiny cursor assets; raster 1bpp payloads are ignored there.
-
-Sample:
-
-```c
-gpx_draw_bmp(g, 32, 24, (bmp_t *)&checker, NULL);
-```
-
-## End-To-End Minimal Example
+One CPC library serves both display modes. Pass `GPXM_CPC_640X200` (the
+default) or `GPXM_CPC_320X200` to `gpx_create()`; it programs the CRTC and
+the Gate Array to match and records the geometry, and `gpx_width()` reports
+it from then on. The modes pack a different number of pixels into a byte, so
+the mode test is deliberately coarse — it sits once per run, once per row or
+once per byte, never once per pixel.
+
+## Using it
+
+Include the one public header, call `gpx_create()` once, draw, and link
+against your machine's library.
 
 ```c
 #include "libgpx.h"
 
 void main(void)
 {
-    gpx_t *g = gpx_create(GPXM_DEFAULT);
-    rect_t clip = {0, 0, 255, 191};
+    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    rect_t r = {10, 10, 100, 60};
 
     gpx_clrscr();
-    gpx_draw_pixel(g, 10, 10, CO_FORE, BM_CPY, &clip);
-    gpx_draw_line(g, 20, 20, 100, 40, CO_FORE, BM_CPY, 0xFF, &clip);
-
-    rect_t box = {30, 50, 120, 90};
-    gpx_draw_rectangle(g, &box, CO_FORE, BM_CPY, 0xFF, &clip);
-
-    const font_t *font = gpx_get_system_font();
-    gpx_draw_text(g, 8, 8, "libgpx", font, CO_FORE, BM_CPY, &clip);
-
-    __asm
-        halt
-    __endasm;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_CPY, 0xFF, 0);
+    gpx_draw_text(gpx, 14, 14, "hello", gpx_get_system_font(),
+                  CO_FORE, BM_CPY, 0);
+    gpx_destroy(gpx);
 }
 ```
 
-## Compatibility/Scope Note
+Text is opaque by default, including the advance between adjacent characters.
+Call `gpx_set_text_background(gpx, GPX_TEXT_BG_TRANSPARENT)` before drawing an
+overlay that should preserve both the glyph background and character spacing.
 
-The header comment mentions additional primitive categories (for example circles/polygons), but the currently exported public API is exactly what is declared in `include/libgpx.h` and documented above.
+Compile and link for the ZX Spectrum:
+
+```bash
+docker run --rm -u $(id -u):$(id -g) -v "$PWD":/work -w /work \
+    wischner/xcc-z80-zx-spectrum sh -lc '
+        xcc -mz80 -std=c11 -Os -Iinclude -c -o build/hello.rel hello.c
+        xcc -mz80 -nostartfiles -o build/hello.bin \
+            build/crt0.rel build/hello.rel bin/libgpx.lib \
+            -Wl,--oformat=binary -Wl,-b,_CODE=0x8000'
+```
+
+For the Partner, swap the image for `wischner/xcc-z80-idp`, the library
+for `bin/partner/libgpx.lib`, and the load address for `0x100` (CP/M
+`.com`). The C source does not change.
+
+For the Amstrad CPC, use `wischner/xcc-z80`, `bin/cpc/libgpx.lib` and
+`bin/cpc/crt0-cpc.rel`. The result is a raw binary that runs at `0x8000`
+with no firmware underneath it: `gpx_create()` programs the CRTC and the
+Gate Array itself and pages both ROMs out, the same way the Partner backend
+programs its own PIO.
+
+```bash
+docker run --rm -u $(id -u):$(id -g) -v "$PWD":/work -w /work \
+    wischner/xcc-z80 sh -lc '
+        xcc -mz80 -std=c11 -Os -Iinclude -c -o build/hello.rel hello.c
+        xld --oformat=binary -b _CODE=0x8000 -nostartfiles \
+            -o build/hello.bin bin/cpc/crt0-cpc.rel \
+            build/hello.rel bin/cpc/libgpx.lib'
+```
+
+## Demos
+
+Every demo builds for both machines. Its page explains the source, build and
+run workflow, and places MCP-emulator screenshots side by side so backend and
+screen-geometry differences are visible.
+
+| Demo | What it demonstrates |
+|---|---|
+| [Demo 1 — dimensions and cursors](samples/demo1/README.md) | fixed 256x192 fill, reported screen size, stock cursors, sprite show/hide |
+| [Demo 2 — full-API smoke test](samples/demo2/README.md) | fixed 1024x256 diagnostic scene and physical-screen clipping |
+| [Demo 3 — portable examples](samples/demo3/README.md) | resolution-adaptive panels and sprite restoration programs |
+
+Build any demo for both targets, or select one backend:
+
+```bash
+make -C samples/demo1 build
+make -C samples/demo2 zx
+make -C samples/demo3 partner
+```
+
+The output is a Spectrum `.tap` and a Partner CP/M `.com`. The manual's
+[demo reference](docs/manuals/PROGRAMMING-LIBGPX.md#demo-directory-reference)
+connects these programs to the API concepts they exercise.
+
+## The three backends, side by side
+
+| | ![ZX Spectrum](docs/images/platforms/zxspec48.jpg) | ![Iskra Delta Partner](docs/images/platforms/partner.jpg) | ![Amstrad CPC](docs/images/platforms/cpc.jpg) |
+|---|:---:|:---:|:---:|
+| | **ZX Spectrum** | **Iskra Delta Partner** | **Amstrad CPC** |
+| Display | 256 x 192 | 1024 x 256 | 640 x 200 / 320 x 200 |
+| Z80 clock | 3.5 MHz | 4 MHz | 4 MHz |
+| Drawing | software | EF9367 coprocessor | software |
+| Library size | 7,600 B | 7,126 B | 8,381 B |
+
+The CPC is the largest because one library serves both display modes, and
+mode 1 packs four pixels to a byte where mode 2 packs eight -- so the span,
+blit and line paths each carry a second form. The Partner is the smallest
+because the chip does the rasterising.
+
+### Speed
+
+`make crossbench` draws the *same picture* on every machine -- fixed
+coordinates inside a 256x192 box that fits every display -- and times it, so
+the numbers can be compared directly. The per-backend suites
+(`make zx-bench`, `make cpc-bench`) size their work from `gpx_width()` and
+so cannot be.
+
+Milliseconds, because the Spectrum's Z80 runs at 3.5 MHz and the other two at
+4 MHz. Lower is better; the best in each row is in bold.
+
+| Benchmark | ZX Spectrum | Partner | CPC 640x200 | CPC 320x200 |
+|---|--:|--:|--:|--:|
+| 64 solid rays, all octants | 756 | **36** | 683 | 714 |
+| the same rays, dashed | 720 | 1,716 | **648** | 680 |
+| 8 solid fills, 248x184 | 821 | 634 | **587** | 734 |
+| 8 patterned/XOR fills | 903 | 10,234 | **760** | 1,139 |
+| 200 sprite show+hide pairs | **2,035** | 5,401 | 3,058 | 3,785 |
+| 60 lines of text, 3 modes | 5,989 | 11,803 | **5,724** | 7,083 |
+| 16 full-screen clears | 455 | see below | 558 | 558 |
+
+What the table is really showing:
+
+* **The Partner wins wherever the EF9367 can do the work itself** -- a solid
+  vector is 21x faster than the fastest software Bresenham here -- and loses
+  badly wherever it cannot. A pattern cannot be handed to the chip's area
+  fill, so patterned fills fall back to software and cost 11x what the
+  Spectrum pays. It is a vector machine, and it rewards being used as one.
+* **The CPC leads on raster work** despite pushing 2.6x the Spectrum's pixels
+  in mode 2, partly from the faster clock and partly because its span, fill
+  and line paths are the most heavily tuned. Its weak spot is sprites, where
+  saving and restoring the background costs more than on the Spectrum.
+* **CPC mode 1 is consistently slower than mode 2** for the same picture:
+  four pixels to a byte means a read-modify-write where mode 2 can store, and
+  the blitter has to gather two screen bytes into one eight-pixel value.
+* **Clears are not comparable**: `gpx_clrscr()` clears the whole display, and
+  the displays are different sizes. On the Partner it is issued to the
+  coprocessor and returns almost immediately, so no honest figure belongs in
+  that column -- the CPU spends 3,131 T-states while the chip works on for
+  roughly 130,000 more.
+
+Measured with `make crossbench`; the emulators are cycle-accurate, so the
+numbers are reproducible rather than sampled.
+
+## Testing
+
+```bash
+make tests           # everything below
+make zx-tests        # ZX differential suite vs an independent C oracle
+make partner-gdp-tests   # Partner suite on the emulated EF9367
+make cpc-tests       # CPC suite, both display modes, on amstrad-cpc-mcp
+make cpc-bench       # CPC micro-benchmarks, in T-states, both modes
+make conformance     # one program on all three backends, compared pixel for pixel
+make crossbench      # the same picture timed on all three, for comparison
+```
+
+`make conformance` is the gate that keeps the backends from drifting
+apart: it compiles a scenario once per backend, runs it on every
+emulator and diffs the rasters against the ZX. The CPC is checked in
+both display modes and has to match *exactly* -- it shares the ZX's
+font, cursors and software rasteriser, so it has no licence to differ. See [tests/README.md](tests/README.md) for how the
+suites work and how to add a scenario.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `include/libgpx.h` | the public API and data formats |
+| `src/zx/`, `src/partner/`, `src/cpc/` | the three backends, hand-written Z80 assembly |
+| `samples/` | dual-platform demos with illustrated README pages |
+| `tests/` | test suites, benchmarks, size and coverage tooling |
+| `docs/manuals/` | the programming manual |
+| `docs/images/screenshots/` | emulator captures, regenerated by `scripts/docs/` |
+| `docs/images/diagrams/` | hand-drawn figures |
+| `docs/images/platforms/` | photographs of the machines |
+| `docs/standards/` | coding standards this project follows |
+| `docs/todo/` | working notes, not part of the library |
+| `scripts/mk/` | shared toolchain and Docker image definitions |
+| `scripts/run/`, `scripts/check/`, `scripts/docs/` | launchers, style checks, doc generation |
+| `bin/`, `build/` | generated artifacts |
+| `archive/` | older snapshots, not used by the current build |
+
+## Licence
+
+GPL2 — see [LICENSE](LICENSE).

@@ -23,30 +23,11 @@ void check(bool condition, const std::string &message, int &failures)
     }
 }
 
-enum PatternMode
-{
-    PM_SOLID = 0,
-    PM_DOTTED = 1,
-    PM_DASHED = 2,
-    PM_DOT_DASH = 3,
-    PM_FALLBACK = 4
-};
-
-bool style_on(PatternMode mode, int step)
-{
-    switch (mode) {
-    case PM_SOLID:
-        return true;
-    case PM_DOTTED:
-        return (step & 0x03) < 2;
-    case PM_DASHED:
-        return (step & 0x07) < 4;
-    default: {
-        int p = step & 0x0F;
-        return p < 10 || (p >= 12 && p < 14);
-    }
-    }
-}
+/* Every pattern is applied literally, one bit per pixel, LSB first from the
+   line's start -- the same rule the ZX backend uses. The EF9367 can dot and
+   dash a vector itself, but its CTRL2 styles are fixed shapes that do not
+   match the lpatt byte that would select them, so the backend no longer uses
+   them and there is only this one semantics to test. */
 
 uint8_t rot_r8(uint8_t v)
 {
@@ -66,7 +47,6 @@ void check_hline_pattern(
     int x0,
     int y,
     int len,
-    PatternMode mode,
     uint8_t lpatt,
     int width,
     int height,
@@ -74,7 +54,7 @@ void check_hline_pattern(
     const std::string &label)
 {
     for (int i = 0; i < len; ++i) {
-        bool expected = (mode == PM_FALLBACK) ? fallback_on(lpatt, i) : style_on(mode, i);
+        bool expected = fallback_on(lpatt, i);
         bool on = pixel_on(screen, x0 + i, y, width, height);
         check(on == expected, label, failures);
     }
@@ -112,10 +92,11 @@ int main()
         check(on == expectedA5[i], "fallback pattern mismatch", failures);
     }
 
+    /* 0xF0 taken LSB-first from x=60: four clear, then four set. */
     for (int x = 60; x <= 63; ++x)
-        check(pixel_on(screen, x, 10, width, height), "dashed line on-segment missing", failures);
+        check(!pixel_on(screen, x, 10, width, height), "0xF0 low nibble should be clear", failures);
     for (int x = 64; x <= 67; ++x)
-        check(!pixel_on(screen, x, 10, width, height), "dashed line off-segment drawn", failures);
+        check(pixel_on(screen, x, 10, width, height), "0xF0 high nibble should be set", failures);
 
     for (int x = 100; x <= 500; ++x)
         check(pixel_on(screen, x, 50, width, height), "long recursive solid line pixel missing", failures);
@@ -125,18 +106,18 @@ int main()
     check(!pixel_on(screen, 49, 80, width, height), "long clipped line leaked at left edge", failures);
     check(!pixel_on(screen, 401, 80, width, height), "long clipped line leaked at right edge", failures);
 
-    check_hline_pattern(screen, 10, 100, 16, PM_SOLID, 0xFF, width, height, failures, "pattern solid mismatch");
-    check_hline_pattern(screen, 10, 101, 16, PM_DOTTED, 0x33, width, height, failures, "pattern 0x33 mismatch");
-    check_hline_pattern(screen, 10, 102, 16, PM_DOTTED, 0x66, width, height, failures, "pattern 0x66 mismatch");
-    check_hline_pattern(screen, 10, 103, 16, PM_DOTTED, 0xCC, width, height, failures, "pattern 0xCC mismatch");
-    check_hline_pattern(screen, 10, 104, 16, PM_DOTTED, 0x99, width, height, failures, "pattern 0x99 mismatch");
-    check_hline_pattern(screen, 10, 105, 16, PM_DOTTED, 0xAA, width, height, failures, "pattern 0xAA mismatch");
-    check_hline_pattern(screen, 10, 106, 16, PM_DOTTED, 0x55, width, height, failures, "pattern 0x55 mismatch");
-    check_hline_pattern(screen, 10, 107, 16, PM_DASHED, 0xF0, width, height, failures, "pattern 0xF0 mismatch");
-    check_hline_pattern(screen, 10, 108, 16, PM_DASHED, 0x3C, width, height, failures, "pattern 0x3C mismatch");
-    check_hline_pattern(screen, 10, 109, 16, PM_DOT_DASH, 0xE4, width, height, failures, "pattern 0xE4 mismatch");
-    check_hline_pattern(screen, 10, 110, 16, PM_DOT_DASH, 0x72, width, height, failures, "pattern 0x72 mismatch");
-    check_hline_pattern(screen, 10, 111, 16, PM_FALLBACK, 0xA5, width, height, failures, "pattern 0xA5 mismatch");
+    check_hline_pattern(screen, 10, 100, 16, 0xFF, width, height, failures, "pattern solid mismatch");
+    check_hline_pattern(screen, 10, 101, 16, 0x33, width, height, failures, "pattern 0x33 mismatch");
+    check_hline_pattern(screen, 10, 102, 16, 0x66, width, height, failures, "pattern 0x66 mismatch");
+    check_hline_pattern(screen, 10, 103, 16, 0xCC, width, height, failures, "pattern 0xCC mismatch");
+    check_hline_pattern(screen, 10, 104, 16, 0x99, width, height, failures, "pattern 0x99 mismatch");
+    check_hline_pattern(screen, 10, 105, 16, 0xAA, width, height, failures, "pattern 0xAA mismatch");
+    check_hline_pattern(screen, 10, 106, 16, 0x55, width, height, failures, "pattern 0x55 mismatch");
+    check_hline_pattern(screen, 10, 107, 16, 0xF0, width, height, failures, "pattern 0xF0 mismatch");
+    check_hline_pattern(screen, 10, 108, 16, 0x3C, width, height, failures, "pattern 0x3C mismatch");
+    check_hline_pattern(screen, 10, 109, 16, 0xE4, width, height, failures, "pattern 0xE4 mismatch");
+    check_hline_pattern(screen, 10, 110, 16, 0x72, width, height, failures, "pattern 0x72 mismatch");
+    check_hline_pattern(screen, 10, 111, 16, 0xA5, width, height, failures, "pattern 0xA5 mismatch");
 
     if (failures == 0) {
         std::cout << "Partner line emulator test passed.\n";

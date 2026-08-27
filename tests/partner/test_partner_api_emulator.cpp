@@ -37,6 +37,20 @@ bool any_pixel_in_rect(
     return false;
 }
 
+bool all_pixels_in_rect(
+    const std::vector<uint8_t> &screen,
+    int x0, int y0, int x1, int y1,
+    int width, int height)
+{
+    for (int y = y0; y <= y1; ++y) {
+        for (int x = x0; x <= x1; ++x) {
+            if (!pixel_on(screen, x, y, width, height))
+                return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 int main()
@@ -71,6 +85,11 @@ int main()
 
     check(any_pixel_in_rect(screen, 20, 20, 31, 35, width, height),
         "draw_text produced no pixels in expected area", failures);
+    check(!all_pixels_in_rect(screen, 20, 20, 35, 28, width, height),
+        "opaque text did not clear its cell background", failures);
+    check(all_pixels_in_rect(screen, 40, 20, 55, 28, width, height),
+        "transparent text changed glyph background or inter-character spacing",
+        failures);
 
     /* XOR sprite: region B (show+hide over backdrop at y=190) must equal
      * region C (pure backdrop at y=230) pixel for pixel; region A

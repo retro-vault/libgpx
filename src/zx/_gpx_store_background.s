@@ -12,6 +12,11 @@
         ;; Saves the visible screen area into HL as a valid standard 1bpp
         ;; bmp_t with stride=2. Bytes/rows clipped off-screen remain zero
         ;; because the payload is cleared first.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module _gpx_store_background
         .optsdcc -mz80 sdcccall(1)
@@ -48,7 +53,7 @@
         .area   _CODE
 
 __gpx_store_background:
-        push    iy                     ;; preserve caller IY (used as dest ptr)
+        push    iy                      ; preserve caller IY (used as dest ptr)
         push    hl
         push    ix
         ld      ix,#0
@@ -60,7 +65,7 @@ __gpx_store_background:
 
         ld      B_VISW(ix),d
         ld      B_ROWCNT(ix),e
-        ld      B_DSTROW_LO(ix),b      ;; parks y until xbyte is known
+        ld      B_DSTROW_LO(ix),b       ; parks y until xbyte is known
 
         ld      a,c
         and     #0x07
@@ -93,7 +98,7 @@ __gpx_store_background:
         ;; First row address, derived once; later rows are one __vid_nextrow
         ;; away. The row base low byte is a multiple of 0x20 and xbyte is
         ;; 0..31, so the add cannot carry.
-        ld      b,B_DSTROW_LO(ix)      ;; y, parked at entry
+        ld      b,B_DSTROW_LO(ix)       ; y, parked at entry
         call    __vid_rowaddr
         ld      a,B_XBYTE(ix)
         add     a,l
@@ -130,7 +135,7 @@ __gpx_store_background:
         or      a
         jr      z,.gsb_shift_done
 .gsb_shift_loop:
-        sla     c                      ;; shifts a zero in and sets carry
+        sla     c                       ; shifts a zero in and sets carry
         rl      e
         rl      d
         djnz    .gsb_shift_loop
@@ -198,5 +203,5 @@ __gpx_store_background:
         ld      sp,ix
         pop     ix
         pop     hl
-        pop     iy                     ;; restore caller IY
+        pop     iy                      ; restore caller IY
         ret

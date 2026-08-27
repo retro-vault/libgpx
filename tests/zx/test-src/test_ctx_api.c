@@ -18,6 +18,13 @@ void main(void)
     record16(gpx->width);
     record16(gpx->height);
     record(gpx->pages);
+    record(gpx->text_background);
+
+    gpx_set_text_background(gpx, GPX_TEXT_BG_TRANSPARENT);
+    record(gpx->text_background);
+    gpx_set_text_background(gpx, (textbg)0xFE);
+    record(gpx->text_background);       /* normalized to opaque */
+    gpx_set_text_background((gpx_t *)0, GPX_TEXT_BG_TRANSPARENT);
 
     /* Paging is a no-op on a single-page display, but must not disturb the
      * context or the screen. */

@@ -1,6 +1,11 @@
         ;; _qmath.s
         ;;
         ;; Quick integer math helpers.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module _qmath
         .optsdcc -mz80 sdcccall(1)
@@ -13,10 +18,10 @@
         ;; __abs_hl
         ;; Compute absolute value of signed 16-bit HL.
         ;;
-        ;; Input:
+        ;; Arguments:
         ;;   HL = value
         ;;
-        ;; Output:
+        ;; Return:
         ;;   HL = abs(value)
         ;;
         ;; Clobbers:

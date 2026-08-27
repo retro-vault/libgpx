@@ -1,49 +1,62 @@
-ROOT_DIR ?= $(abspath ../..)
-DEMO_BUILD_DIR := $(ROOT_DIR)/build/demo1
-DEMO_BIN_DIR := $(ROOT_DIR)/bin/demo1
+# Stock cursor and screen-dimensions demo, built for both machines.
 
-include $(ROOT_DIR)/mk/toolchain.mk
+ROOT_DIR ?= $(abspath ../..)
+BUILD_DIR := $(ROOT_DIR)/build/demo1
+BIN_DIR := $(ROOT_DIR)/bin/demo1
+
+include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 TARGET ?= demo1
-LOAD_ADDR_HEX ?= 0x8000
-LOAD_ADDR_DEC ?= $(shell printf '%d\n' $(LOAD_ADDR_HEX))
+ZX_LOAD_HEX ?= 0x8000
+ZX_LOAD_DEC ?= $(shell printf '%d\n' $(ZX_LOAD_HEX))
+PARTNER_LOAD_HEX ?= 0x100
 
-APP_MAIN_SRC := $(ROOT_DIR)/samples/demo1/src/main.c
-APP_CRT0_SRC := $(ROOT_DIR)/samples/demo1/src/crt0.s
+MAIN_SRC := $(ROOT_DIR)/samples/demo1/src/main.c
+ZX_CRT0_SRC := $(ROOT_DIR)/samples/demo1/src/crt0.s
+PARTNER_CRT0_SRC := $(ROOT_DIR)/samples/demo1/src/crt0-partner.s
 
-APP_MAIN_REL := $(DEMO_BUILD_DIR)/main.rel
-APP_CRT0_REL := $(DEMO_BUILD_DIR)/crt0.rel
-APP_BIN := $(DEMO_BUILD_DIR)/$(TARGET).bin
-APP_TAP := $(DEMO_BIN_DIR)/$(TARGET).tap
+ZX_LIB := $(ROOT_DIR)/bin/libgpx.lib
+PARTNER_LIB := $(ROOT_DIR)/bin/partner/libgpx.lib
+TAP := $(BIN_DIR)/$(TARGET).tap
+COM := $(BIN_DIR)/$(TARGET).com
 
-LIBGPX_LIB := $(ROOT_DIR)/bin/libgpx.lib
+.PHONY: all build zx partner clean
 
-.PHONY: all build clean
+all: build
 
-all: $(APP_TAP)
+build: zx partner
 
-build: all
+zx: $(TAP)
 
-$(DEMO_BUILD_DIR):
+partner: $(COM)
+
+$(BUILD_DIR) $(BIN_DIR):
 	mkdir -p "$@"
 
-$(DEMO_BIN_DIR):
-	mkdir -p "$@"
-
-$(LIBGPX_LIB):
+$(ZX_LIB):
 	$(MAKE) -C $(ROOT_DIR)/src lib
 
-$(APP_MAIN_REL): $(APP_MAIN_SRC) | $(DEMO_BUILD_DIR)
-	$(ZXRUN) '$(XCC) $(XCFLAGS) -c -o "build/demo1/main.rel" "samples/demo1/src/main.c"'
+$(PARTNER_LIB):
+	$(MAKE) -C $(ROOT_DIR)/src partner-lib
 
-$(APP_CRT0_REL): $(APP_CRT0_SRC) | $(DEMO_BUILD_DIR)
-	$(ZXRUN) '$(XAS) -o "build/demo1/crt0.rel" "samples/demo1/src/crt0.s"'
+$(TAP): $(MAIN_SRC) $(ZX_CRT0_SRC) $(ZX_LIB) | $(BUILD_DIR) $(BIN_DIR)
+	$(ZXRUN) 'set -e; \
+		$(XAS) -o build/demo1/crt0-zx.rel samples/demo1/src/crt0.s; \
+		$(XCC) $(XCFLAGS) -c -o build/demo1/main-zx.rel samples/demo1/src/main.c; \
+		$(XCC) $(XLDFLAGS) -o build/demo1/$(TARGET).bin \
+			build/demo1/crt0-zx.rel build/demo1/main-zx.rel bin/libgpx.lib \
+			-Wl,--oformat=binary -Wl,-b,_CODE=$(ZX_LOAD_HEX); \
+		xprog --tap build/demo1/$(TARGET).bin -o bin/demo1/$(TARGET).tap \
+			-n $(TARGET) --load-address $(ZX_LOAD_DEC) --entry $(ZX_LOAD_DEC)'
 
-$(APP_BIN): $(APP_CRT0_REL) $(APP_MAIN_REL) $(LIBGPX_LIB) | $(DEMO_BUILD_DIR)
-	$(ZXRUN) '$(XCC) $(XLDFLAGS) -o "build/demo1/$(TARGET).bin" "build/demo1/crt0.rel" "build/demo1/main.rel" "bin/libgpx.lib" -Wl,--oformat=binary -Wl,-b,_CODE=$(LOAD_ADDR_HEX)'
-
-$(APP_TAP): $(APP_BIN) | $(DEMO_BIN_DIR)
-	$(ZXRUN) 'xprog --tap "build/demo1/$(TARGET).bin" -o "bin/demo1/$(TARGET).tap" -n $(TARGET) --load-address $(LOAD_ADDR_DEC) --entry $(LOAD_ADDR_DEC)'
+$(COM): $(MAIN_SRC) $(PARTNER_CRT0_SRC) $(PARTNER_LIB) | $(BUILD_DIR) $(BIN_DIR)
+	$(IDPRUN) 'set -e; \
+		$(XAS) -o build/demo1/crt0-partner.rel samples/demo1/src/crt0-partner.s; \
+		$(XCC) $(XCFLAGS) -c -o build/demo1/main-partner.rel samples/demo1/src/main.c; \
+		$(XCC) $(XLDFLAGS) -o bin/demo1/$(TARGET).com \
+			build/demo1/crt0-partner.rel build/demo1/main-partner.rel \
+			bin/partner/libgpx.lib -Wl,--oformat=binary \
+			-Wl,-b,_CODE=$(PARTNER_LOAD_HEX)'
 
 clean:
-	rm -rf "$(DEMO_BUILD_DIR)" "$(DEMO_BIN_DIR)"
+	rm -rf "$(BUILD_DIR)" "$(BIN_DIR)"

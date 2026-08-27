@@ -7,6 +7,11 @@
         ;;    all constant down the rectangle, so they are computed once and
         ;;    each row is a single __gpx_span_row call with the row pointer
         ;;    stepped by __vid_nextrow
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_fill_rectangle
         .optsdcc -mz80 sdcccall(1)
@@ -22,14 +27,33 @@
 
         .area   _CODE
 
-        ;; void gpx_fill_rectangle(
-        ;;   gpx_t *gpx, rect_t *r,
-        ;;   color c, bmode m, uint8_t *fpatt, uint8_t fpatt_len,
-        ;;   const rect_t *clip)
+        ;; ------------------------------------------------------------
+        ;; _gpx_fill_rectangle
+        ;; Fill a rectangle with a repeating pattern, corners inclusive.
+        ;; Clipping is resolved once up front, then rows are drawn by byte
+        ;; spans rather than pixels. Row n takes fpatt[n % fpatt_len] and
+        ;; the bits run MSB-first from the rectangle's left edge, both
+        ;; measured on the unclipped rectangle so clipping never shifts
+        ;; the pattern.
         ;;
-        ;; HL = gpx
-        ;; DE = r
-        ;; stack: c, m, fpatt, fpatt_len, clip
+        ;; Signature:
+        ;;   void gpx_fill_rectangle(gpx_t *gpx, rect_t *r,
+        ;;                           color c, bmode m,
+        ;;                           uint8_t *fpatt, uint8_t fpatt_len,
+        ;;                           const rect_t *clip)
+        ;;
+        ;; Arguments:
+        ;;   HL = gpx, DE = r
+        ;;   stack: c, m, fpatt, fpatt_len, clip
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY
+        ;;
+        ;; References:
+        ;;   __gpx_span_setup
+        ;;   __gpx_span_row
+        ;;   __vid_rowaddr, __vid_nextrow
+        ;;   __rect_cmp16s_lt
 _gpx_fill_rectangle::
         push    ix
         ld      ix,#0
@@ -126,35 +150,35 @@ _gpx_fill_rectangle::
         ;; shared __clip_seg helper (reject on either axis => nothing visible).
         ;; X axis: IY = &clip->x0 (clip+0); x1 at IY+4.
         ld      c,9(ix)
-        ld      b,10(ix)               ;; BC = clip ptr
+        ld      b,10(ix)                ; BC = clip ptr
         ld      iy,#0
         add     iy,bc
         ld      l,-1(ix)
-        ld      h,-2(ix)               ;; HL = x0
+        ld      h,-2(ix)                ; HL = x0
         ld      e,-3(ix)
-        ld      d,-4(ix)               ;; DE = x1
+        ld      d,-4(ix)                ; DE = x1
         call    __clip_seg
         jp      c,.fr_done
         ld      -1(ix),l
-        ld      -2(ix),h               ;; x0 = clamped lo
+        ld      -2(ix),h                ; x0 = clamped lo
         ld      -3(ix),e
-        ld      -4(ix),d               ;; x1 = clamped hi
+        ld      -4(ix),d                ; x1 = clamped hi
 
         ;; Y axis: IY = &clip->y0 (clip+2); y1 at IY+4 (clip+6).
         ld      c,9(ix)
-        ld      b,10(ix)               ;; reload BC = clip ptr
+        ld      b,10(ix)                ; reload BC = clip ptr
         ld      iy,#2
         add     iy,bc
         ld      l,-5(ix)
-        ld      h,-6(ix)               ;; HL = y0
+        ld      h,-6(ix)                ; HL = y0
         ld      e,-7(ix)
-        ld      d,-8(ix)               ;; DE = y1
+        ld      d,-8(ix)                ; DE = y1
         call    __clip_seg
         jp      c,.fr_done
         ld      -5(ix),l
-        ld      -6(ix),h               ;; y0 = clamped lo
+        ld      -6(ix),h                ; y0 = clamped lo
         ld      -7(ix),e
-        ld      -8(ix),d               ;; y1 = clamped hi
+        ld      -8(ix),d                ; y1 = clamped hi
 
 .fr_phase_setup:
         ;; IY = &descriptor (ix - 21)
@@ -163,19 +187,19 @@ _gpx_fill_rectangle::
         ld      de,#-21
         add     iy,de
 
-        ld      b,-1(ix)               ;; x0 (clamped to the screen)
-        ld      c,-3(ix)               ;; x1
-        ld      d,4(ix)                ;; color
-        ld      e,5(ix)                ;; mode
-        call    __gpx_span_setup       ;; A = byte_lo
+        ld      b,-1(ix)                ; x0 (clamped to the screen)
+        ld      c,-3(ix)                ; x1
+        ld      d,4(ix)                 ; color
+        ld      e,5(ix)                 ; mode
+        call    __gpx_span_setup        ; A = byte_lo
         ld      c,a
 
         ;; row pointer for the first visible row
-        ld      b,-5(ix)               ;; y0 low
+        ld      b,-5(ix)                ; y0 low
         push    bc
         call    __vid_rowaddr
         pop     bc
-        ld      a,c                    ;; byte_lo
+        ld      a,c                     ; byte_lo
         add     a,l
         ld      l,a
         jr      nc,.fr_rowptr_ok
@@ -235,7 +259,7 @@ _gpx_fill_rectangle::
 .fr_patt_ready:
         ld      l,-9(ix)
         ld      h,-10(ix)
-        call    __gpx_span_row         ;; preserves HL
+        call    __gpx_span_row          ; preserves HL
         call    __vid_nextrow
         ld      -9(ix),l
         ld      -10(ix),h

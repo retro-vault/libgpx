@@ -7,6 +7,11 @@
         ;; display memory. No pixel fallback path remains here.
         ;;
         ;; Re-entrant/thread-safe: all mutable state lives on the stack.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_bmp
         .optsdcc -mz80 sdcccall(1)
@@ -98,30 +103,60 @@
 
         .area   _CODE
 
-        ;; void gpx_draw_bmp(gpx_t *gpx, coord x, coord y, bmp_t *b, const rect_t *clip)
+        ;; ------------------------------------------------------------
+        ;; _gpx_draw_bmp
+        ;; Blit a bitmap with its top-left corner at (x, y). Public entry:
+        ;; the payload's own colours are used and the mode is copy, so it
+        ;; sets the internal mode tag and falls into the shared core.
+        ;;
+        ;; Signature:
+        ;;   void gpx_draw_bmp(gpx_t *gpx, coord x, coord y, bmp_t *b,
+        ;;                     const rect_t *clip)
+        ;;
+        ;; Arguments:
+        ;;   HL = gpx, DE = x
+        ;;   stack: y, b, clip
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY
+        ;;
+        ;; References:
+        ;;   .gb_core
 _gpx_draw_bmp::
         ;; Public API semantics:
         ;; - unmasked: draw 1 bits, skip 0 bits
         ;; - masked:   apply AND/OR pair
-        ld      b,#0x80               ;; internal mode tag: keep legacy semantics
-        ld      c,#0x01               ;; color = CO_FORE
-        jr      gb_core
+        ld      b,#0x80                 ; internal mode tag: keep legacy semantics
+        ld      c,#0x01                 ; color = CO_FORE
+        jr      .gb_core
 
-        ;; Internal entry used by text path.
-        ;; Input:
-        ;;   B = bmode
-        ;;   C = color
+        ;; ------------------------------------------------------------
+        ;; _gpx_draw_bmp_clip
+        ;; As gpx_draw_bmp, but the caller chooses the colour and blit
+        ;; mode. The text path uses this so the colour and mode given to
+        ;; gpx_draw_text actually reach the glyphs.
+        ;;
+        ;; Arguments:
+        ;;   B = bmode, C = color
+        ;;   HL = gpx, DE = x
+        ;;   stack: y, b, clip
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY
+        ;;
+        ;; References:
+        ;;   .gb_core
 _gpx_draw_bmp_clip::
-gb_core:
+.gb_core:
         ;; Drain y and bitmap-ptr args into the alternate set and park the
         ;; return address back on the stack; clip stays as the only stack
         ;; arg (read at 6(ix) below, discarded by the exit). DE = x and
         ;; BC = mode tags stay live in the main set throughout.
         exx
-        pop     bc                     ;; BC' = return address
-        pop     hl                     ;; HL' = y
-        pop     de                     ;; DE' = bitmap ptr
-        push    bc                     ;; return address back (clip below it)
+        pop     bc                      ; BC' = return address
+        pop     hl                      ; HL' = y
+        pop     de                      ; DE' = bitmap ptr
+        push    bc                      ; return address back (clip below it)
         exx
         push    ix
         push    iy
@@ -141,31 +176,49 @@ gb_core:
         ;;   1 = BM_CPY + CO_FORE (copy source bits)
         ;;   2 = BM_CPY + CO_BACK (copy inverted source bits)
         ;;   3 = BM_XOR
+        ;;   5 = transparent BM_CPY + CO_FORE (set OR bits only)
+        ;;   6 = transparent BM_CPY + CO_BACK (clear OR bits only)
         ld      a,b
         bit     7,a
-        jr      z,gb_mode_select
+        jr      z,.gb_mode_select
         xor     a
         ld      L_DRAWMODE(iy),a
         jr      gb_mode_done
 
-gb_mode_select:
+.gb_mode_select:
         ld      a,b
         bit     0,a
         jr      nz,gb_mode_xor_sel
+
+        bit     6,a                     ; transparent text glyph?
+        jr      z,.gb_mode_opaque_select
+        ld      a,c
+        bit     0,a
+        jr      nz,.gb_mode_trans_fore
+        ld      a,#6                    ; preserve zero bits, clear OR bits
+        ld      L_DRAWMODE(iy),a
+        jr      gb_mode_done
+
+.gb_mode_trans_fore:
+        ld      a,#5                    ; preserve zero bits, set OR bits
+        ld      L_DRAWMODE(iy),a
+        jr      gb_mode_done
+
+.gb_mode_opaque_select:
         ld      a,c
         bit     0,a
         jr      nz,gb_mode_fore_sel
-        ld      a,#2                   ;; BACK copy on OR bits
+        ld      a,#2                    ; BACK copy on OR bits
         ld      L_DRAWMODE(iy),a
         jr      gb_mode_done
 
  gb_mode_fore_sel:
-        ld      a,#1                   ;; FORE copy on OR bits
+        ld      a,#1                    ; FORE copy on OR bits
         ld      L_DRAWMODE(iy),a
         jr      gb_mode_done
 
  gb_mode_xor_sel:
-        ld      a,#3                   ;; XOR on OR bits
+        ld      a,#3                    ; XOR on OR bits
         ld      L_DRAWMODE(iy),a
 
  gb_mode_done:
@@ -185,7 +238,7 @@ gb_mode_select:
         ST16DE  L_BPTR
         push    de
         exx
-        pop     hl                     ;; HL = bitmap ptr (main set)
+        pop     hl                      ; HL = bitmap ptr (main set)
 
         ;; Null bitmap -> return.
         ld      a,h
@@ -275,7 +328,7 @@ gb_mode_select:
         or      a
         jr      z,gb_sx0_on
         jp      p,gb_exit
-        xor     a                      ;; x < 0: start at column 0
+        xor     a                       ; x < 0: start at column 0
         jr      gb_sx0_store
  gb_sx0_on:
         ld      a,L_X(iy)
@@ -345,15 +398,15 @@ gb_mode_select:
         ;; 16-bit clamp calls and two 16-bit inversion tests.
         LD16HL  L_CLIP
 
-        ld      e,(hl)                 ;; visx0 = max(visx0, clip->x0)
+        ld      e,(hl)                  ; visx0 = max(visx0, clip->x0)
         inc     hl
         ld      d,(hl)
         inc     hl
         ld      a,d
         or      a
         jr      z,gb_cx0_8
-        jp      p,gb_exit              ;; clip x0 > 255: nothing visible
-        jr      gb_cy0                 ;; clip x0 < 0: visx0 unchanged
+        jp      p,gb_exit               ; clip x0 > 255: nothing visible
+        jr      gb_cy0                  ; clip x0 < 0: visx0 unchanged
  gb_cx0_8:
         ld      a,e
         cp      L_VISX0(iy)
@@ -361,7 +414,7 @@ gb_mode_select:
         ld      L_VISX0(iy),a
 
  gb_cy0:
-        ld      e,(hl)                 ;; visy0 = max(visy0, clip->y0)
+        ld      e,(hl)                  ; visy0 = max(visy0, clip->y0)
         inc     hl
         ld      d,(hl)
         inc     hl
@@ -377,15 +430,15 @@ gb_mode_select:
         ld      L_VISY0(iy),a
 
  gb_cx1:
-        ld      e,(hl)                 ;; visx1 = min(visx1, clip->x1)
+        ld      e,(hl)                  ; visx1 = min(visx1, clip->x1)
         inc     hl
         ld      d,(hl)
         inc     hl
         ld      a,d
         or      a
         jr      z,gb_cx1_8
-        jp      m,gb_exit              ;; clip x1 < 0: nothing visible
-        jr      gb_cy1                 ;; clip x1 > 255: visx1 unchanged
+        jp      m,gb_exit               ; clip x1 < 0: nothing visible
+        jr      gb_cy1                  ; clip x1 > 255: visx1 unchanged
  gb_cx1_8:
         ld      a,e
         cp      L_VISX1(iy)
@@ -393,7 +446,7 @@ gb_mode_select:
         ld      L_VISX1(iy),a
 
  gb_cy1:
-        ld      e,(hl)                 ;; visy1 = min(visy1, clip->y1)
+        ld      e,(hl)                  ; visy1 = min(visy1, clip->y1)
         inc     hl
         ld      d,(hl)
         ld      a,d
@@ -418,11 +471,11 @@ gb_mode_select:
 
  gb_skips:
         ;; Source skip is the clipped-away left/top part.
-        ld      a,L_VISX0(iy)          ;; srcx = visx0 - x
+        ld      a,L_VISX0(iy)           ; srcx = visx0 - x
         sub     L_X(iy)
         ld      L_SRCX(iy),a
 
-        ld      a,L_VISY0(iy)          ;; srcy = visy0 - y
+        ld      a,L_VISY0(iy)           ; srcy = visy0 - y
         sub     L_Y(iy)
         ld      L_SRCY(iy),a
 
@@ -447,7 +500,7 @@ gb_mode_select:
         ld      b,a
         and     #0x07
         ld      L_DBIT(iy),a
-        ld      c,a                    ;; dbit rides in C through this block
+        ld      c,a                     ; dbit rides in C through this block
         ld      a,b
         srl     a
         srl     a
@@ -459,7 +512,7 @@ gb_mode_select:
         ld      b,a
         and     #0x07
         ld      L_SRCBIT(iy),a
-        ld      e,a                    ;; srcbit rides in E
+        ld      e,a                     ; srcbit rides in E
         ld      a,b
         srl     a
         srl     a
@@ -582,7 +635,7 @@ gb_mode_select:
         ld      a,L_VISH(iy)
         or      a
         jp      z,gb_exit
-        ld      L_ROWCNT(iy),a         ;; counts down
+        ld      L_ROWCNT(iy),a          ; counts down
 
         ;; The destination row address is derived once here and then stepped:
         ;; consecutive display rows are one __vid_nextrow apart, which is far
@@ -593,7 +646,7 @@ gb_mode_select:
         call    __vid_rowaddr
         ld      a,L_XBYTE(iy)
         add     a,l
-        ld      l,a                    ;; HL now rides through the row loop
+        ld      l,a                     ; HL now rides through the row loop
 
  gb_row_loop:
         ;; Source row pointers live in the alternate bank: HL'=AND, DE'=OR.
@@ -620,7 +673,7 @@ gb_mode_select:
 
         ;; hb0 = (dbit > srcbit) ? -1 : 0
         ld      a,L_SRCBIT(iy)
-        cp      L_DBIT(iy)             ;; C if srcbit < dbit => dbit>srcbit => hb0=-1
+        cp      L_DBIT(iy)              ; C if srcbit < dbit => dbit>srcbit => hb0=-1
         jr      c,gb_prime_default
 
         ;; hb0 = 0: prev = first source byte (consume one from each live plane)
@@ -628,16 +681,16 @@ gb_mode_select:
         cp      #4
         jr      nz,gb_prime_or_only
         exx
-        ld      a,(hl)                 ;; AND plane (HL')
+        ld      a,(hl)                  ; AND plane (HL')
         inc     hl
-        ld      L_REMAINDER(iy),a      ;; prevA  (IY works inside exx)
+        ld      L_REMAINDER(iy),a       ; prevA  (IY works inside exx)
         exx
  gb_prime_or_only:
         exx
-        ld      a,(de)                 ;; OR plane (DE')
+        ld      a,(de)                  ; OR plane (DE')
         inc     de
-        ld      c,a                    ;; C' = prevO for the fast path
-        ld      L_REMAINDER_OR(iy),a   ;; prevO for the masked path
+        ld      c,a                     ; C' = prevO for the fast path
+        ld      L_REMAINDER_OR(iy),a    ; prevO for the masked path
         exx
         ld      a,L_SRCREMAIN(iy)
         dec     a
@@ -651,7 +704,7 @@ gb_mode_select:
         xor     a
         ld      L_REMAINDER_OR(iy),a
         exx
-        ld      c,a                    ;; C' = prevO for the fast path
+        ld      c,a                     ; C' = prevO for the fast path
         exx
 
  gb_dst_init:
@@ -719,27 +772,27 @@ gb_mode_select:
         dec     a
         ld      L_SRCREMAIN(iy),a
         exx
-        ld      a,(de)                 ;; curO from the OR pointer in DE'
+        ld      a,(de)                  ; curO from the OR pointer in DE'
         inc     de
         jr      gb_fast_have
  gb_fast_pad:
         exx
-        xor     a                      ;; past the source span: zero fill
+        xor     a                       ; past the source span: zero fill
  gb_fast_have:
-        ld      h,c                    ;; H = prevO
-        ld      l,a                    ;; L = curO
-        ld      c,a                    ;; C' = prevO for the next byte
-        ld      b,L_SUB(iy)            ;; IY is not swapped by exx
+        ld      h,c                     ; H = prevO
+        ld      l,a                     ; L = curO
+        ld      c,a                     ; C' = prevO for the next byte
+        ld      b,L_SUB(iy)             ; IY is not swapped by exx
         inc     b
         dec     b
         jr      z,gb_fast_done
  gb_fast_lp:
-        add     hl,hl                  ;; 11T a step, against 16T in D:E
+        add     hl,hl                   ; 11T a step, against 16T in D:E
         djnz    gb_fast_lp
  gb_fast_done:
         ld      a,h
         exx
-        ld      e,a                    ;; E = ORBITS, straight into the compose
+        ld      e,a                     ; E = ORBITS, straight into the compose
         jr      gb_have_src
 
  gb_byte_masked:
@@ -750,11 +803,11 @@ gb_mode_select:
         jr      z,gb_cur_default
 
         exx
-        ld      a,(hl)                 ;; curA from alt HL' (AND ptr)
+        ld      a,(hl)                  ; curA from alt HL' (AND ptr)
         inc     hl
         exx
-        ld      c,a                    ;; curA
-        ld      a,L_REMAINDER(iy)      ;; prevA
+        ld      c,a                     ; curA
+        ld      a,L_REMAINDER(iy)       ; prevA
         ld      d,a
         ld      e,c
         ld      a,L_SUB(iy)
@@ -769,14 +822,14 @@ gb_mode_select:
         ld      a,d
         ld      L_FORE(iy),a
         ld      a,c
-        ld      L_REMAINDER(iy),a      ;; prevA = curA
+        ld      L_REMAINDER(iy),a       ; prevA = curA
 
         exx
-        ld      a,(de)                 ;; curO from alt DE' (OR ptr)
+        ld      a,(de)                  ; curO from alt DE' (OR ptr)
         inc     de
         exx
-        ld      c,a                    ;; curO
-        ld      a,L_REMAINDER_OR(iy)   ;; prevO
+        ld      c,a                     ; curO
+        ld      a,L_REMAINDER_OR(iy)    ; prevO
         ld      d,a
         ld      e,c
         ld      a,L_SUB(iy)
@@ -789,8 +842,8 @@ gb_mode_select:
         djnz    gbw2_lp
  gbw2_done:
         ld      a,c
-        ld      L_REMAINDER_OR(iy),a   ;; prevO = curO
-        ld      e,d                    ;; E = ORBITS
+        ld      L_REMAINDER_OR(iy),a    ; prevO = curO
+        ld      e,d                     ; E = ORBITS
         ld      a,L_SRCREMAIN(iy)
         dec     a
         ld      L_SRCREMAIN(iy),a
@@ -798,16 +851,16 @@ gb_mode_select:
 
  gb_cur_default:
         ;; Cold path: trailing transparent bytes past the source span.
-        ld      c,#0xff                ;; curA default (transparent)
+        ld      c,#0xff                 ; curA default (transparent)
         ld      a,L_REMAINDER(iy)
         call    gb_win
         ld      L_FORE(iy),a
         ld      a,c
         ld      L_REMAINDER(iy),a
-        ld      c,#0x00                ;; curO default
+        ld      c,#0x00                 ; curO default
         ld      a,L_REMAINDER_OR(iy)
         call    gb_win
-        ld      e,a                    ;; E = ORBITS
+        ld      e,a                     ; E = ORBITS
         ld      a,c
         ld      L_REMAINDER_OR(iy),a
 
@@ -823,6 +876,10 @@ gb_mode_select:
         jr      gb_store_out
 
  gb_mode_compose:
+        cp      #6
+        jr      z,gb_mode_trans_back
+        cp      #5
+        jr      z,gb_mode_trans_fore
         cp      #4
         jr      z,gb_mode_masked
         cp      #3
@@ -847,6 +904,19 @@ gb_mode_select:
         cpl
         jr      gb_store_out
 
+ gb_mode_trans_fore:
+        ;; Transparent FORE copy: set source bits, preserve source zeroes.
+        ld      a,e
+        or      (hl)
+        jr      gb_store_out
+
+ gb_mode_trans_back:
+        ;; Transparent BACK copy: clear source bits, preserve source zeroes.
+        ld      a,e
+        cpl
+        and     (hl)
+        jr      gb_store_out
+
  gb_mode_xor:
         ;; XOR: flip OR bits only. old ^ ((old ^ (old ^ src)) & inside)
         ;; collapses to old ^ (src & inside), so this path skips the merge.
@@ -861,8 +931,8 @@ gb_mode_select:
         and     L_INSIDE(iy)
         xor     (hl)
  gb_store_byte:
-        ld      (hl),a                 ;; HL = DSTPTR
-        inc     hl                     ;; advance DSTPTR (kept in HL)
+        ld      (hl),a                  ; HL = DSTPTR
+        inc     hl                      ; advance DSTPTR (kept in HL)
         ret
 
  gb_next_row:
@@ -902,8 +972,8 @@ gb_mode_select:
         ld      sp,ix
         pop     iy
         pop     ix
-        pop     de                     ;; return address
-        pop     hl                     ;; discard clip
+        pop     de                      ; return address
+        pop     hl                      ; discard clip
         push    de
         ret
 
@@ -929,9 +999,20 @@ gb_mode_select:
         ld      a,d
         ret
 
-        ;; __gpx_ffshr: A = 0xff >> A (A = 0..7; 0 -> 0xff). Clobbers B.
-        ;; A = 0xFF >> A, for A in 0..7. A table costs eight bytes and beats
-        ;; the shift loop it replaces at every shift count.
+        ;; ------------------------------------------------------------
+        ;; __gpx_ffshr
+        ;; Right-edge mask for a byte span: 0xFF shifted right by A. A
+        ;; table costs eight bytes and beats the shift loop it replaces at
+        ;; every shift count.
+        ;;
+        ;; Arguments:
+        ;;   A = shift count, 0..7
+        ;;
+        ;; Return:
+        ;;   A = 0xFF >> count (a count of 0 gives 0xFF)
+        ;;
+        ;; Clobbers:
+        ;;   AF, B
 __gpx_ffshr::
         push    hl
         ld      hl,#gb_ffshr_tab

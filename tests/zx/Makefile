@@ -3,7 +3,7 @@ BUILD_DIR ?= $(ROOT_DIR)/build
 BIN_DIR ?= $(ROOT_DIR)/bin
 BUILD_TMP ?= $(BUILD_DIR)/tmp
 
-include $(ROOT_DIR)/mk/toolchain.mk
+include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 # Scenarios link at 0x8000 so they run from real 48K RAM under the emulator
 # behind zx-spectrum-mcp, where 0x0000-0x3FFF is ROM.

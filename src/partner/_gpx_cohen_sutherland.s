@@ -18,6 +18,11 @@
         ;; corners rejects every line (both outcodes share a bit).
         ;;
         ;; Re-entrant: all state lives in registers and the stack frame.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-07-13   TS
 
         .module _gpx_cohen_sutherland
         .optsdcc -mz80 sdcccall(1)
@@ -26,12 +31,12 @@
         .globl  __rect_cmp16s_lt
 
         ;; frame locals (IX-relative)
-        .equ    L_S,    -2             ;; state ptr (x0,y0,x1,y1 words)
-        .equ    L_R,    -4             ;; rect ptr
-        .equ    L_NB,   -6             ;; word: clip-edge coordinate
-        .equ    L_SIGN, -7             ;; folded sign of the offset
-        .equ    L_AXIS, -8             ;; 0 = x-flavor (T/B), 1 = y (R/L)
-        .equ    L_A0,   -10            ;; word: intersection base coord
+        .equ    L_S,    -2              ; state ptr (x0,y0,x1,y1 words)
+        .equ    L_R,    -4              ; rect ptr
+        .equ    L_NB,   -6              ; word: clip-edge coordinate
+        .equ    L_SIGN, -7              ; folded sign of the offset
+        .equ    L_AXIS, -8              ; 0 = x-flavor (T/B), 1 = y (R/L)
+        .equ    L_A0,   -10             ; word: intersection base coord
 
         ;; state-field offsets
         .equ    SO_X0,  0
@@ -42,31 +47,44 @@
         .area   _CODE
 
         ;; ------------------------------------------------------------
-        ;; uint8_t gpx_cohen_sutherland(gpx_line_state_t *s, const rect_t *r)
-        ;;   HL = s (x0,y0,x1,y1 consecutive words; clipped in place)
+        ;; __gpx_cohen_sutherland
+        ;; Clip a line to a rectangle, in place.
+        ;;
+        ;; Signature:
+        ;;   uint8_t gpx_cohen_sutherland(gpx_line_state_t *s,
+        ;;                                const rect_t *r)
+        ;;
+        ;; Arguments:
+        ;;   HL = s, four consecutive words x0,y0,x1,y1, clipped in place
         ;;   DE = r
-        ;; returns:
-        ;;   A = 1 accepted (and clipped), A = 0 rejected
-        ;; Clobbers AF, BC, DE, HL, IY (and the alternate HL'/DE').
+        ;;
+        ;; Return:
+        ;;   A = 1 accepted and clipped, 0 rejected entirely
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IY, and the alternate HL'/DE'
+        ;;
+        ;; References:
+        ;;   __rect_cmp16s_lt
         ;; ------------------------------------------------------------
 __gpx_cohen_sutherland::
         push    ix
         ld      ix,#0
         add     ix,sp
-        push    hl                     ;; L_S
-        push    de                     ;; L_R
-        ld      hl,#-6                 ;; NB, SIGN, AXIS, A0
+        push    hl                      ; L_S
+        push    de                      ; L_R
+        ld      hl,#-6                  ; NB, SIGN, AXIS, A0
         add     hl,sp
         ld      sp,hl
         push    de
-        pop     iy                     ;; IY = rect (field access)
+        pop     iy                      ; IY = rect (field access)
 
 .cs_loop:
-        xor     a                      ;; endpoint 0
+        xor     a                       ; endpoint 0
         call    .cs_outc
-        ld      b,a                    ;; B = c0
-        ld      a,#SO_X1               ;; endpoint 1
-        call    .cs_outc               ;; A = c1 (B preserved)
+        ld      b,a                     ; B = c0
+        ld      a,#SO_X1                ; endpoint 1
+        call    .cs_outc                ; A = c1 (B preserved)
         ld      c,a
         or      b
         jp      z,.cs_accept
@@ -74,7 +92,7 @@ __gpx_cohen_sutherland::
         and     c
         jp      nz,.cs_reject
 
-        push    bc                     ;; save which-endpoint (B = c0)
+        push    bc                      ; save which-endpoint (B = c0)
         ld      a,b
         or      a
         jr      nz,.cs_disp
@@ -82,28 +100,28 @@ __gpx_cohen_sutherland::
 
         ;; edge select (priority T, B, R, L): NB = edge value, AXIS flavor
 .cs_disp:
-        bit     2,a                    ;; TOP
+        bit     2,a                     ; TOP
         jr      z,.cd_notT
         ld      e,2(iy)
         ld      d,3(iy)
         xor     a
         jr      .cs_edge
 .cd_notT:
-        bit     3,a                    ;; BOTTOM
+        bit     3,a                     ; BOTTOM
         jr      z,.cd_notB
         ld      e,6(iy)
         ld      d,7(iy)
         xor     a
         jr      .cs_edge
 .cd_notB:
-        bit     1,a                    ;; RIGHT
+        bit     1,a                     ; RIGHT
         jr      z,.cd_left
         ld      e,4(iy)
         ld      d,5(iy)
         ld      a,#1
         jr      .cs_edge
 .cd_left:
-        ld      e,0(iy)                ;; LEFT
+        ld      e,0(iy)                 ; LEFT
         ld      d,1(iy)
         ld      a,#1
 .cs_edge:
@@ -115,28 +133,28 @@ __gpx_cohen_sutherland::
         ;; P = |x1 - x0| (sign parked in B), Q = |y1 - y0| (sign in A)
         ld      a,#SO_X0
         call    .cs_ldst
-        ex      de,hl                  ;; DE = x0
+        ex      de,hl                   ; DE = x0
         ld      a,#SO_X1
-        call    .cs_ldst               ;; HL = x1
+        call    .cs_ldst                ; HL = x1
         call    .cs_absd
         ld      b,a
-        push    hl                     ;; park P
+        push    hl                      ; park P
         ld      a,#SO_Y0
         call    .cs_ldst
         ex      de,hl
         ld      a,#SO_Y1
         call    .cs_ldst
-        call    .cs_absd               ;; HL = Q, A = sQ
+        call    .cs_absd                ; HL = Q, A = sQ
         xor     b
-        ld      L_SIGN(ix),a           ;; sP ^ sQ (m2 sign folded below)
-        pop     de                     ;; DE = P, HL = Q
+        ld      L_SIGN(ix),a            ; sP ^ sQ (m2 sign folded below)
+        pop     de                      ; DE = P, HL = Q
 
         ld      a,L_AXIS(ix)
         or      a
         jr      nz,.ci_yflav
         ;; x-flavor: m1 = P, m3 = Q, b0 = y0, a0 = x0
-        push    de                     ;; [m1 = P]
-        push    hl                     ;; park m3 = Q
+        push    de                      ; [m1 = P]
+        push    hl                      ; park m3 = Q
         ld      a,#SO_X0
         call    .cs_ldst
         ld      L_A0(ix),l
@@ -145,8 +163,8 @@ __gpx_cohen_sutherland::
         jr      .ci_m2
 .ci_yflav:
         ;; y-flavor: m1 = Q, m3 = P, b0 = x0, a0 = y0
-        push    hl                     ;; [m1 = Q]
-        push    de                     ;; park m3 = P
+        push    hl                      ; [m1 = Q]
+        push    de                      ; park m3 = P
         ld      a,#SO_Y0
         call    .cs_ldst
         ld      L_A0(ix),l
@@ -154,51 +172,51 @@ __gpx_cohen_sutherland::
         ld      a,#SO_X0
 .ci_m2:
         call    .cs_ldst
-        ex      de,hl                  ;; DE = b0
+        ex      de,hl                   ; DE = b0
         ld      l,L_NB(ix)
-        ld      h,L_NB+1(ix)           ;; HL = edge value
-        call    .cs_absd               ;; HL = m2 = |nb - b0|, A = sign
-        ex      de,hl                  ;; DE = m2
+        ld      h,L_NB+1(ix)            ; HL = edge value
+        call    .cs_absd                ; HL = m2 = |nb - b0|, A = sign
+        ex      de,hl                   ; DE = m2
         ld      l,a
         ld      a,L_SIGN(ix)
         xor     l
         ld      L_SIGN(ix),a
-        pop     hl                     ;; m3
-        pop     bc                     ;; m1
-        push    hl                     ;; park m3
-        call    .cs_mul16              ;; DE:HL = m1 * m2
-        ex      de,hl                  ;; HL = hi, DE = lo
-        pop     bc                     ;; m3
-        call    .cs_div                ;; DE = quotient
+        pop     hl                      ; m3
+        pop     bc                      ; m1
+        push    hl                      ; park m3
+        call    .cs_mul16               ; DE:HL = m1 * m2
+        ex      de,hl                   ; HL = hi, DE = lo
+        pop     bc                      ; m3
+        call    .cs_div                 ; DE = quotient
         ld      l,L_A0(ix)
         ld      h,L_A0+1(ix)
         ld      a,L_SIGN(ix)
         or      a
         jr      z,.ci_add
-        sbc     hl,de                  ;; carry clear from or above
+        sbc     hl,de                   ; carry clear from or above
         jr      .cs_put
 .ci_add:
         add     hl,de
 
         ;; ---- write the moved endpoint back into the state ----
 .cs_put:
-        ex      de,hl                  ;; DE = computed coordinate
+        ex      de,hl                   ; DE = computed coordinate
         ld      l,L_NB(ix)
-        ld      h,L_NB+1(ix)           ;; HL = edge value
+        ld      h,L_NB+1(ix)            ; HL = edge value
         ld      a,L_AXIS(ix)
         or      a
-        jr      nz,.cp_go              ;; y-flavor: x = NB, y = computed
-        ex      de,hl                  ;; x-flavor: x = computed, y = NB
+        jr      nz,.cp_go               ; y-flavor: x = NB, y = computed
+        ex      de,hl                   ; x-flavor: x = computed, y = NB
 .cp_go:
         ;; HL = new x, DE = new y; target = out endpoint (c0 != 0 -> p0)
-        pop     bc                     ;; B = c0
+        pop     bc                      ; B = c0
         ld      a,b
         or      a
         ld      a,#SO_X0
         jr      nz,.cp_off
         ld      a,#SO_X1
 .cp_off:
-        push    hl                     ;; save new x
+        push    hl                      ; save new x
         ld      l,L_S(ix)
         ld      h,L_S+1(ix)
         add     a,l
@@ -206,7 +224,7 @@ __gpx_cohen_sutherland::
         jr      nc,.cp_ptr
         inc     h
 .cp_ptr:
-        pop     bc                     ;; BC = new x
+        pop     bc                      ; BC = new x
         ld      (hl),c
         inc     hl
         ld      (hl),b
@@ -247,19 +265,19 @@ __gpx_cohen_sutherland::
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
-        ld      l,a                    ;; HL = py, DE = px
+        ld      l,a                     ; HL = py, DE = px
         push    de
         push    hl
         exx
-        pop     de                     ;; DE' = py
-        pop     hl                     ;; HL' = px
+        pop     de                      ; DE' = py
+        pop     hl                      ; HL' = px
         exx
         ld      c,#0
         ;; L: px < rx0 ?
         exx
         push    hl
         exx
-        pop     hl                     ;; HL = px
+        pop     hl                      ; HL = px
         ld      e,0(iy)
         ld      d,1(iy)
         call    __rect_cmp16s_lt
@@ -273,7 +291,7 @@ __gpx_cohen_sutherland::
         exx
         push    hl
         exx
-        pop     de                     ;; DE = px
+        pop     de                      ; DE = px
         call    __rect_cmp16s_lt
         or      a
         jr      z,.co_t
@@ -283,7 +301,7 @@ __gpx_cohen_sutherland::
         exx
         push    de
         exx
-        pop     hl                     ;; HL = py
+        pop     hl                      ; HL = py
         ld      e,2(iy)
         ld      d,3(iy)
         call    __rect_cmp16s_lt
@@ -297,7 +315,7 @@ __gpx_cohen_sutherland::
         exx
         push    de
         exx
-        pop     de                     ;; DE = py
+        pop     de                      ; DE = py
         call    __rect_cmp16s_lt
         or      a
         jr      z,.co_ret
@@ -329,7 +347,7 @@ __gpx_cohen_sutherland::
         jr      z,.ca_sub
         ex      de,hl
 .ca_sub:
-        or      a                      ;; clear carry, keep A
+        or      a                       ; clear carry, keep A
         sbc     hl,de
         ret
 

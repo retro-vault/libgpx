@@ -9,6 +9,11 @@
         ;;   - only right/bottom clipping is applied
         ;;   - saved background is stored as a valid standard 1bpp bmp_t
         ;;     with fixed stride=2 and zero-filled clipped bytes
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module gpx_show_sprite
         .optsdcc -mz80 sdcccall(1)
@@ -75,11 +80,25 @@
         .area   _CODE
 
         ;; ------------------------------------------------------------
-        ;; void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite)
+        ;; _gpx_show_sprite
+        ;; Save the pixels under the sprite into sprite->background, then
+        ;; draw the sprite over them, so gpx_hide_sprite can put the
+        ;; artwork back exactly.
         ;;
-        ;; Input:
+        ;; Signature:
+        ;;   void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite)
+        ;;
+        ;; Arguments:
         ;;   HL = gpx
-        ;;   DE = sprite
+        ;;   DE = sprite; background must point at writable storage of at
+        ;;        least GPX_SPRITE_BG_SIZE bytes
+        ;;
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL, IX, IY
+        ;;
+        ;; References:
+        ;;   __gpx_store_background
+        ;;   __gpx_sprite_blit_raw
 _gpx_show_sprite::
         push    ix
         ld      ix,#0
@@ -132,7 +151,7 @@ _gpx_show_sprite::
         or      c
         jp      z,.gs_done
         inc     hl
-        ld      a,(hl)                 ;; optional window rect
+        ld      a,(hl)                  ; optional window rect
         ld      S_CLIP_LO(ix),a
         inc     hl
         ld      a,(hl)
@@ -237,22 +256,22 @@ _gpx_show_sprite::
         ld      h,S_BMP_HI(ix)
         ld      b,S_Y_LO(ix)
         ld      c,S_X_LO(ix)
-        xor     a                    ;; standard bitmaps keep zero bits transparent
+        xor     a                       ; standard bitmaps keep zero bits transparent
         call    __gpx_sprite_blit_raw
         jr      .gs_done
 
 .gs_clipped:
         ld      l,S_CLIP_LO(ix)
         ld      h,S_CLIP_HI(ix)
-        push    hl                   ;; clip
+        push    hl                      ; clip
         ld      l,S_BMP_LO(ix)
         ld      h,S_BMP_HI(ix)
-        push    hl                   ;; bitmap
+        push    hl                      ; bitmap
         ld      l,S_Y_LO(ix)
         ld      h,#0
-        push    hl                   ;; y
+        push    hl                      ; y
         ld      e,S_X_LO(ix)
-        ld      d,#0                 ;; DE = x (gpx arg unused by draw_bmp)
+        ld      d,#0                    ; DE = x (gpx arg unused by draw_bmp)
         call    _gpx_draw_bmp
 
 .gs_done:

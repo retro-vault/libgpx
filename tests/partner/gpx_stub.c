@@ -67,8 +67,15 @@ gpx_t *gpx_create(gmode mode)
     partner_gpx.width = PARTNER_WIDTH;
     partner_gpx.height = PARTNER_HEIGHT;
     partner_gpx.pages = 2;
+    partner_gpx.text_background = GPX_TEXT_BG_OPAQUE;
     gpx_clrscr();
     return &partner_gpx;
+}
+
+void gpx_set_text_background(gpx_t *gpx, textbg background)
+{
+    if (gpx)
+        gpx->text_background = (textbg)(background & 1);
 }
 
 void gpx_destroy(gpx_t *gpx)

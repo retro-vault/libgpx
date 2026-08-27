@@ -1,8 +1,8 @@
 #include "zxtest.h"
 
-/* Text in every colour and blit mode over content. Glyph rendering fills
- * the gap between glyphs as well as the glyph box, so the mode has to apply
- * consistently across both. */
+/* Text in every color and blit mode over content, with both background
+ * policies. Opaque replaces glyph boxes and spacing; transparent preserves
+ * every destination pixel outside the glyph ink. */
 void main(void)
 {
     gpx_t *gpx = gpx_create(GPXM_DEFAULT);
@@ -11,6 +11,7 @@ void main(void)
     coord phase;
 
     seed_screen_wash();
+    gpx_set_text_background(gpx, GPX_TEXT_BG_OPAQUE);
 
     for (phase = 0; phase < 8; ++phase) {
         gpx_draw_text(gpx, (coord)phase, (coord)(phase * 13),
@@ -23,7 +24,8 @@ void main(void)
             "Modes", sys, CO_BACK, BM_XOR, (const rect_t *)0);
     }
 
-    /* XOR twice restores the content underneath. */
+    /* Transparent XOR twice restores every pixel underneath. */
+    gpx_set_text_background(gpx, GPX_TEXT_BG_TRANSPARENT);
     gpx_draw_text(gpx, 10, 120, "restore me", sys, CO_FORE, BM_XOR,
         (const rect_t *)0);
     gpx_draw_text(gpx, 10, 120, "restore me", sys, CO_FORE, BM_XOR,
@@ -35,6 +37,10 @@ void main(void)
     gpx_draw_text(gpx, 10, 155, "tiny back", tiny, CO_BACK, BM_CPY,
         (const rect_t *)0);
     gpx_draw_text(gpx, 10, 170, "tiny xor", tiny, CO_FORE, BM_XOR,
+        (const rect_t *)0);
+
+    /* Reverse-color transparent copy clears ink without clearing its box. */
+    gpx_draw_text(gpx, 130, 170, "back", tiny, CO_BACK, BM_CPY,
         (const rect_t *)0);
 
     TEST_END();

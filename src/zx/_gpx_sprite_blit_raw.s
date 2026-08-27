@@ -18,6 +18,11 @@
         ;;   - no top/left clipping
         ;;   - right/bottom clipping only
         ;;   - max size 16x16
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-08-25   TS
 
         .module _gpx_sprite_blit_raw
         .optsdcc -mz80 sdcccall(1)
@@ -84,7 +89,7 @@
 __gpx_sprite_blit_raw:
         ld      d,h
         ld      e,l
-        push    iy                     ;; preserve caller IY (pinned OR src ptr)
+        push    iy                      ; preserve caller IY (pinned OR src ptr)
         push    ix
         ld      ix,#0
         add     ix,sp
@@ -94,7 +99,7 @@ __gpx_sprite_blit_raw:
         ld      sp,hl
 
         ld      P_STDMODE(ix),a
-        ld      P_DSTROW_LO(ix),b      ;; parks y until xbyte is known
+        ld      P_DSTROW_LO(ix),b       ; parks y until xbyte is known
         ld      l,e
         ld      h,d
 
@@ -232,7 +237,7 @@ __gpx_sprite_blit_raw:
         ;; right-keep = 0xff >> ((shift+visw) & 7), 0 -> 0
         ld      a,e
         and     #0x07
-        jr      z,.gbr_rk_store        ;; A = 0 stands
+        jr      z,.gbr_rk_store         ; A = 0 stands
         call    __gpx_ffshr
 .gbr_rk_store:
         ld      e,a
@@ -303,7 +308,7 @@ __gpx_sprite_blit_raw:
         ;; First destination row address, derived once. Every later row is one
         ;; __vid_nextrow away. The row base low byte is a multiple of 0x20 and
         ;; xbyte is 0..31, so the add cannot carry.
-        ld      b,P_DSTROW_LO(ix)      ;; y, parked at entry
+        ld      b,P_DSTROW_LO(ix)       ; y, parked at entry
         call    __vid_rowaddr
         ld      a,P_XBYTE(ix)
         add     a,l
@@ -321,7 +326,7 @@ __gpx_sprite_blit_raw:
 
         ld      a,P_MASKED(ix)
         or      a
-        jr      z,.gbr_or_plane        ;; plain: AND bytes are already set
+        jr      z,.gbr_or_plane         ; plain: AND bytes are already set
 
         LD16DE  P_SRCAND_LO
         ex      de,hl
@@ -380,7 +385,7 @@ __gpx_sprite_blit_raw:
         dec     e
         jr      nz,.gbr_or_shift_loop
 .gbr_or_shift_done:
-        pop     hl                     ;; destination
+        pop     hl                      ; destination
 
         ;; compose: new = (old & ANDn) | ORn, then merge under INSn via
         ;; old ^ ((old ^ new) & INSn)
@@ -426,7 +431,7 @@ __gpx_sprite_blit_raw:
         ;; 8-bit adds throughout, with a carry into the high byte.
         ld      e,P_ROWADV_LO(ix)
         ld      d,#0x00
-        add     iy,de                  ;; pinned OR source pointer
+        add     iy,de                   ; pinned OR source pointer
 
         ld      a,P_MASKED(ix)
         or      a
@@ -454,5 +459,5 @@ __gpx_sprite_blit_raw:
 .gbr_done:
         ld      sp,ix
         pop     ix
-        pop     iy                     ;; restore caller IY
+        pop     iy                      ; restore caller IY
         ret

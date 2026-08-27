@@ -25,6 +25,7 @@ void main(void)
         gpx->width == 1024 &&
         gpx->height == 256 &&
         gpx->pages == 2 &&
+        gpx->text_background == GPX_TEXT_BG_OPAQUE &&
         (gpx->width >> 3) == 128 &&
         (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 32768u &&
         gpx_width() == 1024 &&
@@ -39,6 +40,7 @@ void main(void)
         gpx->width == 1024 &&
         gpx->height == 256 &&
         gpx->pages == 2 &&
+        gpx->text_background == GPX_TEXT_BG_OPAQUE &&
         (gpx->width >> 3) == 128 &&
         (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 32768u &&
         gpx_height() == 256) {
@@ -52,6 +54,7 @@ void main(void)
         gpx->width == 1024 &&
         gpx->height == 512 &&
         gpx->pages == 2 &&
+        gpx->text_background == GPX_TEXT_BG_OPAQUE &&
         (gpx->width >> 3) == 128 &&
         (uint32_t)(gpx->width >> 3) * (uint32_t)gpx->height == 65536u &&
         gpx_width() == 1024 &&
@@ -70,18 +73,44 @@ void main(void)
 
     sys = gpx_get_system_font();
     tiny = gpx_get_tiny_font();
-    if (sys != (const font_t *)0 && tiny != (const font_t *)0 && sys == tiny)
+    if (sys != (const font_t *)0 && tiny != (const font_t *)0 &&
+        sys == tiny && sys->max_glyph_width == 8 &&
+        sys->glyph_height == 9)
         mark(gpx, 4, 0);
     else
         ok = 0;
 
     w = gpx_measure_text("AB", sys);
-    if (w > 0)
+    if (w == 16)
         mark(gpx, 5, 0);
     else
         ok = 0;
 
-    gpx_draw_text(gpx, 20, 20, "A", sys, CO_FORE, BM_CPY, (const rect_t *)0);
+    /* Draw the same foreground glyph over solid ink. Opaque mode must clear
+     * the cell's paper; transparent mode must leave the solid cell intact. */
+    {
+        static uint8_t solid[1] = {0xFF};
+        rect_t opaque_cell = {20, 20, 35, 28};
+        rect_t transparent_cell = {40, 20, 55, 28};
+
+        gpx_fill_rectangle(gpx, &opaque_cell, CO_FORE, BM_CPY,
+                           solid, 1, (const rect_t *)0);
+        gpx_fill_rectangle(gpx, &transparent_cell, CO_FORE, BM_CPY,
+                           solid, 1, (const rect_t *)0);
+
+        gpx_set_text_background(gpx, GPX_TEXT_BG_TRANSPARENT);
+        if (gpx->text_background != GPX_TEXT_BG_TRANSPARENT)
+            ok = 0;
+        gpx_draw_text(gpx, 40, 20, "AA", sys, CO_FORE, BM_CPY,
+                      (const rect_t *)0);
+
+        gpx_set_text_background(gpx, GPX_TEXT_BG_OPAQUE);
+        if (gpx->text_background != GPX_TEXT_BG_OPAQUE)
+            ok = 0;
+        gpx_draw_text(gpx, 20, 20, "AA", sys, CO_FORE, BM_CPY,
+                      (const rect_t *)0);
+        gpx_set_text_background((gpx_t *)0, GPX_TEXT_BG_TRANSPARENT);
+    }
 
     classic = gpx_get_stock_bmp(GPXSB_CURSOR_CLASSIC);
     std = gpx_get_stock_bmp(GPXSB_CURSOR_STD);

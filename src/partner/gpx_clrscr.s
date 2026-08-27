@@ -1,6 +1,11 @@
         ;; gpx_clrscr.s
         ;;
         ;; Partner clear-screen primitive.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module gpx_clrscr
         .optsdcc -mz80 sdcccall(1)

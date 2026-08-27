@@ -1,6 +1,11 @@
         ;; _gpx_get_stock_bmp.s
         ;;
         ;; Resolve stock bitmap id to Partner cursor bitmap blob.
+        ;;
+        ;; GPL2 License (see: LICENSE)
+        ;; Copyright (C) 2026 Tomaz Stih
+        ;;
+        ;; 2026-03-30   TS
 
         .module _gpx_get_stock_bmp
         .optsdcc -mz80 sdcccall(1)
@@ -20,9 +25,23 @@
 
         .area   _CODE
 
-        ;; bmp_t *gpx_get_stock_bmp(uint8_t which)
-        ;;   A = which
-        ;;   DE = bmp pointer (or 0)
+        ;; ------------------------------------------------------------
+        ;; _gpx_get_stock_bmp
+        ;; Built-in artwork by id, in the tiny move-stream format this
+        ;; backend draws. Using these keeps a program portable, since the
+        ;; payload format itself is machine-specific.
+        ;;
+        ;; Signature:
+        ;;   bmp_t *gpx_get_stock_bmp(uint8_t which)
+        ;;
+        ;; Arguments:
+        ;;   A = which, one of the GPXSB_* ids
+        ;;
+        ;; Return:
+        ;;   DE = bmp_t*, or 0 when the id is not known here
+        ;;
+        ;; Clobbers:
+        ;;   AF, DE
 _gpx_get_stock_bmp::
         cp      #GPXSB_CURSOR_CLASSIC
         jr      z,.classic
