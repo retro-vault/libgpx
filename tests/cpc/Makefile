@@ -13,7 +13,8 @@ CPC_TEST_SRCS := $(filter-out %/cpctest.c, \
 	$(wildcard $(ROOT_DIR)/tests/cpc/src/*.c))
 CPC_TEST_NAMES := $(patsubst $(ROOT_DIR)/tests/cpc/src/%.c,%,$(CPC_TEST_SRCS))
 CPC_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/cpc/*.s) \
-	$(wildcard $(ROOT_DIR)/src/cpc/*.inc)
+	$(wildcard $(ROOT_DIR)/src/cpc/*.inc) \
+	$(ADVANCED_SRCS)
 CPC_IMG_DIR := $(BUILD_DIR)/cpc-tests
 CPC_STAMP := $(CPC_IMG_DIR)/.built.stamp
 CODE_LOC ?= 0x8000

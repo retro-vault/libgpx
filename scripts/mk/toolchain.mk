@@ -1,15 +1,42 @@
 # Shared X Tools (xcc) toolchain definitions.
 #
 # Every target is built inside a pinned Docker image so the toolchain is the
-# same on a developer machine and in CI. The ZX image also ships the
-# zx-spectrum-mcp emulator that the ZX test suite drives.
+# same on a developer machine and in CI. Each image also ships the emulator
+# that its test suite drives: zx-spectrum-mcp, idp-mcp and amstrad-cpc-mcp.
 
 DOCKER_ZX ?= wischner/xcc-z80-zx-spectrum
 DOCKER_IDP ?= wischner/xcc-z80-idp
-# The CPC needs no emulator in its image: amstrad-cpc-mcp is a native binary
-# driven from tests/mcp/cpcmcp.py, so the plain Z80 toolchain is enough.
-DOCKER_CPC ?= wischner/xcc-z80
+DOCKER_CPC ?= wischner/xcc-z80-cpc
 DOCKER_USER ?= $(shell id -u):$(shell id -g)
+
+# ADVANCED selects the optional half of the library. Set it to 0, no or
+# false (any case) and the build is exactly the core set of primitives;
+# anything else -- the default -- also assembles src/common, the portable
+# modules that are written against the public API rather than against one
+# machine's framebuffer. They cost nothing in a program that does not call
+# them, because the linker only pulls the archive members it needs.
+ADVANCED ?= 1
+ADVANCED_FALSE := 0 n N no No NO nO false False FALSE off Off OFF
+ifeq ($(strip $(filter $(ADVANCED),$(ADVANCED_FALSE))),)
+ADVANCED_ON := 1
+ADVANCED_SRCS := $(wildcard $(ROOT_DIR)/src/common/*.s)
+# Expanded by the shell inside the container, where the repo is /work.
+ADVANCED_GLOB := src/common/*.s
+else
+ADVANCED_ON := 0
+ADVANCED_SRCS :=
+ADVANCED_GLOB :=
+endif
+
+# Flipping ADVANCED has to invalidate the object stamps, which otherwise
+# only watch source files. The witness file's name carries the setting, so
+# a changed setting means a missing file, which means the stamps rebuild.
+ADVANCED_WITNESS := $(BUILD_DIR)/.advanced-$(ADVANCED_ON)
+
+$(ADVANCED_WITNESS):
+	mkdir -p $(BUILD_DIR)
+	rm -f $(BUILD_DIR)/.advanced-*
+	touch $@
 
 XCC ?= xcc
 XAS ?= xas

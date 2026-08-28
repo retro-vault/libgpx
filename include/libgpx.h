@@ -300,4 +300,82 @@ extern void gpx_fill_rectangle(
     color c, bmode m,
     uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip);
 
+/* ---------------------------------------------------------------------
+ * Advanced primitives.
+ *
+ * These are present only in a library built with ADVANCED enabled, which
+ * is the default; a build made with ADVANCED=0 (or no, or false) stops at
+ * the core set above and these will not link. They are portable modules
+ * written against the primitives above rather than against one machine's
+ * framebuffer, so every backend gets the same picture by construction.
+ * --------------------------------------------------------------------- */
+
+/* Draw the outline of the circle centred on (x, y) with radius r, using
+ * the midpoint (Bresenham) stepper. Every pixel is plotted exactly once,
+ * so the outline is safe in BM_XOR and drawing it twice erases it. r == 0
+ * is a single pixel, a negative r draws nothing. There is no line pattern:
+ * the outline is emitted eight octant points at a time rather than walked
+ * end to end, so a per-pixel phase would be meaningless.
+ * Clipped to clip if non-NULL. */
+extern void gpx_draw_circle(
+    gpx_t *gpx, coord x, coord y, coord r,
+    color c, bmode m, const rect_t *clip);
+
+/* Fill the disc centred on (x, y) with radius r using repeating fill
+ * pattern fpatt[fpatt_len]. The pattern is anchored to the circle's
+ * bounding box exactly as gpx_fill_rectangle anchors to its rectangle:
+ * one byte per row from the top of the box, applied MSB-first from the
+ * box's left edge, both measured before clipping. Filling a circle and
+ * filling its bounding box therefore lay the same bits over the pixels
+ * they share.
+ *
+ * The disc is bounded by the pixels gpx_draw_circle plots for the same
+ * centre and radius, so the two can be combined for a filled circle with
+ * a contrasting outline. Every row is painted exactly once, so BM_XOR
+ * behaves. fpatt_len must be >= 1. Clipped to clip if non-NULL. */
+extern void gpx_fill_circle(
+    gpx_t *gpx, coord x, coord y, coord r,
+    color c, bmode m,
+    uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip);
+
+/* Most points gpx_fill_polygon will accept. Its edge table lives on the
+ * stack, so this is a space trade: each point costs 17 bytes there, 13 for
+ * the edge walker and 4 for its crossing slot. A polygon with more points
+ * than this is not filled at all. gpx_draw_polygon has no such limit. */
+#define GPX_MAX_POLY_PTS 12
+
+/* Draw the closed path through pts[0..n-1], each edge a gpx_draw_line.
+ * The rotated pattern is carried from one edge into the next, so a dashed
+ * outline stays continuous around the corners, exactly as it does around a
+ * rectangle. Fewer than two points draws nothing.
+ *
+ * Each vertex belongs to two edges and is therefore painted twice. Under
+ * BM_XOR that leaves the corners uninverted, though drawing the whole
+ * outline twice still restores the background exactly.
+ * Clipped to clip if non-NULL. */
+extern void gpx_draw_polygon(
+    gpx_t *gpx, point_t *pts, uint8_t n,
+    color c, bmode m, uint8_t lpatt, const rect_t *clip);
+
+/* Fill the closed path through pts[0..n-1] using the even-odd rule, one
+ * horizontal run per scanline. The polygon may be concave or
+ * self-intersecting; edges may be given in either winding order.
+ *
+ * The spans end exactly on the pixels gpx_draw_polygon draws for the same
+ * points, so a filled polygon can be given a contrasting outline. Every
+ * pixel is painted at most once, so BM_XOR behaves.
+ *
+ * The pattern is anchored to the polygon's bounding box exactly as
+ * gpx_fill_rectangle anchors to its rectangle: one byte per row from the
+ * top of the box, applied MSB-first from the box's left edge, both measured
+ * before clipping. Filling a rectangle's four corners as a polygon lays
+ * down the same bits gpx_fill_rectangle would.
+ *
+ * Fewer than three points, more than GPX_MAX_POLY_PTS, or fpatt_len == 0
+ * draws nothing. Clipped to clip if non-NULL. */
+extern void gpx_fill_polygon(
+    gpx_t *gpx, point_t *pts, uint8_t n,
+    color c, bmode m,
+    uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip);
+
 #endif /* __LIBGPX_H__ */

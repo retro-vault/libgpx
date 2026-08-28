@@ -3,9 +3,10 @@
 A 1-bit-per-pixel graphics library for Z80 machines, written entirely in
 hand-optimised assembly.
 
-libgpx gives you pixels, lines, rectangles, pattern fills, text and
-sprites behind one API that behaves the same on every supported machine,
-so a program written against it draws the same picture wherever it runs.
+libgpx gives you pixels, lines, rectangles, pattern fills, circles,
+polygons, text and sprites behind one API that behaves the same on every
+supported machine, so a program written against it draws the same picture
+wherever it runs.
 
 **The full programming manual is
 [docs/manuals/PROGRAMMING-LIBGPX.md](docs/manuals/PROGRAMMING-LIBGPX.md)** —
@@ -42,7 +43,7 @@ Docker and Python 3 are the only requirements — no host toolchain.
 |---|---|
 | ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
 | Iskra Delta Partner | `wischner/xcc-z80-idp` |
-| Amstrad CPC | `wischner/xcc-z80` |
+| Amstrad CPC | `wischner/xcc-z80-cpc` |
 
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
@@ -51,6 +52,13 @@ make cpc-lib       # bin/cpc/libgpx.lib      (CPC, both display modes)
 make build         # all of them, plus the test binaries
 make clean
 ```
+
+The core primitives are per machine, hand-written against that machine's
+hardware. The advanced ones -- circles and polygons -- live once in
+`src/common`, written against the core API rather than against any
+framebuffer, so every backend gets the same picture by construction. `make ADVANCED=0` (`no` and `false` also work) builds only
+the core set; the default builds both. Since the library is an archive,
+a program that draws no circles pays nothing for them either way.
 
 One CPC library serves both display modes. Pass `GPXM_CPC_640X200` (the
 default) or `GPXM_CPC_320X200` to `gpx_create()`; it programs the CRTC and
@@ -99,7 +107,7 @@ For the Partner, swap the image for `wischner/xcc-z80-idp`, the library
 for `bin/partner/libgpx.lib`, and the load address for `0x100` (CP/M
 `.com`). The C source does not change.
 
-For the Amstrad CPC, use `wischner/xcc-z80`, `bin/cpc/libgpx.lib` and
+For the Amstrad CPC, use `wischner/xcc-z80-cpc`, `bin/cpc/libgpx.lib` and
 `bin/cpc/crt0-cpc.rel`. The result is a raw binary that runs at `0x8000`
 with no firmware underneath it: `gpx_create()` programs the CRTC and the
 Gate Array itself and pages both ROMs out, the same way the Partner backend
@@ -107,7 +115,7 @@ programs its own PIO.
 
 ```bash
 docker run --rm -u $(id -u):$(id -g) -v "$PWD":/work -w /work \
-    wischner/xcc-z80 sh -lc '
+    wischner/xcc-z80-cpc sh -lc '
         xcc -mz80 -std=c11 -Os -Iinclude -c -o build/hello.rel hello.c
         xld --oformat=binary -b _CODE=0x8000 -nostartfiles \
             -o build/hello.bin bin/cpc/crt0-cpc.rel \
@@ -125,6 +133,8 @@ screen-geometry differences are visible.
 | [Demo 1 — dimensions and cursors](samples/demo1/README.md) | fixed 256x192 fill, reported screen size, stock cursors, sprite show/hide |
 | [Demo 2 — full-API smoke test](samples/demo2/README.md) | fixed 1024x256 diagnostic scene and physical-screen clipping |
 | [Demo 3 — portable examples](samples/demo3/README.md) | resolution-adaptive panels and sprite restoration programs |
+| [Demo 4 — circles](samples/demo4/README.md) | circle outlines, pattern fills, XOR overlap and clipping |
+| [Demo 5 — polygons](samples/demo5/README.md) | polygon outlines, concave and self-intersecting fills, even-odd |
 
 Build any demo for both targets, or select one backend:
 
@@ -146,12 +156,20 @@ connects these programs to the API concepts they exercise.
 | Display | 256 x 192 | 1024 x 256 | 640 x 200 / 320 x 200 |
 | Z80 clock | 3.5 MHz | 4 MHz | 4 MHz |
 | Drawing | software | EF9367 coprocessor | software |
-| Library size | 7,600 B | 7,126 B | 8,381 B |
+| Library size | 10,350 B | 9,876 B | 11,131 B |
+| ...core only (`ADVANCED=0`) | 7,600 B | 7,126 B | 8,381 B |
 
 The CPC is the largest because one library serves both display modes, and
 mode 1 packs four pixels to a byte where mode 2 packs eight -- so the span,
 blit and line paths each carry a second form. The Partner is the smallest
 because the chip does the rasterising.
+
+The advanced half costs the same 2,750 bytes on every backend, because
+circles and polygons are one shared module set rather than three: 1,603 B
+for `gpx_fill_polygon`, 499 for `gpx_fill_circle`, 429 for
+`gpx_draw_circle` and 219 for `gpx_draw_polygon`. A program pays only for
+what it calls -- the library is an archive, so a program that draws no
+polygons never links that 1,603 B, whichever way `ADVANCED` is set.
 
 ### Speed
 
@@ -166,21 +184,35 @@ Milliseconds, because the Spectrum's Z80 runs at 3.5 MHz and the other two at
 
 | Benchmark | ZX Spectrum | Partner | CPC 640x200 | CPC 320x200 |
 |---|--:|--:|--:|--:|
-| 64 solid rays, all octants | 756 | **36** | 683 | 714 |
-| the same rays, dashed | 720 | 1,716 | **648** | 680 |
-| 8 solid fills, 248x184 | 821 | 634 | **587** | 734 |
-| 8 patterned/XOR fills | 903 | 10,234 | **760** | 1,139 |
-| 200 sprite show+hide pairs | **2,035** | 5,401 | 3,058 | 3,785 |
-| 60 lines of text, 3 modes | 5,989 | 11,803 | **5,724** | 7,083 |
-| 16 full-screen clears | 455 | see below | 558 | 558 |
+| 64 solid rays, all octants | 755 | **68** | 683 | 714 |
+| the same rays, dashed | 720 | 1,749 | **648** | 679 |
+| 8 solid fills, 248x184 | 821 | 667 | **587** | 734 |
+| 8 patterned/XOR fills | 903 | 10,266 | **760** | 1,139 |
+| 16 circle outlines, 4 radii | **1,668** | 2,204 | 1,964 | 1,940 |
+| 8 solid discs, r=90 | 1,965 | **1,248** | 2,156 | 2,217 |
+| 8 ten-point star outlines | 282 | **87** | 276 | 283 |
+| 8 ten-point star fills | 5,464 | **4,443** | 5,573 | 5,612 |
+| 200 sprite show+hide pairs | **2,034** | 5,432 | 3,057 | 3,784 |
+| 60 lines of text, 3 modes | 5,989 | 11,835 | **5,724** | 7,083 |
+| 16 full-screen clears | **455** | 538 | 558 | 558 |
 
 What the table is really showing:
 
 * **The Partner wins wherever the EF9367 can do the work itself** -- a solid
-  vector is 21x faster than the fastest software Bresenham here -- and loses
+  vector is 10x faster than the fastest software Bresenham here -- and loses
   badly wherever it cannot. A pattern cannot be handed to the chip's area
   fill, so patterned fills fall back to software and cost 11x what the
   Spectrum pays. It is a vector machine, and it rewards being used as one.
+* **Circles and polygons split the Partner exactly along that line.** A
+  polygon outline is slanted vectors, which is what the chip is for: 87 ms
+  against 276 on the CPC, the widest win in the table after plain lines. A
+  circle outline is per-pixel plotting, which it cannot accelerate at all,
+  and it becomes the *slowest* machine for that one row. Filling either
+  shape puts it back in front, because every scanline is a horizontal run.
+* **A polygon fill costs far more than a circle fill of similar area**, on
+  every machine: each scanline walks ten edge records and sorts their
+  crossings before a single pixel is drawn. That bookkeeping, not the
+  filling, is what the row measures.
 * **The CPC leads on raster work** despite pushing 2.6x the Spectrum's pixels
   in mode 2, partly from the faster clock and partly because its span, fill
   and line paths are the most heavily tuned. Its weak spot is sprites, where
@@ -188,11 +220,9 @@ What the table is really showing:
 * **CPC mode 1 is consistently slower than mode 2** for the same picture:
   four pixels to a byte means a read-modify-write where mode 2 can store, and
   the blitter has to gather two screen bytes into one eight-pixel value.
-* **Clears are not comparable**: `gpx_clrscr()` clears the whole display, and
-  the displays are different sizes. On the Partner it is issued to the
-  coprocessor and returns almost immediately, so no honest figure belongs in
-  that column -- the CPU spends 3,131 T-states while the chip works on for
-  roughly 130,000 more.
+* **Clears are not really comparable**: `gpx_clrscr()` clears the whole
+  display, and the displays are different sizes -- the Partner is clearing
+  five times the Spectrum's pixels for its 538 ms.
 
 Measured with `make crossbench`; the emulators are cycle-accurate, so the
 numbers are reproducible rather than sampled.

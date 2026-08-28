@@ -423,6 +423,167 @@ the colours their own payload specifies.
 
 ---
 
+### Circles
+
+The two circle primitives are **advanced** functions: they are in the
+library a plain `make` produces, but a library built with `ADVANCED=0`
+stops at the core set and these will not link. See [Building and running
+the examples](#5-building-and-running-the-examples).
+
+Unlike everything above they are not written per machine. One portable
+module drives each backend through `gpx_draw_pixel` and
+`gpx_fill_rectangle`, so all three machines get the same circle by
+construction rather than by three implementations agreeing.
+
+#### `gpx_draw_circle`
+
+```c
+void gpx_draw_circle(gpx_t *gpx, coord x, coord y, coord r,
+                     color c, bmode m, const rect_t *clip);
+```
+
+Draw the outline of the circle centred on (`x`, `y`) with radius `r`,
+using the midpoint (Bresenham) stepper.
+
+| Parameter | Description |
+|---|---|
+| `x`, `y` | centre, which may be off screen |
+| `r` | radius in pixels; `0` is a single pixel, negative draws nothing |
+
+**Notes.** Every pixel is plotted exactly once, so `BM_XOR` behaves and
+drawing the same circle twice in XOR erases it. There is no `lpatt`
+argument: the outline is emitted eight octant points at a time rather
+than walked end to end, so a per-pixel pattern phase would have no
+meaning. For a dashed ring, draw into a scratch page or use
+`gpx_draw_line` segments.
+
+```c
+gpx_draw_circle(gpx, 128, 96, 40, CO_FORE, BM_CPY, 0);
+gpx_draw_circle(gpx, 128, 96, 40, CO_FORE, BM_XOR, 0);  /* and gone again */
+```
+
+---
+
+#### `gpx_fill_circle`
+
+```c
+void gpx_fill_circle(gpx_t *gpx, coord x, coord y, coord r,
+                     color c, bmode m,
+                     uint8_t *fpatt, uint8_t fpatt_len,
+                     const rect_t *clip);
+```
+
+Fill the disc centred on (`x`, `y`) with radius `r`, with the same kind
+of repeating pattern `gpx_fill_rectangle` takes.
+
+| Parameter | Description |
+|---|---|
+| `fpatt` | pattern bytes, applied MSB first from the left edge of the circle's bounding box |
+| `fpatt_len` | number of bytes; row *n* of the box uses `fpatt[n % fpatt_len]` |
+
+**Notes.** The pattern is anchored to the bounding box, not to each row,
+so the pattern runs straight down the disc instead of stepping in and
+out with the row width — and a disc and a rectangle filled with the same
+pattern lay down the same bits where they overlap. Both are measured
+before clipping, exactly as for a rectangle.
+
+The disc is bounded by the pixels `gpx_draw_circle` plots for the same
+centre and radius, so the outline lands on the disc's own edge and the
+two combine into a filled circle with a contrasting rim. Every row is
+painted once, so `BM_XOR` behaves here too.
+
+```c
+static uint8_t solid[1] = {0xFF};
+static uint8_t half[2]  = {0xAA, 0x55};
+
+gpx_fill_circle(gpx, 60, 96, 40, CO_FORE, BM_CPY, half, 2, 0);
+
+gpx_fill_circle(gpx, 180, 96, 40, CO_FORE, BM_CPY, solid, 1, 0);
+gpx_draw_circle(gpx, 180, 96, 40, CO_BACK, BM_CPY, 0);
+```
+
+---
+
+### Polygons
+
+Also **advanced**, and also one portable module rather than three: both
+functions drive the backend through `gpx_draw_line`, so every machine gets
+the same polygon.
+
+#### `gpx_draw_polygon`
+
+```c
+void gpx_draw_polygon(gpx_t *gpx, point_t *pts, uint8_t n,
+                      color c, bmode m, uint8_t lpatt,
+                      const rect_t *clip);
+```
+
+Draw the closed path through `pts[0..n-1]`.
+
+| Parameter | Description |
+|---|---|
+| `pts` | vertices; the path closes from the last back to the first |
+| `n` | number of points; fewer than two draws nothing |
+| `lpatt` | dash pattern, carried from each edge into the next |
+
+**Notes.** The rotated pattern is chained edge to edge, so a dashed
+outline runs continuously around the corners the way it does around a
+rectangle. Each vertex belongs to two edges and so is painted twice: in
+`BM_XOR` that leaves the corners uninverted, although drawing the whole
+outline twice still restores the background exactly.
+
+---
+
+#### `gpx_fill_polygon`
+
+```c
+void gpx_fill_polygon(gpx_t *gpx, point_t *pts, uint8_t n,
+                      color c, bmode m,
+                      uint8_t *fpatt, uint8_t fpatt_len,
+                      const rect_t *clip);
+```
+
+Fill the closed path through `pts[0..n-1]`, one horizontal run per
+scanline, using the even-odd rule.
+
+| Parameter | Description |
+|---|---|
+| `n` | 3 to `GPX_MAX_POLY_PTS` points; anything else fills nothing |
+| `fpatt` | pattern bytes, MSB first from the left edge of the bounding box |
+| `fpatt_len` | number of bytes; row *n* of the box uses `fpatt[n % fpatt_len]` |
+
+**Notes.** The polygon may be concave or self-intersecting, and the points
+may be given in either winding order — even-odd empties the crossing of a
+bowtie and the middle of a five-pointed star. As with a filled circle the
+pattern is anchored to the bounding box, so it runs straight through the
+shape instead of stepping with the edges, and a rectangle filled as a
+polygon lays down the same bits `gpx_fill_rectangle` would.
+
+The spans end exactly on the pixels `gpx_draw_polygon` paints for the same
+points, so a dithered fill can be closed with a solid rim. Getting that
+right is most of what the module does: an edge the path runs *up* has to
+be walked *down* to fill it, this Bresenham is not symmetric under
+reversal, and so a flipped edge is walked with the opposite rounding bias.
+
+Every pixel is painted at most once, so `BM_XOR` behaves. Two spans that
+meet on a shared vertex hand the pixel to the first of them.
+
+**Cost.** The edge table lives on the stack: about 250 bytes while the
+call is running, 17 of them per point. That is the reason for
+`GPX_MAX_POLY_PTS`, which is 12. Raising it means editing `MAXPTS` in
+`src/common/gpx_fill_polygon.s` and the constant in `libgpx.h` together.
+
+```c
+static uint8_t solid[1] = {0xFF};
+static point_t arrow[7];
+
+/* ... fill in the vertices ... */
+gpx_fill_polygon(gpx, arrow, 7, CO_FORE, BM_CPY, solid, 1, 0);
+gpx_draw_polygon(gpx, arrow, 7, CO_BACK, BM_CPY, 0xFF, 0);
+```
+
+---
+
 ### Text
 
 ---
@@ -622,6 +783,8 @@ Partner and CPC captures.
 | 1 | [screen dimensions and stock cursors](../../samples/demo1/README.md) | dimensions, fill, text, stock bitmaps, sprite show/hide | fixed 256x192; exposes unused Partner screen area |
 | 2 | [full-API smoke test](../../samples/demo2/README.md) | measurement, lines, patterns, clipping, text, rectangles, sprites | fixed 1024x256; exposes Spectrum screen clipping |
 | 3 | [portable example programs](../../samples/demo3/README.md) | portable layouts and the complete drawing/sprite workflow | derives coordinates from `gpx_width()` and `gpx_height()` |
+| 4 | [circles and filled circles](../../samples/demo4/README.md) | the advanced primitives: outlines, pattern fills, XOR, clipping | derives coordinates from `gpx_width()` and `gpx_height()`; needs an `ADVANCED` library |
+| 5 | [polygons](../../samples/demo5/README.md) | polygon outlines and even-odd fills, concave and self-intersecting | unit shapes scaled into cells; needs an `ADVANCED` library |
 
 Both programs are in [`samples/demo3/src/`](../../samples/demo3/src/)
 and build for either machine from the same source. Neither hard-codes a
@@ -677,10 +840,37 @@ achieves it without ever reading the screen.
 
 ## 5. Building and running the examples
 
+### The `ADVANCED` switch
+
+A plain `make lib` (or `partner-lib`, or `cpc-lib`) builds the whole
+library, advanced primitives included. Building with `ADVANCED=0` — `no`
+and `false` also work, in any case — stops at the core set:
+
+```bash
+make lib                # everything, the default
+make ADVANCED=0 lib     # core primitives only
+```
+
+[The circle functions](#circles) and [the polygon
+functions](#polygons) are the advanced ones today. Turning them
+off is not usually worth it: the library is an archive, so the linker
+already leaves out any module a program does not call, and a program that
+never draws a circle pays nothing either way. The switch is there for
+builds that want the library itself to be exactly the core set — and a
+program that does call a circle function will fail to link against one,
+with an unresolved `_gpx_draw_circle` or `_gpx_fill_circle`.
+
+Changing the setting rebuilds the objects on the next `make`; there is no
+need to `make clean` in between.
+
+### Samples
+
 ```bash
 make -C samples/demo1 build        # demo1.tap and demo1.com
 make -C samples/demo2 build        # demo2.tap and demo2.com
 make -C samples/demo3 build        # panels/bounce as .tap and .com
+make -C samples/demo4 build        # circles as .tap and .com
+make -C samples/demo5 build        # polygons as .tap and .com
 
 make -C samples/demo1 zx           # one demo, Spectrum only
 make -C samples/demo1 partner      # one demo, Partner only
@@ -705,7 +895,7 @@ python3 scripts/docs/capture-manual-shots.py
 
 That builds every sample against all three backends -- the CPC twice, once
 per display mode -- drives the headless Spectrum, Partner and CPC emulators
-over MCP, and writes sixteen PNGs into
+over MCP, and writes twenty-four PNGs into
 `docs/images/screenshots/`.
 
 ---
@@ -869,6 +1059,17 @@ Two consequences for how you write code. Prefer horizontal and vertical
 lines, which take a fast path; and prefer `gpx_fill_rectangle` over loops of
 `gpx_draw_pixel`, which is the slowest thing in the library because every
 call repeats the whole clip test.
+
+The advanced primitives fall on both sides of that line, and `make
+crossbench` shows it plainly. A **polygon outline** is slanted vectors, so
+the Partner draws eight ten-point stars in 87 ms against the CPC's 276 --
+one of its widest wins. A **circle outline** is per-pixel plotting, which
+the chip cannot accelerate at all, so the same machine becomes the slowest
+of the three for that one benchmark: 2,204 ms against the Spectrum's 1,668.
+**Filling** either shape puts the Partner back in front, because a fill
+emits one horizontal run per scanline. If a picture needs many circles on a
+Partner, drawing them filled is not just cheaper than outline-plus-fill --
+it is cheaper than the outline alone.
 
 ---
 

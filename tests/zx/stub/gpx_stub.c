@@ -659,6 +659,356 @@ void gpx_fill_rectangle(
     }
 }
 
+/* --- advanced primitives -------------------------------------------
+ * The midpoint circle stepper, mirroring src/common. Both the outline and
+ * the fill walk the same octant, so the fill's row spans are exactly the
+ * ones the outline lands on. Every pixel and every row is emitted once,
+ * which is what keeps BM_XOR meaningful.
+ */
+
+void gpx_draw_circle(
+    gpx_t *gpx, coord x, coord y, coord r,
+    color c, bmode m, const rect_t *clip)
+{
+    coord xn = 0;
+    coord yn = r;
+    int16_t f;
+    int16_t ddx;
+    int16_t ddy;
+
+    if (r < 0)
+        return;
+    if (r == 0) {
+        gpx_draw_pixel(gpx, x, y, c, m, clip);
+        return;
+    }
+
+    gpx_draw_pixel(gpx, x, (coord)(y + r), c, m, clip);
+    gpx_draw_pixel(gpx, x, (coord)(y - r), c, m, clip);
+    gpx_draw_pixel(gpx, (coord)(x + r), y, c, m, clip);
+    gpx_draw_pixel(gpx, (coord)(x - r), y, c, m, clip);
+
+    f = (int16_t)(1 - r);
+    ddx = 1;
+    ddy = (int16_t)(-2 * r);
+
+    while (xn < yn) {
+        ++xn;
+        ddx += 2;
+        f += ddx;
+        if (f >= 0) {
+            --yn;
+            ddy += 2;
+            f += ddy;
+        }
+        if (xn <= yn) {
+            gpx_draw_pixel(gpx, (coord)(x + xn), (coord)(y + yn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x - xn), (coord)(y + yn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x + xn), (coord)(y - yn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x - xn), (coord)(y - yn), c, m, clip);
+        }
+        /* On the diagonal the swapped four are the same four pixels. */
+        if (xn < yn) {
+            gpx_draw_pixel(gpx, (coord)(x + yn), (coord)(y + xn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x - yn), (coord)(y + xn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x + yn), (coord)(y - xn), c, m, clip);
+            gpx_draw_pixel(gpx, (coord)(x - yn), (coord)(y - xn), c, m, clip);
+        }
+    }
+}
+
+/* One row of the disc, as the one-row rectangle the backend fills. The
+ * pattern byte is picked by the row's distance from the top of the
+ * bounding box and rotated so its MSB still lands on the box's left edge,
+ * which is what makes a filled circle line up with a filled rectangle. */
+static void zx_circle_row(
+    gpx_t *gpx, coord x, coord y, coord r, coord dy, coord w,
+    color c, bmode m, uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)
+{
+    rect_t row;
+    uint8_t byte = fpatt[(uint16_t)(dy + r) % fpatt_len];
+    uint8_t rot = (uint8_t)((uint16_t)(r - w) & 7);
+    uint8_t rotated = rot
+        ? (uint8_t)((uint8_t)(byte << rot) | (uint8_t)(byte >> (8 - rot)))
+        : byte;
+
+    row.x0 = (coord)(x - w);
+    row.x1 = (coord)(x + w);
+    row.y0 = (coord)(y + dy);
+    row.y1 = row.y0;
+    gpx_fill_rectangle(gpx, &row, c, m, &rotated, 1, clip);
+}
+
+static void zx_circle_row_pair(
+    gpx_t *gpx, coord x, coord y, coord r, coord dy, coord w,
+    color c, bmode m, uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)
+{
+    zx_circle_row(gpx, x, y, r, dy, w, c, m, fpatt, fpatt_len, clip);
+    zx_circle_row(gpx, x, y, r, (coord)(-dy), w, c, m, fpatt, fpatt_len, clip);
+}
+
+void gpx_fill_circle(
+    gpx_t *gpx, coord x, coord y, coord r,
+    color c, bmode m,
+    uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)
+{
+    coord xn = 0;
+    coord yn = r;
+    int16_t f;
+    int16_t ddx;
+    int16_t ddy;
+
+    if (r < 0 || fpatt_len == 0)
+        return;
+
+    zx_circle_row(gpx, x, y, r, 0, r, c, m, fpatt, fpatt_len, clip);
+    if (r == 0)
+        return;
+
+    f = (int16_t)(1 - r);
+    ddx = 1;
+    ddy = (int16_t)(-2 * r);
+
+    while (xn < yn) {
+        ++xn;
+        ddx += 2;
+        f += ddx;
+        if (f >= 0) {
+            /* yn is as wide as it will get: the xn from before this step */
+            zx_circle_row_pair(gpx, x, y, r, yn, (coord)(xn - 1),
+                c, m, fpatt, fpatt_len, clip);
+            --yn;
+            ddy += 2;
+            f += ddy;
+        }
+        if (xn <= yn)
+            zx_circle_row_pair(gpx, x, y, r, xn, yn,
+                c, m, fpatt, fpatt_len, clip);
+    }
+}
+
+/* Polygons. The edge walker steps the same Bresenham gpx_draw_line uses,
+ * so a span ends where the outline is drawn; an edge the polygon traverses
+ * upwards is walked downwards here and takes the opposite rounding bias,
+ * which reproduces the reversed walk exactly. */
+
+typedef struct zx_edge_s
+{
+    coord y1;
+    coord dx;
+    coord dy;
+    coord err;
+    coord cx;
+    coord cy;
+    coord lo;
+    coord hi;
+    int8_t sx;
+} zx_edge_t;
+
+void gpx_draw_polygon(
+    gpx_t *gpx, point_t *pts, uint8_t n,
+    color c, bmode m, uint8_t lpatt, const rect_t *clip)
+{
+    uint8_t i;
+    uint8_t j;
+
+    if (pts == (point_t *)0 || n < 2)
+        return;
+
+    for (i = 0, j = 1; i < n; ++i, j = (uint8_t)((j + 1) % n))
+        lpatt = gpx_draw_line(gpx, pts[i].x, pts[i].y, pts[j].x, pts[j].y,
+            c, m, lpatt, clip);
+}
+
+/* One edge, normalized top to bottom. Horizontal edges get no walker: they
+ * contribute no crossing, and the edges meeting them carry the row. */
+static int zx_edge_init(zx_edge_t *e, const point_t *a, const point_t *b)
+{
+    int flipped = 0;
+    coord v;
+    coord pix;
+    coord piy;
+    coord pjx;
+    coord pjy;
+
+    /* Taken through locals rather than by-value point_t parameters: the
+     * Z80 compiler and the host compiler do not agree on struct passing,
+     * and this oracle has to mean the same thing in both. */
+    pix = a->x;
+    piy = a->y;
+    pjx = b->x;
+    pjy = b->y;
+
+    if (piy > pjy) {
+        coord t = pix; pix = pjx; pjx = t;
+        t = piy; piy = pjy; pjy = t;
+        flipped = 1;
+    }
+    if (piy == pjy)
+        return 0;
+
+    e->y1 = pjy;
+    e->dy = (coord)(pjy - piy);
+    e->dx = (coord)(pjx >= pix ? pjx - pix : pix - pjx);
+    e->sx = (int8_t)(pjx > pix ? 1 : (pjx < pix ? -1 : 0));
+    v = (coord)(e->dx > e->dy ? e->dx : e->dy);
+    if (flipped)
+        --v;
+    v = (coord)(v >> 1);
+    e->err = (coord)(e->dx > e->dy ? v : -v);
+    e->cx = pix;
+    e->cy = piy;
+    return 1;
+}
+
+static void zx_edge_step(zx_edge_t *e)
+{
+    coord e2 = e->err;
+
+    if (e2 > (coord)(-e->dx)) {
+        e->err = (coord)(e2 - e->dy);
+        e->cx = (coord)(e->cx + e->sx);
+    }
+    if (e2 < e->dy) {
+        e->err = (coord)(e->err + e->dx);
+        ++e->cy;
+    }
+}
+
+/* The run this edge paints on scanline y, or 0 if it does not reach it.
+ * Half-open y0 <= y < y1 keeps a shared vertex from counting twice; on the
+ * polygon's own bottom row the rule closes so the bottom edge is filled. */
+/* The run is left in e->lo / e->hi rather than written through pointer
+ * parameters: the Z80 compiler does not pass a five-argument call the way
+ * the host one does, and this oracle has to mean the same thing in both. */
+static int zx_edge_run(zx_edge_t *e, coord y, int lastrow)
+{
+    coord oldy;
+
+    if (y < e->cy)
+        return 0;
+    if (lastrow ? (y > e->y1) : (y >= e->y1))
+        return 0;
+
+    while (e->cy < y)
+        zx_edge_step(e);
+
+    e->lo = e->cx;
+    e->hi = e->cx;
+    for (;;) {
+        oldy = e->cy;
+        zx_edge_step(e);
+        if (e->cy != oldy)
+            break;
+        if (e->cx < e->lo)
+            e->lo = e->cx;
+        if (e->cx > e->hi)
+            e->hi = e->cx;
+    }
+    return 1;
+}
+
+/* File scope, not locals: the tables are a few hundred bytes and the Z80
+ * compiler addresses a frame that large through one-byte IX offsets, which
+ * silently wraps. The library's own assembler version walks them with
+ * cursors instead, so only the oracle needs this. */
+static zx_edge_t zx_poly_edges[GPX_MAX_POLY_PTS];
+static coord zx_poly_lo[GPX_MAX_POLY_PTS];
+static coord zx_poly_hi[GPX_MAX_POLY_PTS];
+
+void gpx_fill_polygon(
+    gpx_t *gpx, point_t *pts, uint8_t n,
+    color c, bmode m,
+    uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip)
+{
+    zx_edge_t *edges = zx_poly_edges;
+    coord *lo = zx_poly_lo;
+    coord *hi = zx_poly_hi;
+    uint8_t nedges = 0;
+    uint8_t patt_idx = 0;
+    coord ymin;
+    coord ymax;
+    coord xmin;
+    coord y;
+    uint8_t i;
+    uint8_t j;
+
+    if (pts == (point_t *)0 || n < 3 || n > GPX_MAX_POLY_PTS
+            || fpatt_len == 0 || fpatt == (uint8_t *)0)
+        return;
+
+    ymin = ymax = pts[0].y;
+    xmin = pts[0].x;
+    for (i = 0, j = 1; i < n; ++i, j = (uint8_t)((j + 1) % n)) {
+        if (pts[i].x < xmin)
+            xmin = pts[i].x;
+        if (pts[i].y < ymin)
+            ymin = pts[i].y;
+        if (pts[i].y > ymax)
+            ymax = pts[i].y;
+        if (zx_edge_init(&edges[nedges], &pts[i], &pts[j]))
+            ++nedges;
+    }
+    if (nedges == 0)
+        return;
+
+    for (y = ymin; y <= ymax; ++y) {
+        uint8_t k = 0;
+        coord prev_end = -32768;
+
+        for (i = 0; i < nedges; ++i) {
+            if (zx_edge_run(&edges[i], y, y == ymax)) {
+                lo[k] = edges[i].lo;
+                hi[k] = edges[i].hi;
+                ++k;
+            }
+        }
+
+        /* selection sort by the low x */
+        for (i = 0; i + 1 < k; ++i) {
+            uint8_t mn = i;
+            for (j = (uint8_t)(i + 1); j < k; ++j)
+                if (lo[j] < lo[mn])
+                    mn = j;
+            if (mn != i) {
+                coord t = lo[i]; lo[i] = lo[mn]; lo[mn] = t;
+                t = hi[i]; hi[i] = hi[mn]; hi[mn] = t;
+            }
+        }
+
+        for (i = 0; (uint8_t)(i + 1) < k; i = (uint8_t)(i + 2)) {
+            coord x0 = lo[i];
+            coord x1 = hi[i + 1];
+            uint8_t byte;
+            uint8_t rev;
+            uint8_t rot;
+            uint8_t b;
+
+            /* two spans can meet on a shared vertex pixel: leave it to the
+             * first, so BM_XOR does not cancel it */
+            if (x0 <= prev_end)
+                x0 = (coord)(prev_end + 1);
+            if (x0 > x1)
+                continue;
+            prev_end = x1;
+
+            byte = fpatt[patt_idx];
+            rev = 0;
+            for (b = 0; b < 8; ++b) {
+                rev = (uint8_t)((rev << 1) | (byte & 1));
+                byte = (uint8_t)(byte >> 1);
+            }
+            rot = (uint8_t)((uint16_t)(x0 - xmin) & 7);
+            if (rot)
+                rev = (uint8_t)((rev >> rot) | (rev << (8 - rot)));
+            gpx_draw_line(gpx, x0, y, x1, y, c, m, rev, clip);
+        }
+
+        if (++patt_idx >= fpatt_len)
+            patt_idx = 0;
+    }
+}
+
 typedef struct zx_bmp_view_s
 {
     uint8_t signature;

@@ -13,16 +13,19 @@ CONF_NAMES := $(patsubst $(ROOT_DIR)/tests/conformance/src/%.c,%,$(CONF_SRCS))
 # Relink when the backends change, not just when the scenario does: these
 # images link build/{zx,partner-lib}/*.rel, so a change under src/ must
 # invalidate them or the comparison silently runs against yesterday's library.
-ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c)
+ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c) \
+	$(ADVANCED_SRCS)
 PARTNER_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/partner/*.s) \
 	$(wildcard $(ROOT_DIR)/src/partner/*.c) \
-	$(wildcard $(ROOT_DIR)/src/partner/*.inc)
+	$(wildcard $(ROOT_DIR)/src/partner/*.inc) \
+	$(ADVANCED_SRCS)
 
 CONF_BIN := $(BIN_DIR)/conf
 # The CPC is compared in both display modes: it shares the ZX's font and
 # stock cursors, so it must match pixel for pixel with no exceptions.
 CPC_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/cpc/*.s) \
-	$(wildcard $(ROOT_DIR)/src/cpc/*.inc)
+	$(wildcard $(ROOT_DIR)/src/cpc/*.inc) \
+	$(ADVANCED_SRCS)
 CONF_OUT := $(foreach n,$(CONF_NAMES),$(CONF_BIN)/$(n)_zx.ihx \
 	$(CONF_BIN)/$(n)_partner.ihx \
 	$(CONF_BIN)/$(n)_cpc-640x200.bin $(CONF_BIN)/$(n)_cpc-320x200.bin)

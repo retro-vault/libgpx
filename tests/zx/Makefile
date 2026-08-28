@@ -22,7 +22,8 @@ ZX_REAL_TESTS_STAMP := $(BUILD_DIR)/zx/.tests-built.stamp
 ZX_ORACLE_TESTS_STAMP := $(BUILD_DIR)/zx-oracle/.tests-built.stamp
 # Relink scenarios whenever the backend they link against changes.
 ZX_LIB_STAMP := $(BUILD_DIR)/zx/.lib-objs.stamp
-ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c)
+ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c) \
+	$(ADVANCED_SRCS)
 
 BIN_ZX_TEST_IHXS := $(addprefix $(BIN_DIR)/zx/,$(addsuffix .ihx,$(ZX_TEST_NAMES)))
 BIN_ZX_ORACLE_TEST_IHXS := $(addprefix $(BIN_DIR)/zx-oracle/,$(addsuffix .ihx,$(ZX_TEST_NAMES)))
@@ -56,7 +57,7 @@ one:
 		$(XCC) $(XCFLAGS) -c -o "build/tmp/$(TEST).rel" "tests/zx/test-src/$(TEST).c"; \
 		$(XCC) $(XLDFLAGS) -o "build/zx/$(TEST).ihx" "build/tmp/$(TEST).rel" build/zx/*.rel \
 			-Wl,--oformat=ihx -Wl,-b,_CODE=$(CODE_LOC) -Wl,-Map=build/zx/$(TEST).map; \
-		test -f build/tmp/gpx_stub_oracle.rel || \
+		[ build/tmp/gpx_stub_oracle.rel -nt tests/zx/stub/gpx_stub.c ] || \
 			$(XCC) $(XCFLAGS) -c -o build/tmp/gpx_stub_oracle.rel tests/zx/stub/gpx_stub.c; \
 		$(XCC) $(XLDFLAGS) -o "build/zx-oracle/$(TEST).ihx" "build/tmp/$(TEST).rel" \
 			build/tmp/gpx_stub_oracle.rel build/zx/_gpx_font_envy.rel \

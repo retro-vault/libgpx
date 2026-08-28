@@ -1,9 +1,8 @@
 # Tests
 
 Three backends live in this repository, and each is tested on a real emulator
-driven over MCP (JSON-RPC on stdio). Every emulator ships either inside the
-toolchain's Docker image or as a native binary, so there is nothing extra to
-install.
+driven over MCP (JSON-RPC on stdio). Every emulator ships inside that
+backend's toolchain Docker image, so there is nothing extra to install.
 
 | Backend | Emulator | What it is checked against |
 |---|---|---|

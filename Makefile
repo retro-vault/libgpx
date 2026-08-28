@@ -22,7 +22,7 @@ include $(ROOT_DIR)/scripts/mk/toolchain.mk
 export DOCKER_ZX DOCKER_IDP DOCKER_USER
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR RELEASE_DIR VERSION
 
-.PHONY: cpc-tests cpc-bench all build lib partner-lib cpc-lib package-zx package-partner package-cpc release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 clean
+.PHONY: cpc-tests cpc-bench all build lib partner-lib cpc-lib package-zx package-partner package-cpc release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 demo4 demo5 clean
 
 all: build
 
@@ -106,6 +106,14 @@ demo2:
 
 demo3:
 	$(MAKE) -C samples/demo3 build
+
+# demo4 and demo5 draw circles and polygons, so they need an ADVANCED
+# library -- the default.
+demo4:
+	$(MAKE) -C samples/demo4 build
+
+demo5:
+	$(MAKE) -C samples/demo5 build
 
 $(RELEASE_DIR):
 	mkdir -p $@

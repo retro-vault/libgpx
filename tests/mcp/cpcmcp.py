@@ -1,8 +1,8 @@
 """Minimal MCP (JSON-RPC 2.0 over stdio) client for amstrad-cpc-mcp.
 
-The server is a cycle-stepped Amstrad CPC. Unlike the ZX and Partner
-servers it runs as a native binary rather than inside Docker, so host paths
-reach it unchanged.
+The server is a cycle-stepped Amstrad CPC. Like the ZX and Partner servers
+it ships inside the toolchain image and runs in Docker, so paths handed to
+it have to be rewritten into the container mount.
 """
 
 import json
@@ -11,10 +11,13 @@ import subprocess
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-CPC_MCP = os.environ.get(
-    "CPC_MCP", "/home/tstih/data/retro-vault/amstrad-cpc-mcp")
-SERVER = os.path.join(CPC_MCP, "bin", "bin", "amstrad-cpc-mcp")
-ROMS = os.path.join(CPC_MCP, "data", "roms")
+# amstrad-cpc-mcp and the CPC ROMs ship inside the same image as the
+# toolchain, so the suite has no dependency on a local build of it. CPC_MCP
+# overrides the server command with a local binary when one is being
+# developed alongside; CPC_ROMS then says where that binary's ROMs live.
+DOCKER_CPC = os.environ.get("DOCKER_CPC", "wischner/xcc-z80-cpc")
+LOCAL_SERVER = os.environ.get("CPC_MCP")
+IMAGE_ROMS = "/opt/amstrad-cpc-mcp/share/amstrad-cpc-mcp/roms"
 
 SCREEN_BASE = 0xC000
 SCREEN_BYTES = 0x4000
@@ -28,11 +31,29 @@ class McpError(RuntimeError):
 class Cpc:
     """One long-lived emulator process, reset between test cases."""
 
-    def __init__(self, server=None, model="cpc6128"):
-        argv = [server or SERVER, "--model", model,
-                "--os-rom", os.path.join(ROMS, f"{model}-os.rom"),
-                "--basic-rom", os.path.join(ROMS, f"{model}-basic.rom"),
-                "--amsdos-rom", os.path.join(ROMS, "amsdos.rom")]
+    def __init__(self, server=None, model="cpc6128", workdir=None):
+        server = server or LOCAL_SERVER
+        self.workdir = os.path.abspath(workdir or ROOT)
+        if server:
+            argv = [server]
+            roms = os.environ.get("CPC_ROMS", IMAGE_ROMS)
+            self._path_prefix = ""
+        else:
+            # The container sees the host workdir at /work, so any path handed
+            # to `load` or `screenshot` has to be rewritten into that mount.
+            argv = [
+                "docker", "run", "--rm", "-i",
+                "-u", f"{os.getuid()}:{os.getgid()}",
+                "-v", f"{self.workdir}:/work",
+                "-w", "/work",
+                DOCKER_CPC, "amstrad-cpc-mcp",
+            ]
+            roms = IMAGE_ROMS
+            self._path_prefix = "/work"
+        argv += ["--model", model,
+                 "--os-rom", f"{roms}/{model}-os.rom",
+                 "--basic-rom", f"{roms}/{model}-basic.rom",
+                 "--amsdos-rom", f"{roms}/amsdos.rom"]
         self._proc = subprocess.Popen(
             argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1)
@@ -102,8 +123,15 @@ class Cpc:
         return self.call("reset", clear_memory=clear_memory)
 
     def guest_path(self, path):
-        """The server is native, so host paths need no rewriting."""
-        return os.path.abspath(path)
+        """Map a host path into the container mount, if one is in use."""
+        if not self._path_prefix:
+            return os.path.abspath(path)
+        rel = os.path.relpath(os.path.abspath(path), self.workdir)
+        if rel.startswith(".."):
+            raise McpError(
+                f"{path} is outside {self.workdir}, which is the only "
+                f"directory the emulator container can see")
+        return os.path.join(self._path_prefix, rel)
 
     def load_binary(self, path, address, start=None, reset=False):
         args = {"path": self.guest_path(path), "format": "binary",

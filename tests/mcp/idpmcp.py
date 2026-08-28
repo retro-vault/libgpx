@@ -214,17 +214,28 @@ RASTER_YSCALE = 2
 
 
 def raster_from_png(path, width=GDP_WIDTH, height=GDP_HEIGHT_LORES):
-    """Extract the logical 1bpp GDP framebuffer from a screenshot."""
+    """Extract the logical 1bpp GDP framebuffer from a screenshot.
+
+    Two layouts are accepted. The bordered one puts logical pixel (x, y) at
+    (RASTER_X0 + x, RASTER_Y0 + 2y); the bare one is the logical raster
+    itself, one PNG pixel per GDP pixel. Which one a screenshot comes back
+    in depends on the emulator build, so the layout is chosen from the
+    image's own size rather than assumed.
+    """
     from png import lit_mask
     pw, ph, lit = lit_mask(path)
     need_y = RASTER_Y0 + RASTER_YSCALE * (height - 1)
-    if pw < RASTER_X0 + width or ph <= need_y:
+    if pw >= RASTER_X0 + width and ph > need_y:
+        x0, y0, yscale = RASTER_X0, RASTER_Y0, RASTER_YSCALE
+    elif pw >= width and ph >= height:
+        x0, y0, yscale = 0, 0, 1
+    else:
         raise McpError(
             f"{path}: {pw}x{ph} is too small for a {width}x{height} raster")
     rows = []
     for y in range(height):
-        src = lit[RASTER_Y0 + RASTER_YSCALE * y]
-        rows.append(bytes(1 if src[RASTER_X0 + x] else 0 for x in range(width)))
+        src = lit[y0 + yscale * y]
+        rows.append(bytes(1 if src[x0 + x] else 0 for x in range(width)))
     return rows
 
 

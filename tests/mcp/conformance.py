@@ -60,6 +60,13 @@ ACCEPTED = {
         10,
         "steep solid rays: EF9367 vector generator again, y-major this time. "
         "The patterned rays in the same phase match exactly."),
+    ("conf_polygons", 2): (
+        100,
+        "polygon outlines over their own fills: the fills match exactly, "
+        "but gpx_draw_polygon's slanted edges go to the EF9367 vector "
+        "generator, which picks its own interior pixels -- the same "
+        "divergence as conf_lines phase 0. Every other polygon phase, "
+        "including the pattern-anchored fills, matches exactly."),
     ("conf_lines", 8): (
         400,
         "XOR text: both backends knock the glyphs out of the ink, but the "

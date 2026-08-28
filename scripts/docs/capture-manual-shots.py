@@ -36,6 +36,8 @@ ZX_SHOTS = (
     ("demo2", "samples/demo2/src/main.c", "demo2-zx.png", False),
     ("panels", "samples/demo3/src/panels.c", "panels-zx.png", True),
     ("bounce", "samples/demo3/src/bounce.c", "bounce-zx.png", True),
+    ("circles", "samples/demo4/src/circles.c", "circles-zx.png", True),
+    ("polygons", "samples/demo5/src/polygons.c", "polygons-zx.png", True),
 )
 
 # The CPC has two display modes behind one library, so each sample is built
@@ -50,6 +52,8 @@ CPC_SHOTS = (
     ("demo2", "samples/demo2/src/main.c", "demo2-cpc-{mode}.png", False),
     ("panels", "samples/demo3/src/panels.c", "panels-cpc-{mode}.png", True),
     ("bounce", "samples/demo3/src/bounce.c", "bounce-cpc-{mode}.png", True),
+    ("circles", "samples/demo4/src/circles.c", "circles-cpc-{mode}.png", True),
+    ("polygons", "samples/demo5/src/polygons.c", "polygons-cpc-{mode}.png", True),
 )
 
 # A CPC scanline is far wider than it is tall: 640x200 on a 4:3 monitor makes
@@ -72,6 +76,8 @@ PARTNER_SHOTS = (
     ("demo2", "samples/demo2/src/main.c", "demo2-partner.png", False),
     ("panels", "samples/demo3/src/panels.c", "panels-partner.png", True),
     ("bounce", "samples/demo3/src/bounce.c", "bounce-partner.png", True),
+    ("circles", "samples/demo4/src/circles.c", "circles-partner.png", True),
+    ("polygons", "samples/demo5/src/polygons.c", "polygons-partner.png", True),
 )
 
 
@@ -85,7 +91,7 @@ def run_in(image, script):
 def build_cpc(name, source, mode, gpxmode):
     """Link one sample for the CPC, as a raw binary at 0x8000."""
     out = f"build/demo-shots/{name}-cpc-{mode}"
-    run_in("wischner/xcc-z80", f"""set -e
+    run_in("wischner/xcc-z80-cpc", f"""set -e
         mkdir -p build/demo-shots
         xcc -mz80 -std=c11 -Os -Iinclude -DDEMO_MODE={gpxmode} \
             -c -o {out}.rel {source}

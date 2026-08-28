@@ -1,48 +1,17 @@
 # Toolchain and emulator packaging — pending work
 
-Both items below are the same shape: libgpx currently reaches outside its
-pinned Docker images for part of the CPC and Partner setup, because the images
-do not yet carry what it needs. Neither is a libgpx defect, and neither blocks
-a build today — but both mean a fresh checkout does not behave identically to
-this machine, which is exactly what the pinned images exist to prevent.
+libgpx currently reaches outside its pinned Docker images for part of the
+Partner setup, because the packaged image does not yet carry what it needs.
+It is not a libgpx defect and does not block a build today — but it means a
+fresh checkout does not behave identically to this machine, which is exactly
+what the pinned images exist to prevent.
 
-## 1. A CPC toolchain image (`wischner/xcc-z80-cpc`)
+The matching CPC item is done: `wischner/xcc-z80-cpc` ships the toolchain,
+`amstrad-cpc-mcp` and the CPC ROMs, and `scripts/mk/toolchain.mk`,
+`tests/mcp/cpcmcp.py` and `.mcp.json` all use it. `CPC_MCP` is now only the
+escape hatch for a local emulator build, mirroring `IDP_MCP`.
 
-The ZX and Partner backends each build inside a dedicated image
-(`wischner/xcc-z80-zx-spectrum`, `wischner/xcc-z80-idp`). The CPC does not:
-`scripts/mk/toolchain.mk` sets
-
-```make
-DOCKER_CPC ?= wischner/xcc-z80
-```
-
-— the plain Z80 toolchain, with no emulator in it — and `amstrad-cpc-mcp` is
-run as a native binary instead. `tests/mcp/cpcmcp.py` and `.mcp.json` both
-default to an absolute path outside the repo:
-
-```python
-CPC_MCP = os.environ.get("CPC_MCP", "/home/tstih/data/retro-vault/amstrad-cpc-mcp")
-```
-
-The direction is the wrong way round compared with the Partner: there, Docker
-is the default and `IDP_MCP` is the escape hatch. Here the local build *is*
-the default, so `make cpc-tests`, `make cpc-bench` and the CPC half of
-`make conformance` only run on a machine where that binary and its ROMs exist
-at that path. CI cannot run them at all.
-
-**When a CPC image is prepared**, it should ship `xcc`/`xas`/`xld`/`xar` plus
-`amstrad-cpc-mcp` and the CPC ROMs, exactly as the ZX image ships
-`zx-spectrum-mcp`. Then:
-
-* point `DOCKER_CPC` at it in `scripts/mk/toolchain.mk`;
-* invert the default in `cpcmcp.py` so the container is used unless `CPC_MCP`
-  is set, mirroring `idpmcp.py`'s `DOCKER_IDP` / `IDP_MCP` pair;
-* drop the absolute path from `.mcp.json`;
-* teach `cpcmcp.py` to rewrite paths into the `/work` mount when it runs under
-  Docker. Its `guest_path()` currently returns the host path unchanged, which
-  is correct only for a native server.
-
-## 2. Move the Partner MCP back to the packaged image
+## Move the Partner MCP back to the packaged image
 
 `tests/mcp/idpmcp.py` honours `IDP_MCP` to run a local `idp-mcp` build instead
 of the one inside `wischner/xcc-z80-idp`. That escape hatch is currently

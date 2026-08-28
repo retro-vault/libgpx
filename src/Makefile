@@ -7,6 +7,9 @@ include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 ZX_LIB_STAMP := $(BUILD_DIR)/zx/.lib-objs.stamp
 BIN_LIBGPX_LIB := $(BIN_DIR)/libgpx.lib
+# src/common holds the portable modules gated by ADVANCED; they are
+# assembled into each backend's object directory so the archives and every
+# link line that globs those directories pick them up unchanged.
 ZX_ASM_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s)
 ZX_C_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.c)
 PARTNER_LIB_BUILD_DIR := $(BUILD_DIR)/partner-lib
@@ -60,11 +63,12 @@ $(BIN_DIR)/:
 $(BUILD_TMP)/:
 	mkdir -p $@
 
-$(ZX_LIB_STAMP): $(ZX_ASM_SRCS) $(ZX_C_SRCS) | $(BUILD_DIR)/zx/
+$(ZX_LIB_STAMP): $(ZX_ASM_SRCS) $(ZX_C_SRCS) $(ADVANCED_SRCS) \
+		$(ADVANCED_WITNESS) | $(BUILD_DIR)/zx/
 	rm -f $(BUILD_DIR)/zx/*.rel
 	$(ZXRUN) '\
 		set -e; \
-		for src in src/zx/*.s; do \
+		for src in src/zx/*.s $(ADVANCED_GLOB); do \
 			[ -e "$$src" ] || continue; \
 			$(XAS) -o "build/zx/$$(basename "$$src" .s).rel" "$$src"; \
 		done; \
@@ -78,11 +82,12 @@ $(BIN_LIBGPX_LIB): $(ZX_LIB_STAMP) | $(BIN_DIR)/
 	rm -f $(BIN_LIBGPX_LIB)
 	$(ZXRUN) '$(XAR) rc "bin/libgpx.lib" build/zx/*.rel'
 
-$(PARTNER_LIB_STAMP): $(PARTNER_ASM_SRCS) | $(PARTNER_LIB_BUILD_DIR)/
+$(PARTNER_LIB_STAMP): $(PARTNER_ASM_SRCS) $(ADVANCED_SRCS) \
+		$(ADVANCED_WITNESS) | $(PARTNER_LIB_BUILD_DIR)/
 	rm -f $(PARTNER_LIB_BUILD_DIR)/*.rel
 	$(IDPRUN) '\
 		set -e; \
-		for src in src/partner/*.s; do \
+		for src in src/partner/*.s $(ADVANCED_GLOB); do \
 			[ -e "$$src" ] || continue; \
 			$(XAS) -o "build/partner-lib/$$(basename "$$src" .s).rel" "$$src"; \
 		done'
@@ -92,11 +97,12 @@ $(BIN_PARTNER_LIBGPX_LIB): $(PARTNER_LIB_STAMP) | $(BIN_DIR)/partner/
 	rm -f $(BIN_PARTNER_LIBGPX_LIB)
 	$(IDPRUN) '$(XAR) rc "bin/partner/libgpx.lib" build/partner-lib/*.rel'
 
-$(CPC_LIB_STAMP): $(CPC_ASM_SRCS) | $(CPC_LIB_BUILD_DIR)/
+$(CPC_LIB_STAMP): $(CPC_ASM_SRCS) $(ADVANCED_SRCS) \
+		$(ADVANCED_WITNESS) | $(CPC_LIB_BUILD_DIR)/
 	rm -f $(CPC_LIB_BUILD_DIR)/*.rel
 	$(CPCRUN) '\
 		set -e; \
-		for src in src/cpc/*.s; do \
+		for src in src/cpc/*.s $(ADVANCED_GLOB); do \
 			[ -e "$$src" ] || continue; \
 			$(XAS) -I src/cpc \
 				-o "build/cpc/$$(basename "$$src" .s).rel" "$$src"; \
