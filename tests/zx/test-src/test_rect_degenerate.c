@@ -51,6 +51,32 @@ void main(void)
     r.x0 = -32768; r.y0 = -32768; r.x1 = 32767; r.y1 = 32767;
     gpx_draw_rectangle(gpx, &r, CO_FORE, BM_CPY, 0xFF, (const rect_t *)0);
 
+    /* Every pixel of an outline is drawn exactly once. A one-row
+     * rectangle has a single horizontal edge and a one-column rectangle a
+     * single vertical one, so neither may be emitted twice. Drawing an
+     * edge twice is invisible under BM_CPY and cancels under BM_XOR, which
+     * is what makes XOR the mode that pins this down. */
+    r.x0 = 20; r.y0 = 100; r.x1 = 90; r.y1 = 100;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0x38, (const rect_t *)0);
+    r.x0 = 20; r.y0 = 104; r.x1 = 90; r.y1 = 104;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0xFF, (const rect_t *)0);
+    r.x0 = 100; r.y0 = 100; r.x1 = 100; r.y1 = 130;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0xFF, (const rect_t *)0);
+    r.x0 = 110; r.y0 = 100; r.x1 = 110; r.y1 = 130;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0x6D, (const rect_t *)0);
+    r.x0 = 120; r.y0 = 100; r.x1 = 120; r.y1 = 100;
+    gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0xFF, (const rect_t *)0);
+
+    /* The same two shapes through a clip that keeps only part of them,
+     * which is how a window decoration reaches them. */
+    {
+        rect_t clip = {40, 90, 70, 135};
+        r.x0 = 20; r.y0 = 108; r.x1 = 90; r.y1 = 108;
+        gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0x38, &clip);
+        r.x0 = 60; r.y0 = 95; r.x1 = 60; r.y1 = 140;
+        gpx_draw_rectangle(gpx, &r, CO_FORE, BM_XOR, 0xFF, &clip);
+    }
+
     /* A row of one-pixel rectangles at every bit phase along a byte. */
     for (i = 0; i < 16; ++i) {
         r.x0 = (coord)(160 + i); r.y0 = 150;

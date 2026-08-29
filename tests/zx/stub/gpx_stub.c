@@ -606,7 +606,8 @@ void gpx_draw_rectangle(
                 --yhi;
             for (coord y = ylo; y <= yhi; ++y) {
                 gpx_draw_pixel(gpx, rect.x0, y, c, m, clip);
-                gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
+                if (rect.x1 != rect.x0)
+                    gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
             }
         }
     }

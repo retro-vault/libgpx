@@ -95,6 +95,18 @@ _gpx_draw_rectangle::
         ld      d,-2(ix)
         call    __gpx_hline
 
+        ;; A one-row rectangle has a single horizontal edge. Drawing it as
+        ;; both the top and the bottom would apply the pattern twice, which
+        ;; is invisible in BM_CPY but cancels under BM_XOR. The sides are
+        ;; empty here too (ybot = y0-1 < ytop), so this is the whole rest.
+        ld      a,-5(ix)
+        cp      -7(ix)
+        jr      nz,.dr_bottom
+        ld      a,-6(ix)
+        cp      -8(ix)
+        jp      z,.dr_done
+
+.dr_bottom:
         ;; bottom edge: hline(x0..x1, y1)
         ld      l,7(ix)
         ld      h,8(ix)
@@ -170,6 +182,16 @@ _gpx_draw_rectangle::
 
         call    __gpx_bresenham_line    ; dx=0, downward: bres fast path
 
+        ;; A one-column rectangle has a single vertical edge, for the same
+        ;; reason the one-row case above has a single horizontal one.
+        ld      a,-1(ix)
+        cp      -3(ix)
+        jr      nz,.dr_right
+        ld      a,-2(ix)
+        cp      -4(ix)
+        jr      z,.dr_done
+
+.dr_right:
         ;; right side: vline(x1, ytop..ybot), solid
         ld      l,7(ix)
         ld      h,8(ix)
