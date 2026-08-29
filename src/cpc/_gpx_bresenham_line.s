@@ -430,7 +430,10 @@ __gpx_bresenham_line::
         jp      nz,.bxln_loop
         jp      .bxlw_loop
 .bl_go_y:
-        ld      b,L_DY(ix)              ; steps = dy (>0: dy>dx>=0, under 200)
+        ld      b,L_DY(ix)              ; steps = dy (under 200)
+        ld      a,b
+        or      a
+        jp      z,.bl_last              ; clipping collapsed it to one pixel
         ld      a,L_DX(ix)
         or      L_DX+1(ix)              ; Z <=> dx == 0, i.e. a vertical
         ;; The y direction and the display mode are both fixed for the whole

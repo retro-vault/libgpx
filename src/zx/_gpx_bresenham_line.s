@@ -386,7 +386,10 @@ __gpx_bresenham_line::
         ex      af,af'
         jr      .bxl_loop
 .bl_go_y:
-        ld      b,L_DY(ix)              ; steps = dy (>0: dy>dx>=0)
+        ld      b,L_DY(ix)              ; steps = dy
+        ld      a,b
+        or      a
+        jp      z,.bl_last              ; clipping collapsed it to one pixel
         ld      a,L_DX(ix)
         or      a
         jp      nz,.by_loop             ; genuine diagonal

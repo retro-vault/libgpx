@@ -35,6 +35,8 @@ void main(void)
             &line_clip);
         gpx_draw_line(gpx, 0, 160, 255, 160, CO_FORE, BM_CPY, 0xFF,
             &point_clip);
+        gpx_draw_line(gpx, 200, 0, 200, 191, CO_FORE, BM_CPY, 0xFF,
+            &point_clip);
         gpx_draw_line(gpx, 150, 150, 250, 170, CO_FORE, BM_CPY, 0xFF,
             &point_clip);
     }
