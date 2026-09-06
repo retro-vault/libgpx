@@ -2,19 +2,21 @@
  *
  * Each phase runs one primitive in a tight loop and HALTs, so the runner can
  * difference the T-state counter across the phase and divide by the
- * iteration count. The emulator gives every EF9367 command the same fixed
- * two-tick busy time, so what these numbers measure is the library's own
- * CPU cost, not the GDP's drawing time. */
+ * iteration count. EF9367 commands execute asynchronously; the measured
+ * CPU cost includes any waits for the emulated GDP to finish drawing. */
 #include "gdptest.h"
 
 static uint8_t solid[1] = {0xFF};
 static uint8_t brick[4] = {0xFF, 0x88, 0x88, 0x88};
 
-/* 16x8, stride 2. */
+/* Actual 16x8 Tiny outline. Partner does not support raster 1bpp assets;
+ * benchmarking one would only time its unsupported-encoding return. */
 static const uint8_t glyph[] = {
-    BMP_SIG_STRIDE(BMP_ENC_1BPP, 2), 16, 8, 16, 0,
-    0xFF, 0xFF, 0x80, 0x01, 0xBE, 0x7D, 0xA2, 0x45,
-    0xA2, 0x45, 0xBE, 0x7D, 0x80, 0x01, 0xFF, 0xFF
+    BMP_SIG_STRIDE(BMP_ENC_TINY, 0), 16, 8, 16, 0,
+    0xE0, 0xE0, 0xE0, 0xE0, 0xE0, /* right 15 */
+    0x98, 0x98, 0x88,             /* down 7 */
+    0xE2, 0xE2, 0xE2, 0xE2, 0xE2, /* left 15 */
+    0x9C, 0x9C, 0x8C              /* up 7 */
 };
 
 static const char sample[] = "Iskra Delta Partner 0123456789";

@@ -2,17 +2,11 @@
         ;;
         ;; Partner line drawing with optional Cohen-Sutherland clipping.
         ;;
-        ;; Pattern policy: only a solid line goes to the EF9367 vector
-        ;; generator. Every other pattern is walked pixel by pixel in
-        ;; software, exactly as the ZX backend does.
-        ;;
-        ;; The chip can dot, dash and dash-dot a vector itself via CTRL2, and
-        ;; this used to map lpatt onto those styles. It cannot be used: the
-        ;; hardware styles are fixed shapes that do not match the lpatt byte
-        ;; that selected them (CTRL2 "dotted" is 2 on 2 off, while lpatt 0xAA
-        ;; is 1 on 1 off), and a hardware-styled vector cannot report back how
-        ;; far the pattern rotated, so chained segments lose phase. Both would
-        ;; make the same program draw differently on the two backends.
+        ;; Solid lines use the EF9367 vector generator. Longer horizontal
+        ;; patterns use exact native 2-on/2-off or 4-on/4-off styles when
+        ;; possible; XOR also composes two shifted native strokes. Every
+        ;; other pattern follows the shared software Bresenham contract.
+        ;; Pattern phase and finite endpoints are preserved in all cases.
         ;;
         ;; GPL2 License (see: LICENSE)
         ;; Copyright (C) 2026 Tomaz Stih
@@ -23,15 +17,18 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_line
+        .globl  __gpx_hline
+        .globl  __ret_clean11
         .globl  __gpx_cohen_sutherland
         .globl  __gpx_bresenham_line_local
         .globl  __ef9367_exec_cmd
+        .globl  __ef9367_wait_ready
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_set_color
         .globl  __ef9367_set_line_style
         .globl  __ef9367_set_xy_fast
         .globl  __gpx_draw_vector
-        .globl  __gpx_hw_style_from_lpatt
+        .globl  __gpx_native_horizontal
         .globl  __gpx_vec_x0
         .globl  __ef9367_get_delta_cmd
         .globl  __abs_hl
@@ -40,14 +37,13 @@
 
         .equ    LPATT_SOLID,         0xFF
 
-        ;; locals (37 bytes)
+        ;; locals (15 bytes)
         ;; -12..-11 x0
         ;; -10..-9  y0
         ;; -8..-7   x1
         ;; -6..-5   y1
         ;; -4       lpatt (working)
         ;; -2       lpatt return value
-        ;; -1       vector command
         .equ    S_X0_LO,             -12
         .equ    S_X0_HI,             -11
         .equ    S_Y0_LO,             -10
@@ -66,9 +62,9 @@
         ;; by how far along the major axis clipping skipped. The axis is
         ;; chosen from the original, pre-clip deltas, x winning ties -- the
         ;; same rule the ZX backend uses.
-        .equ    SKIP_BASE_LO,        -37
-        .equ    SKIP_BASE_HI,        -36
-        .equ    SKIP_MAJOR_X,        -35
+        .equ    SKIP_BASE_LO,        -15
+        .equ    SKIP_BASE_HI,        -14
+        .equ    SKIP_MAJOR_X,        -13
 
         ;; Word offsets into the endpoint block __gpx_draw_vector is given.
         .equ    VEC_X0,              0
@@ -95,11 +91,12 @@
         ;; Clobbers:
         ;;   AF, BC, DE, HL, IX, IY
 _gpx_draw_line::
+__gpx_hline::
         push    ix
         ld      ix,#0
         add     ix,sp
 
-        ld      hl,#-37
+        ld      hl,#-15
         add     hl,sp
         ld      sp,hl
 
@@ -125,6 +122,8 @@ _gpx_draw_line::
         ld      a,12(ix)
         ld      S_LPATT(ix),a
         ld      LPATT_RET(ix),a
+        or      a
+        jp      z,.gdl_return           ; rotating an empty pattern stays empty
 
         ;; Optional clipping:
         ;; if clip != NULL, run Cohen-Sutherland; otherwise draw as-is.
@@ -133,6 +132,12 @@ _gpx_draw_line::
         ld      a,e
         or      d
         jp      z,.gdl_dispatch
+
+        ;; A solid pattern is rotation invariant; only patterned lines need
+        ;; the original major axis and the skipped distance.
+        ld      a,S_LPATT(ix)
+        inc     a
+        jr      z,.gdl_skip_done
 
         ;; Pick the skip axis and its origin before clipping moves them.
         ld      l,S_X1_LO(ix)
@@ -181,6 +186,10 @@ _gpx_draw_line::
         or      a
         jr      z,.gdl_return           ; rejected by clip window
 
+        ld      a,S_LPATT(ix)
+        inc     a
+        jr      z,.gdl_dispatch
+
         ;; Accepted: advance the pattern past the skipped part.
         ld      a,SKIP_MAJOR_X(ix)
         or      a
@@ -216,8 +225,9 @@ _gpx_draw_line::
         ld      a,10(ix)                ; c
         call    __ef9367_set_color
 
-        ;; A solid line goes to the EF9367 vector generator; every other
-        ;; pattern is walked in software (see the pattern policy above).
+        ;; A solid line goes directly to the EF9367 vector generator.
+        ;; The patterned kernel selects exact native horizontal styles or
+        ;; finite XOR compositions where applicable, then scalar fallback.
         ;;
         ;; For a slanted solid line the chip picks its own interior pixels,
         ;; and they are not quite the ones the ZX backend's Bresenham picks
@@ -228,11 +238,8 @@ _gpx_draw_line::
         ;; match the ZX backend exactly; only interior pixels of a slanted
         ;; solid line differ.
         ld      a,S_LPATT(ix)
-        call    __gpx_hw_style_from_lpatt
-        jr      c,.gdl_draw_hw
-        jr      .gdl_draw_bres
-
-.gdl_draw_hw:
+        inc     a                       ; FF -> solid style 0
+        jr      nz,.gdl_draw_bres
         call    __ef9367_set_line_style
         ;; The frame already holds x0,y0,x1,y1 as four consecutive words in
         ;; the order the renderer wants, so it draws straight out of there.
@@ -254,37 +261,16 @@ _gpx_draw_line::
         ld      sp,ix
         pop     ix
 
-        ;; callee cleanup: y0(2), x1(2), y1(2), c(1), m(1), lpatt(1), clip(2) = 11
+        ;; ------------------------------------------------------------
+        ;; __ret_clean11
+        ;; Callee cleanup for a return address followed by eleven bytes.
+        ;; Clobbers: DE, HL and flags. Preserves A.
+__ret_clean11::
         pop     de
         ld      hl,#11
         add     hl,sp
         ld      sp,hl
         push    de
-        ret
-
-        ;; ------------------------------------------------------------
-        ;; __gpx_hw_style_from_lpatt
-        ;; Decide whether lpatt can go to the EF9367 vector generator.
-        ;; Only a solid line can: see the pattern policy at the top of this
-        ;; file. Shared with gpx_fill_rectangle, which asks the same question
-        ;; per row.
-        ;;
-        ;; Arguments:
-        ;;   A = lpatt
-        ;; Return:
-        ;;   if recognized: A = EF9367_CR2_* style, carry=1
-        ;;   else:          A = original lpatt, carry=0
-        ;; Clobbers:
-        ;;   AF, BC
-__gpx_hw_style_from_lpatt:
-        cp      #LPATT_SOLID
-        jr      z,.gdl_hw_solid
-        or      a                       ; clears carry: software path
-        ret
-
-.gdl_hw_solid:
-        ld      a,#EF9367_CR2_SOLID
-        scf
         ret
 
         ;; ------------------------------------------------------------
@@ -342,80 +328,90 @@ __gpx_draw_vector::
         out     (#EF9367_DX),a
         out     (#EF9367_DY),a
         ld      a,#0b00010001
-        call    __ef9367_exec_cmd
-        ret
+        jp      __ef9367_exec_cmd
 
 .gdl_vec_not_point:
         ;; Build direction command and absolute deltas.
         call    __ef9367_get_delta_cmd
-        ld      (__gpx_vec_cmd),a
+        ld      c,a                     ; command survives every queued half
 
         call    __abs_hl                ; HL = abs(dx)
         ex      de,hl                   ; DE = abs(dx), HL = signed dy
         call    __abs_hl                ; HL = abs(dy)
 
-        ;; Work queue: push pair as (dx,dy); pop as (dy,dx).
-        push    de                      ; dx
-        push    hl                      ; dy
+        ;; Visible horizontal vectors can use complete 256-pixel chunks.
+        ;; Adjacent inclusive 255-delta commands otherwise share an endpoint
+        ;; and cancel that pixel under XOR. The native row kernel advances
+        ;; its next origin by 256 and therefore visits each pixel once.
+        ld      a,d
+        or      a                       ; short vectors cannot repeat a split endpoint
+        jr      z,.gdl_vec_queue
+        ld      a,h
+        or      l                       ; abs(dy) == 0?
+        jr      nz,.gdl_vec_queue
+        ld      a,VEC_X0+1(iy)
+        or      VEC_X1+1(iy)
+        and     #0xFC                   ; retain original wrap handling offscreen
+        jr      nz,.gdl_vec_queue
+        ld      l,VEC_X0(iy)
+        ld      h,VEC_X0+1(iy)
+        ld      b,#0xFF
+        jp      __gpx_native_horizontal
+
+.gdl_vec_queue:
+        ;; The first pair is already in registers. Only recursively queued
+        ;; halves need the stack; avoid a push/pop round trip for every glyph.
+        ex      de,hl                   ; HL=dx, DE=dy
         ld      b,#1                    ; pair count
+        jr      .gdl_vec_check
 
 .gdl_vec_loop:
         pop     de                      ; dy
         pop     hl                      ; dx
 
+.gdl_vec_check:
         ;; Fits EF9367 delta register when both high bytes are 0.
         ld      a,d
         or      h
         jr      nz,.gdl_vec_divide
 
+        call    __ef9367_wait_ready     ; fence before changing a live delta
         ld      a,l
         out     (#EF9367_DX),a
         ld      a,e
         out     (#EF9367_DY),a
-        ld      a,(__gpx_vec_cmd)
-        call    __ef9367_exec_cmd
+        ld      a,c
+        out     (#EF9367_CMD),a         ; no intervening command needs a fence
         djnz    .gdl_vec_loop
         ret
 
 .gdl_vec_divide:
         ;; Split (dx,dy) into two halves:
         ;; first: floor/2, second: ceil/2
-        ld      a,l
-        and     #1
-        ld      c,a
         srl     h
-        rr      l
-        push    hl                      ; dx1
-        ld      a,c
-        or      a
-        jr      z,.gdl_vec_dx2_ready
+        rr      l                       ; carry = the discarded odd bit
+        push    hl                      ; dx1 (PUSH preserves carry)
+        jr      nc,.gdl_vec_dx2_ready
         inc     hl                      ; dx2 = dx1 + 1
 .gdl_vec_dx2_ready:
 
-        ld      a,e
-        and     #1
-        ld      c,a
         srl     d
-        rr      e
-        push    de                      ; dy1
-        ld      a,c
-        or      a
-        jr      z,.gdl_vec_dy2_ready
+        rr      e                       ; carry = the discarded odd bit
+        push    de                      ; dy1 (PUSH preserves carry)
+        jr      nc,.gdl_vec_dy2_ready
         inc     de                      ; dy2 = dy1 + 1
 .gdl_vec_dy2_ready:
 
         push    hl                      ; dx2
         push    de                      ; dy2
-        inc     b
-        inc     b
-        djnz    .gdl_vec_loop
-        ret
+        inc     b                       ; replace one pending pair with two
+        jr      .gdl_vec_loop
 
         .area   _DATA
 
         ;; Endpoint scratch for callers that have no suitable block of their
-        ;; own (the tiny-bitmap stroke renderer), plus the direction command
-        ;; __gpx_draw_vector builds. gpx_draw_line points the renderer at its
+        ;; own (the tiny-bitmap stroke renderer). The direction command lives
+        ;; in C. gpx_draw_line points the renderer at its
         ;; own frame instead and never touches the scratch.
 __gpx_vec_x0::
         .dw     0x0000
@@ -425,5 +421,3 @@ __gpx_vec_x1::
         .dw     0x0000
 __gpx_vec_y1::
         .dw     0x0000
-__gpx_vec_cmd::
-        .db     0x00

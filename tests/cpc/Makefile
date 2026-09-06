@@ -30,6 +30,8 @@ build: $(CPC_STAMP)
 
 run: build
 	$(PYTHON) $(ROOT_DIR)/tests/mcp/run_cpc_tests.py $(ARGS)
+	$(PYTHON) $(ROOT_DIR)/tests/cpc/optimization_regressions.py
+	$(PYTHON) $(ROOT_DIR)/tests/cpc/bitmap_sprite_regressions.py
 
 $(CPC_IMG_DIR)/:
 	mkdir -p $@

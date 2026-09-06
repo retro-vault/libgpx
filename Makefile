@@ -118,13 +118,13 @@ demo5:
 $(RELEASE_DIR):
 	mkdir -p $@
 
-$(BIN_DIR)/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c)
+$(BIN_DIR)/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
 	$(MAKE) -C src lib
 
-$(BIN_DIR)/partner/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/partner/*.s)
+$(BIN_DIR)/partner/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/partner/*.s) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
 	$(MAKE) -C src partner-lib
 
-$(BIN_DIR)/cpc/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/cpc/*.s) $(wildcard $(ROOT_DIR)/src/cpc/*.inc)
+$(BIN_DIR)/cpc/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/cpc/*.s) $(wildcard $(ROOT_DIR)/src/cpc/*.inc) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
 	$(MAKE) -C src cpc-lib
 
 $(ZX_RELEASE_STAGE): $(BIN_DIR)/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)

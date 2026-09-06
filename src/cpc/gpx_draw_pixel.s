@@ -8,9 +8,9 @@
         ;; gpx_draw_pixel is a thin wrapper that marshals its stack args into
         ;; the core's register interface.
         ;;
-        ;; x reaches 639 here, so the bounds test and the clip test are both
-        ;; 16-bit. The clip uses __rect_cmp16s_lt, which leaves BC, DE and HL
-        ;; alone, so the point survives the four compares in registers.
+        ;; x reaches 639 here, so clipping retains its full 16-bit edges.
+        ;; Screen bounds establish nonnegative points; signed clip checks
+        ;; then reduce to sign tests and unsigned subtractions in registers.
         ;;
         ;; GPL2 License (see: LICENSE)
         ;; Copyright (C) 2026 Tomaz Stih
@@ -25,7 +25,6 @@
         .globl  _gpx_draw_pixel
         .globl  __gpx_plot_raw
         .globl  __vid_rowaddr
-        .globl  __rect_cmp16s_lt
         .globl  __gpx_xbyte
         .globl  __cpc_mode1
         .globl  __cpc_pixmask
@@ -89,96 +88,58 @@ __gpx_plot_raw:
 
         ;; x in [0, width-1] ?  One unsigned 16-bit compare does both ends:
         ;; a negative x is a huge unsigned value and fails the same test.
-        push    de                      ; x
-        push    hl                      ; y
-        ld      h,d
-        ld      l,e
-        ld      de,(__cpc_width)
-        or      a
-        sbc     hl,de                   ; carry when x < width
-        pop     hl
-        pop     de
-        jp      nc,.pr_reject
+        ld      a,(__cpc_width)
+        dec     a                       ; both widths have a nonzero low byte
+        sub     e
+        ld      a,(__cpc_width+1)
+        sbc     a,d                     ; carry when width - 1 < x
+        jp      c,.pr_reject
 .pr_x_ok:
 
-        ;; optional clip (BC = rect ptr). __rect_cmp16s_lt preserves BC,
-        ;; so the rect pointer survives all four compares; x and y wait on
-        ;; the stack because the compares need both register pairs.
+        ;; IX walks the clip while the point stays in DE/HL. Preserve it
+        ;; for register-fed shape and line callers.
         ld      a,b
         or      c
         jr      z,.pr_plot
+        push    ix
+        push    bc
+        pop     ix
 
-        push    de                      ; [x]
-        push    hl                      ; [x][y]
-
-        ;; y >= clip->y0 ?
-        ld      h,b
-        ld      l,c
-        inc     hl
-        inc     hl
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                  ; DE = clip->y0
-        pop     hl
-        push    hl                      ; HL = y
-        call    __rect_cmp16s_lt        ; carry when y < y0
+        ;; A negative lower edge passes; all other x edges need 16 bits.
+        bit     7,1(ix)
+        jr      nz,.pr_y0
+        ld      a,e
+        sub     0(ix)
+        ld      a,d
+        sbc     a,1(ix)
+        jr      c,.pr_clip_out
+.pr_y0:
+        ;; y is already in 0..199, so its high byte is zero.
+        ld      a,3(ix)
+        or      a
+        jp      m,.pr_x1
+        jr      nz,.pr_clip_out
+        ld      a,l
+        cp      2(ix)
+        jr      c,.pr_clip_out
+.pr_x1:
+        bit     7,5(ix)
+        jr      nz,.pr_clip_out
+        ld      a,4(ix)
+        sub     e
+        ld      a,5(ix)
+        sbc     a,d
         jr      c,.pr_clip_out
 
-        ;; y <= clip->y1 ?
-        ld      h,b
-        ld      l,c
-        ld      de,#6
-        add     hl,de
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        ex      de,hl                   ; HL = clip->y1
-        pop     de
-        push    de                      ; DE = y
-        call    __rect_cmp16s_lt        ; carry when y1 < y
+        ld      a,7(ix)
+        or      a
+        jp      m,.pr_clip_out
+        jr      nz,.pr_clip_ok
+        ld      a,6(ix)
+        cp      l
         jr      c,.pr_clip_out
-
-        ;; x >= clip->x0 ?
-        ld      h,b
-        ld      l,c
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                  ; DE = clip->x0
-        ld      hl,#2
-        add     hl,sp                   ; -> saved x
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                     ; HL = x
-        call    __rect_cmp16s_lt        ; carry when x < x0
-        jr      c,.pr_clip_out
-
-        ;; x <= clip->x1 ?
-        ld      h,b
-        ld      l,c
-        ld      de,#4
-        add     hl,de
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    de                      ; [x][y][x1]
-        ld      hl,#4
-        add     hl,sp                   ; -> saved x
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                  ; DE = x
-        pop     hl                      ; HL = clip->x1
-        call    __rect_cmp16s_lt        ; carry when x1 < x
-        jr      c,.pr_clip_out
-
-        pop     hl                      ; y
-        pop     de                      ; x
-        jr      .pr_plot
-
-.pr_clip_out:
-        pop     hl
-        pop     de
-        jr      .pr_reject
+.pr_clip_ok:
+        pop     ix
 
 .pr_plot:
         ;; y fits a byte here, which frees HL for the mask table
@@ -235,6 +196,8 @@ __gpx_plot_raw:
         ld      (hl),a
         ret
 
+.pr_clip_out:
+        pop     ix
 .pr_reject:
         pop     af
         ret

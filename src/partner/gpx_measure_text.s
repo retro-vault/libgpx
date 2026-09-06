@@ -31,7 +31,7 @@
         ;;   DE = measured width
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX, IY
+        ;;   AF, BC, DE, HL, HL' (IX and IY preserved)
 _gpx_measure_text::
         ld      a,h                     ; text != NULL ?
         or      l
@@ -42,19 +42,22 @@ _gpx_measure_text::
         jp      z,.mt_zero
 
         push    ix
-        push    iy
         push    de
         pop     ix                      ; IX = font
         push    hl
-        pop     iy                      ; IY = text
+        exx
+        pop     hl                      ; HL' = text
+        exx
 
         ld      bc,#0x0000              ; BC = accumulated width
 
 .mt_loop:
-        ld      a,0(iy)                 ; ch = *text
+        exx
+        ld      a,(hl)                  ; ch = *text++
+        inc     hl
+        exx
         or      a
         jr      z,.mt_done
-        inc     iy
 
         cp      1(ix)                   ; ch < first_ascii ?
         jr      c,.mt_add_empty
@@ -103,18 +106,13 @@ _gpx_measure_text::
         pop     hl
         add     hl,de
 
-        ;; Accept compact 1bpp and tiny encodings.
+        ;; Encodings 0/1 share the raster width; 2/3 share Tiny width-1.
         ld      a,(hl)
-        and     #BMP_ENC_MASK
-        cp      #BMP_SIG_1BPP
-        jr      z,.mt_w8
-        cp      #BMP_SIG_1BPP_MASK
+        and     #0xE0
         jr      z,.mt_w8
         cp      #BMP_SIG_TINY
         jr      z,.mt_tiny_w8
-        cp      #BMP_SIG_TINY_MASK
-        jr      z,.mt_tiny_w8
-        jr      .mt_add_empty
+        jp      .mt_add_empty
 
 .mt_tiny_w8:
         ;; Legacy Tiny font glyph headers store width-1.
@@ -161,7 +159,6 @@ _gpx_measure_text::
 .mt_done:
         ld      d,b
         ld      e,c
-        pop     iy
         pop     ix
         ret
 

@@ -1160,6 +1160,12 @@ static void zx_draw_bmp_mode(
     for (row = 0; row < view.h; ++row) {
         uint16_t col;
         uint16_t row_offset = (uint16_t)(row * view.stride);
+        /* Text takes its ink from the OR plane. A masked bitmap stores an
+         * AND row followed by an OR row, so its ink row has double stride.
+         * The text background policy, color and mode supply the compositor;
+         * the glyph's AND plane is used only by the public bitmap blitter. */
+        if (view.signature == BMP_SIG(BMP_ENC_1BPP_MASK))
+            row_offset = (uint16_t)((row * 2u + 1u) * view.stride);
         for (col = 0; col < view.w; ++col) {
             uint8_t byte = view.bitmap[row_offset + (uint16_t)(col >> 3)];
             uint8_t mask = (uint8_t)(0x80 >> (col & 7));

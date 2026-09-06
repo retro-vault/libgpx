@@ -33,14 +33,11 @@
         ;; References:
         ;;   __gpx_ctx
 _gpx_height::
-        ld      hl,(__gpx_ctx)          ; HL = active gpx_t*
-        ld      a,h
-        or      l
-        jr      nz,.have_ctx
-        ld      de,#0x0000
-        ret
-
-.have_ctx:
+        ld      de,(__gpx_ctx)          ; NULL already supplies the zero result
+        ld      a,d
+        or      e
+        ret     z
+        ex      de,hl
         inc     hl                      ; +2 => height
         inc     hl
         ld      e,(hl)                  ; height lo

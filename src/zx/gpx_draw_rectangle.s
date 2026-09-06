@@ -65,8 +65,6 @@ _gpx_draw_rectangle::
         jp      z,.dr_done
 
         ;; unpack + normalize rect into locals
-        push    ix
-        pop     hl
         call    __rect_unpack_norm
 
         ;; top edge: hline(x0..x1, y0)

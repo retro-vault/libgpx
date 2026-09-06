@@ -49,28 +49,25 @@ _gpx_clrscr::
         ;; is wide enough that the loop test costs well under a T-state a
         ;; byte.
         ld      hl,#0x0000
-        ld      d,h
-        ld      e,l
-        ld      c,#(CPC_VRAM_SIZE / 32 / 256)
-.cls_outer:
-        ld      b,#0                    ; djnz: 0 means 256
+        ld      bc,#(CPC_VRAM_SIZE / 32 / 256)
+.cls_outer:                             ; B starts and ends each pass at zero
 .cls_block:
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
         push    hl
-        push    de
+        push    hl
+        push    hl
+        push    hl
+        push    hl
+        push    hl
+        push    hl
+        push    hl
+        push    hl
         djnz    .cls_block
         dec     c
         jr      nz,.cls_outer

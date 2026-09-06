@@ -73,10 +73,8 @@ _gpx_draw_rectangle::
         push    hl                      ; clip
 
         ld      a,6(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt
+        push    af                      ; lpatt
+        inc     sp
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -118,10 +116,8 @@ _gpx_draw_rectangle::
         push    hl                      ; clip
 
         ld      a,6(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt
+        push    af                      ; lpatt
+        inc     sp
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -165,7 +161,6 @@ _gpx_draw_rectangle::
         ld      e,-11(ix)
         ld      d,-12(ix)
         call    __rect_cmp16s_lt
-        or      a
         jp      nz,.dr_done
 
         ;; left side, solid
@@ -174,10 +169,8 @@ _gpx_draw_rectangle::
         push    hl                      ; clip
 
         ld      a,#0xFF
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt solid
+        push    af                      ; lpatt solid
+        inc     sp
 
         ld      l,4(ix)
         ld      h,5(ix)
@@ -217,10 +210,8 @@ _gpx_draw_rectangle::
         push    hl                      ; clip
 
         ld      a,#0xFF
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt solid
+        push    af                      ; lpatt solid
+        inc     sp
 
         ld      l,4(ix)
         ld      h,5(ix)

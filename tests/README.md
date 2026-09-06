@@ -114,6 +114,53 @@ python3 tests/mcp/profile_zx.py bench_bmp --top 12
 python3 tests/mcp/profile_cpc.py bench_text 640x200
 ```
 
+## Optimization regression coverage
+
+`make zx-tests` includes randomized polygon/circle checks with intermediate
+framebuffer hashes and custom-font, sprite-background and extreme-fill cases.
+The independent text oracle reads the OR ink plane of masked glyphs.
+The normal target also runs 362 independent bitmap cases and 1,037 sprite
+cases, checking arbitrary AND/OR planes, every alignment, deep clipping,
+complete save-under buffers, screen attributes, memory guards and IX/IY/stack
+preservation. The Python models compute expected pixels directly.
+
+`make cpc-tests` also runs `tests/cpc/optimization_regressions.py`: 908
+independent checks of comparison flags and raw framebuffer contents across both
+modes, including untouched color-plane bits and X clipping above 255.
+`bitmap_sprite_regressions.py` adds 512 captures, 768 bitmap cases and 384
+sprite show/hide pairs, including arbitrary contents in both framebuffer
+planes, clipped source rows and all 32 bytes of background payload.
+
+`make -C tests/partner helpers` executes more than two million helper checks
+in the host Z80 harness. The existing Partner recorded-golden and conformance
+failures remain visible; the [optimization report](../docs/research/OPTIMIZATION-2026-09.md)
+records their unchanged before/after counts and the separate baseline-raster
+comparison.
+
+`make -C tests/partner pattern-tests` checks every horizontal pattern byte
+against an independent pixel oracle: 8,192 calls over mixed backgrounds,
+including copy/XOR, both directions, clipped origins and 255/256 boundaries.
+It also runs 60 full-raster fill cases across both Partner heights, with
+extreme signed origins and pattern lengths up to 255. These checks run before
+the recorded-golden gate. The pattern fixture uses its scalar oracle instead
+of recorded goldens.
+
+`make -C tests/partner tiny-tests` checks all 256 Tiny commands on the MCP
+GDP across 32 phases and both display heights, including pen-up moves,
+inversion, copy/XOR, all header variants and clipping. It checks more than
+11 million independently predicted pixels and 8,192 following-primitive
+markers. Pass `--baseline /path/to/checkout` to
+`tests/mcp/check_partner_tiny.py` to compare every pixel, including partially
+clipped strokes. The normal Partner GDP target includes this oracle before
+its recorded-golden gate.
+
+After `make -C tests/crossbench build`, run
+`python3 tests/mcp/pixel_core_regressions.py` for 1,240 pixel ABI/clipping cases
+and 120 circles across all five display modes. `probe_partner_styles.py` in
+the same directory verifies finite hardware compositions and enumerates the
+additional dash-dot pattern space. Spectrum's normal suite also covers
+shallow polygon edge runs and point counts 0, 1, 2, 254 and 255.
+
 ## Baselines
 
 `tests/size/baseline.json`, `tests/zx/bench-src/baseline.json` and

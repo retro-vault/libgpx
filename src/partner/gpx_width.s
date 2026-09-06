@@ -33,14 +33,11 @@
         ;; References:
         ;;   __gpx_ctx
 _gpx_width::
-        ld      hl,(__gpx_ctx)          ; HL = active gpx_t*
-        ld      a,h
-        or      l
-        jr      nz,.have_ctx
-        ld      de,#0x0000
-        ret
-
-.have_ctx:
+        ld      de,(__gpx_ctx)          ; NULL already supplies the zero result
+        ld      a,d
+        or      e
+        ret     z
+        ex      de,hl
         ld      e,(hl)                  ; width lo
         inc     hl
         ld      d,(hl)                  ; width hi

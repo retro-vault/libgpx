@@ -15,22 +15,15 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_fill_rectangle
-        .globl  _gpx_draw_line
+        .globl  __gpx_horizontal_prepared
         .globl  __rect_cmp16s_lt
         .globl  __rect_unpack_norm
-        .globl  __gpx_draw_vector
-        .globl  __gpx_hw_style_from_lpatt
-        .globl  __gpx_vec_x0
-        .globl  __gpx_vec_y0
-        .globl  __gpx_vec_x1
-        .globl  __gpx_vec_y1
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_set_color
-        .globl  __ef9367_set_line_style
 
         .area   _CODE
 
-        ;; locals (32 bytes)
+        ;; locals (30 bytes)
         .equ    R_X0_LO,               -1
         .equ    R_X0_HI,               -2
         .equ    R_X1_LO,               -3
@@ -64,8 +57,6 @@
         .equ    Y_CUR_HI,              -28
         .equ    ROW_IDX,               -29
         .equ    X_ROT,                 -30
-        .equ    ROW_PATT,              -31
-        .equ    TMP_CNT,               -32
 
         ;; ------------------------------------------------------------
         ;; void gpx_fill_rectangle(
@@ -80,7 +71,7 @@
         ;;   stack: c, m, fpatt, fpatt_len, clip
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX
+        ;;   AF, BC, DE, HL, AF'. IX and IY are preserved.
 _gpx_fill_rectangle::
         push    ix
         ld      ix,#0
@@ -90,7 +81,7 @@ _gpx_fill_rectangle::
         ld      b,h                     ; gpx hi
         ld      c,l                     ; gpx lo
 
-        ld      hl,#-32
+        ld      hl,#-30
         add     hl,sp
         ld      sp,hl
 
@@ -205,7 +196,6 @@ _gpx_fill_rectangle::
         ld      e,V_X0_LO(ix)
         ld      d,V_X0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jp      nz,.fr_done
 
         ;; reject if vis.y1 < vis.y0
@@ -214,7 +204,6 @@ _gpx_fill_rectangle::
         ld      e,V_Y0_LO(ix)
         ld      d,V_Y0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jp      nz,.fr_done
 
         ;; optional user clip
@@ -226,88 +215,22 @@ _gpx_fill_rectangle::
         ld      e,9(ix)
         ld      d,10(ix)
 
-        ;; clip x0
-        ld      a,(de)
-        ld      C_X0_LO(ix),a
-        inc     de
-        ld      a,(de)
-        ld      C_X0_HI(ix),a
-        inc     de
-        ;; clip y0
-        ld      a,(de)
-        ld      C_Y0_LO(ix),a
-        inc     de
-        ld      a,(de)
-        ld      C_Y0_HI(ix),a
-        inc     de
-        ;; clip x1
-        ld      a,(de)
-        ld      C_X1_LO(ix),a
-        inc     de
-        ld      a,(de)
-        ld      C_X1_HI(ix),a
-        inc     de
-        ;; clip y1
-        ld      a,(de)
-        ld      C_Y1_LO(ix),a
-        inc     de
-        ld      a,(de)
-        ld      C_Y1_HI(ix),a
+        ;; The clip fields use the same layout, displaced by 18 bytes.
+        push    ix
+        pop     hl
+        ld      bc,#-18
+        add     hl,bc
+        call    __rect_unpack_norm
 
-        ;; normalize clip x
-        ld      l,C_X1_LO(ix)
-        ld      h,C_X1_HI(ix)
-        ld      e,C_X0_LO(ix)
-        ld      d,C_X0_HI(ix)
-        call    __rect_cmp16s_lt
-        or      a
-        jr      z,.fr_cx_ok
-        ld      a,C_X0_LO(ix)
-        ld      c,a
-        ld      a,C_X0_HI(ix)
-        ld      b,a
-        ld      a,C_X1_LO(ix)
-        ld      C_X0_LO(ix),a
-        ld      a,C_X1_HI(ix)
-        ld      C_X0_HI(ix),a
-        ld      a,c
-        ld      C_X1_LO(ix),a
-        ld      a,b
-        ld      C_X1_HI(ix),a
-.fr_cx_ok:
-        ;; normalize clip y
-        ld      l,C_Y1_LO(ix)
-        ld      h,C_Y1_HI(ix)
-        ld      e,C_Y0_LO(ix)
-        ld      d,C_Y0_HI(ix)
-        call    __rect_cmp16s_lt
-        or      a
-        jr      z,.fr_cy_ok
-        ld      a,C_Y0_LO(ix)
-        ld      c,a
-        ld      a,C_Y0_HI(ix)
-        ld      b,a
-        ld      a,C_Y1_LO(ix)
-        ld      C_Y0_LO(ix),a
-        ld      a,C_Y1_HI(ix)
-        ld      C_Y0_HI(ix),a
-        ld      a,c
-        ld      C_Y1_LO(ix),a
-        ld      a,b
-        ld      C_Y1_HI(ix),a
-.fr_cy_ok:
         ;; vis.x0 = max(vis.x0, clip.x0)
         ld      l,V_X0_LO(ix)
         ld      h,V_X0_HI(ix)
         ld      e,C_X0_LO(ix)
         ld      d,C_X0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.fr_ix0_ok
-        ld      a,C_X0_LO(ix)
-        ld      V_X0_LO(ix),a
-        ld      a,C_X0_HI(ix)
-        ld      V_X0_HI(ix),a
+        ld      V_X0_LO(ix),e
+        ld      V_X0_HI(ix),d
 .fr_ix0_ok:
         ;; vis.y0 = max(vis.y0, clip.y0)
         ld      l,V_Y0_LO(ix)
@@ -315,12 +238,9 @@ _gpx_fill_rectangle::
         ld      e,C_Y0_LO(ix)
         ld      d,C_Y0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.fr_iy0_ok
-        ld      a,C_Y0_LO(ix)
-        ld      V_Y0_LO(ix),a
-        ld      a,C_Y0_HI(ix)
-        ld      V_Y0_HI(ix),a
+        ld      V_Y0_LO(ix),e
+        ld      V_Y0_HI(ix),d
 .fr_iy0_ok:
         ;; vis.x1 = min(vis.x1, clip.x1)
         ld      l,C_X1_LO(ix)
@@ -328,12 +248,9 @@ _gpx_fill_rectangle::
         ld      e,V_X1_LO(ix)
         ld      d,V_X1_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.fr_ix1_ok
-        ld      a,C_X1_LO(ix)
-        ld      V_X1_LO(ix),a
-        ld      a,C_X1_HI(ix)
-        ld      V_X1_HI(ix),a
+        ld      V_X1_LO(ix),l
+        ld      V_X1_HI(ix),h
 .fr_ix1_ok:
         ;; vis.y1 = min(vis.y1, clip.y1)
         ld      l,C_Y1_LO(ix)
@@ -341,12 +258,9 @@ _gpx_fill_rectangle::
         ld      e,V_Y1_LO(ix)
         ld      d,V_Y1_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.fr_iy1_ok
-        ld      a,C_Y1_LO(ix)
-        ld      V_Y1_LO(ix),a
-        ld      a,C_Y1_HI(ix)
-        ld      V_Y1_HI(ix),a
+        ld      V_Y1_LO(ix),l
+        ld      V_Y1_HI(ix),h
 .fr_iy1_ok:
         ;; reject invalid after user clip
         ld      l,V_X1_LO(ix)
@@ -354,7 +268,6 @@ _gpx_fill_rectangle::
         ld      e,V_X0_LO(ix)
         ld      d,V_X0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jp      nz,.fr_done
 
         ld      l,V_Y1_LO(ix)
@@ -362,7 +275,6 @@ _gpx_fill_rectangle::
         ld      e,V_Y0_LO(ix)
         ld      d,V_Y0_HI(ix)
         call    __rect_cmp16s_lt
-        or      a
         jp      nz,.fr_done
 
 .fr_clip_done:
@@ -374,21 +286,29 @@ _gpx_fill_rectangle::
         or      a
         sbc     hl,de
 
-        ld      e,8(ix)                 ; fpatt_len
-        ld      d,#0x00
-.fr_mod_loop:
+        ;; Bound phase setup for far-off-screen origins. Keep the common
+        ;; case where the offset already fits outside the division loop.
+        ld      c,8(ix)                 ; fpatt_len
         ld      a,h
         or      a
-        jr      nz,.fr_mod_sub
+        jr      nz,.fr_mod_div
         ld      a,l
-        cp      e
+        cp      c
         jr      c,.fr_mod_done
+.fr_mod_div:
+        ld      b,#16
+        xor     a
+.fr_mod_loop:
+        add     hl,hl
+        rla
+        jr      c,.fr_mod_sub
+        cp      c
+        jr      c,.fr_mod_next
 .fr_mod_sub:
-        or      a
-        sbc     hl,de
-        jr      .fr_mod_loop
+        sub     c
+.fr_mod_next:
+        djnz    .fr_mod_loop
 .fr_mod_done:
-        ld      a,l
         ld      ROW_IDX(ix),a
 
         ;; xrot = (vis.x0 - norm.x0) & 7
@@ -411,16 +331,6 @@ _gpx_fill_rectangle::
         ld      a,4(ix)                 ; c
         call    __ef9367_set_color
 
-        ;; Every row spans the same x range, so the horizontal endpoints go
-        ;; into the shared vector block once. Only y changes per row. The
-        ;; software fallback below never touches this block, so it survives.
-        ld      l,V_X0_LO(ix)
-        ld      h,V_X0_HI(ix)
-        ld      (__gpx_vec_x0),hl
-        ld      l,V_X1_LO(ix)
-        ld      h,V_X1_HI(ix)
-        ld      (__gpx_vec_x1),hl
-
 .fr_row_loop:
         ;; row pattern = fpatt[row_idx]
         ld      l,6(ix)
@@ -429,7 +339,10 @@ _gpx_fill_rectangle::
         ld      d,#0x00
         add     hl,de
         ld      a,(hl)
-        ld      ROW_PATT(ix),a
+        or      a
+        jr      z,.fr_row_done          ; zero pattern cannot draw any pixel
+        cp      #0xFF
+        jr      z,.fr_row_draw          ; FF stays FF under reversal/rotation
 
         ;; A fill takes its pattern MSB-first from the rectangle's left edge
         ;; -- the same way the ZX backend does it, and the same way the
@@ -437,19 +350,16 @@ _gpx_fill_rectangle::
         ;; below consumes a pattern LSB-first, the way a line's lpatt
         ;; rotates, so reverse the byte here. Doing it on this side keeps
         ;; both backends drawing identical fills.
-        ld      a,ROW_PATT(ix)
         ld      c,a
         ld      b,#8
 .fr_rev_loop:
         rr      c                       ; next source bit, low end first
         rla                             ; ...lands at the high end of A
         djnz    .fr_rev_loop
-        ld      ROW_PATT(ix),a
 
         ;; Rotate the row pattern right by xrot. Both the pattern and the
         ;; count stay in registers: spilling each to the frame cost over a
         ;; hundred T-states per bit, and this runs for every row of a fill.
-        ld      a,ROW_PATT(ix)
         ld      b,X_ROT(ix)
         inc     b                       ; djnz form: xrot 0 means no rotate
         jr      .fr_rot_test
@@ -457,58 +367,16 @@ _gpx_fill_rectangle::
         rrca
 .fr_rot_test:
         djnz    .fr_rot_loop
-        ld      ROW_PATT(ix),a
-.fr_rot_done:
-        ;; A row is a horizontal line the fill has already clipped, so when
-        ;; its pattern byte maps to a hardware vector style there is nothing
-        ;; left for the public entry to decide. Going straight to the
-        ;; renderer skips eleven bytes of argument marshalling, a 37-byte
-        ;; frame, the clip test and the pattern dispatch, once per row.
-        ld      a,ROW_PATT(ix)
-        call    __gpx_hw_style_from_lpatt
-        jr      nc,.fr_row_software     ; needs the Bresenham fallback
-        call    __ef9367_set_line_style
-
-        ld      l,Y_CUR_LO(ix)
-        ld      h,Y_CUR_HI(ix)
-        ld      (__gpx_vec_y0),hl
-        ld      (__gpx_vec_y1),hl       ; horizontal: y1 == y0
-        ld      iy,#__gpx_vec_x0
-        call    __gpx_draw_vector
-        jr      .fr_row_done
-
-.fr_row_software:
-        ;; gpx_draw_line(gpx, vis.x0, ycur, vis.x1, ycur, c, m, rowpatt, NULL)
-        ld      hl,#0x0000
-        push    hl                      ; clip = NULL
-
-        ld      a,ROW_PATT(ix)
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                      ; c,m
-
-        ld      l,Y_CUR_LO(ix)
-        ld      h,Y_CUR_HI(ix)
-        push    hl                      ; y1
-
-        ld      l,V_X1_LO(ix)
-        ld      h,V_X1_HI(ix)
-        push    hl                      ; x1
-
-        ld      l,Y_CUR_LO(ix)
-        ld      h,Y_CUR_HI(ix)
-        push    hl                      ; y0
-
-        ld      l,R_GPX_LO(ix)
-        ld      h,R_GPX_HI(ix)
-        ld      e,V_X0_LO(ix)
-        ld      d,V_X0_HI(ix)
-        call    _gpx_draw_line
+.fr_row_draw:
+        ;; The rectangle already clipped this row and programmed its mode.
+        ;; Pass coordinates directly to the frame-free patterned renderer.
+        ld      l,V_X0_LO(ix)
+        ld      h,V_X0_HI(ix)
+        ld      e,V_X1_LO(ix)
+        ld      d,V_X1_HI(ix)
+        ld      c,Y_CUR_LO(ix)
+        ld      b,Y_CUR_HI(ix)
+        call    __gpx_horizontal_prepared
 
 .fr_row_done:
         ;; if (ycur == vis.y1) done

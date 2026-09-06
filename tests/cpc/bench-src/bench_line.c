@@ -25,6 +25,13 @@ void bench_body(gpx_t *gpx)
     for (i = 0; i < 30; ++i)
         gpx_draw_line(gpx, (coord)(w - 1), 0, 0, (coord)(i * 6),
                       CO_FORE, BM_CPY, 0xAA, 0);
+    /* The right clip edge is 560 (mode 2) or 280 (mode 1). An older
+     * renderer truncated that coordinate to 48 or 24 while computing the
+     * intersection's y coordinate, causing these 30 lines to draw different
+     * pixels or disappear. Compare optimization timings with the old code
+     * plus that one correctness fix: 10,653,756 / 7,812,952 T-states for
+     * 640x200 / 320x200 respectively. The original baseline.json retains
+     * the historical, incorrect raster's timings for traceability. */
     for (i = 0; i < 30; ++i)
         gpx_draw_line(gpx, 0, (coord)(h - 1), (coord)(w - 1), (coord)(i * 6),
                       CO_FORE, BM_CPY, 0xFF, &clip);

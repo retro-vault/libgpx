@@ -11,14 +11,13 @@
         ;;
         ;; Saves the visible screen area into HL as a valid standard 1bpp
         ;; bmp_t with stride=2. Bytes/rows clipped off-screen remain zero
-        ;; because the payload is cleared first.
+        ;; because every captured row is masked and the unused tail is zeroed.
         ;;
         ;; The capture is always in the eight-pixels-per-byte form the rest
         ;; of the library uses for bitmaps, so in mode 1 -- where a screen
         ;; byte carries four pixels in its high nibble -- each eight-pixel
-        ;; group is gathered from the two screen bytes it occupies. That is
-        ;; the exact mirror of the blitter's scatter, so a captured
-        ;; background redraws through gpx_draw_bmp unchanged.
+        ;; group is gathered from the two screen bytes it occupies. The
+        ;; blitter restores that payload without changing the other plane.
         ;;
         ;; GPL2 License (see: LICENSE)
         ;; Copyright (C) 2026 Tomaz Stih
@@ -38,14 +37,8 @@
         .equ    BG_HEADER_SIZE,          5
         .equ    BG_PAYLOAD_SIZE,         32
 
-        .equ    B_BG_LO,                 -2
-        .equ    B_BG_HI,                 -1
-        .equ    B_VISW,                  -3
-        .equ    B_ROWCNT,                -4
-        .equ    B_DSTROW_LO,             -5
-        .equ    B_SHIFT,                 -6
-        .equ    B_GROUP,                 -7
-        .equ    B_DSTROW_HI,             -8
+        .equ    B_SHIFT,                 -1
+        .equ    B_GROUPS,                -2
 
         .area   _CODE
 
@@ -61,25 +54,33 @@
         ;; References:
         ;;   __vid_rowaddr, __vid_nextrow
 __gpx_store_background::
-        push    iy                      ; preserve caller IY (used as dest ptr)
         push    hl
         push    ix
         ld      ix,#0
         add     ix,sp
-
-        ld      hl,#-8
+        ld      hl,#-2
         add     hl,sp
         ld      sp,hl
+        exx
+        ld      b,a                     ; B' = rows remaining
+        add     a,a
+        neg
+        add     a,#BG_PAYLOAD_SIZE
+        ld      c,a                     ; C' = unused payload bytes
+        exx
 
-        ld      B_VISW(ix),c
-        ld      B_ROWCNT(ix),a
-        ld      B_DSTROW_LO(ix),b       ; parks y until the group is known
-
-        ;; pixel-in-group and group index: the pattern period is eight
-        ;; pixels in both modes, so this split is mode independent
+        ;; Pixel shift and source group count are invariant across rows.
         ld      a,e
-        and     #0x07
+        and     #7
         ld      B_SHIFT(ix),a
+        add     a,c
+        dec     a
+        rrca
+        rrca
+        rrca
+        and     #3
+        inc     a
+        ld      B_GROUPS(ix),a
         ld      a,e
         srl     d
         rra
@@ -87,146 +88,108 @@ __gpx_store_background::
         rra
         srl     d
         rra
-        ld      B_GROUP(ix),a           ; 0..79
+        ld      e,a                     ; group index, 0..79
 
-        ;; clear the payload so clipped bytes and rows read back as zero
+        ;; Form both output masks once, as a single 16-bit mask.
+        push    bc                      ; y
+        push    de                      ; destination group index
+        ld      hl,#0xffff
+        ld      a,#16
+        sub     c
+        ld      b,a
+        jr      z,.gsb_mask_done
+.gsb_mask_loop:
+        add     hl,hl
+        djnz    .gsb_mask_loop
+.gsb_mask_done:
+        push    hl                      ; output masks for alternate DE
         ld      l,2(ix)
         ld      h,3(ix)
         ld      de,#BG_HEADER_SIZE
         add     hl,de
         push    hl
-        ld      d,h
-        ld      e,l
-        inc     de
-        ld      bc,#BG_PAYLOAD_SIZE-1
-        ld      (hl),#0x00
-        ldir
-        pop     hl
-        push    hl
-        pop     iy                      ; IY = payload write pointer, +2/row
+        exx
+        pop     hl                      ; HL' = payload destination
+        pop     de                      ; D'/E' = output masks
+        exx
+        pop     de
+        pop     bc
 
-        ;; first row address, then one __vid_nextrow per row
-        ld      b,B_DSTROW_LO(ix)
         call    __vid_rowaddr
         ld      a,(__cpc_mode1)
         or      a
-        ld      a,B_GROUP(ix)
+        ld      a,e
         jr      z,.gsb_base_wide
-        add     a,a                     ; two screen bytes per group
+        add     a,a
 .gsb_base_wide:
         add     a,l
         ld      l,a
-        jr      nc,.gsb_base_ok
+        jr      nc,.gsb_row_loop
         inc     h
-.gsb_base_ok:
-        ld      B_DSTROW_LO(ix),l
-        ld      B_DSTROW_HI(ix),h
 
 .gsb_row_loop:
-        ld      a,B_ROWCNT(ix)
-        or      a
-        jp      z,.gsb_done
-
-        ld      l,B_DSTROW_LO(ix)
-        ld      h,B_DSTROW_HI(ix)
-
-        ;; Gather up to three eight-pixel groups into D:E:C.
+        push    hl                      ; retain the row base across the gather
+        ld      b,B_GROUPS(ix)
         call    .gsb_group
         ld      d,a
-        xor     a
-        ld      e,a
-        ld      c,a
-
-        ld      b,B_SHIFT(ix)
-        ld      a,B_VISW(ix)
-        add     a,b
-        cp      #9
-        jr      c,.gsb_src_ready
-        push    af
+        ld      e,#0
+        ld      c,#0
+        dec     b
+        jr      z,.gsb_src_ready
         call    .gsb_group
         ld      e,a
-        pop     af
-        cp      #17
-        jr      c,.gsb_src_ready
+        dec     b
+        jr      z,.gsb_src_ready
         call    .gsb_group
         ld      c,a
 .gsb_src_ready:
-
-        ;; align the first captured pixel to bit 7
+        ex      de,hl                   ; HL = first two eight-pixel groups
+        ld      b,B_SHIFT(ix)
         ld      a,b
         or      a
         jr      z,.gsb_shift_done
+        ld      a,c                     ; third group supplies incoming low bits
 .gsb_shift_loop:
-        sla     c
-        rl      e
-        rl      d
+        add     a,a
+        adc     hl,hl
         djnz    .gsb_shift_loop
 .gsb_shift_done:
-
-        ;; mask off everything past the visible width
-        ld      a,B_VISW(ix)
-        cp      #8
-        jr      nc,.gsb_first_full
-
-        ld      b,a
-        ld      a,#8
-        sub     b
-        ld      b,a
-        ld      a,#0xFF
-.gsb_mask0_loop:
-        add     a,a
-        djnz    .gsb_mask0_loop
+        ld      a,h
+        exx
         and     d
-        ld      d,a
-        xor     a
-        ld      e,a
-        jr      .gsb_store_row
-
-.gsb_first_full:
-        ld      a,B_VISW(ix)
-        cp      #9
-        jr      nc,.gsb_second_partial
-        xor     a
-        ld      e,a
-        jr      .gsb_store_row
-
-.gsb_second_partial:
-        sub     #8
-        cp      #8
-        jr      z,.gsb_store_row
-        ld      b,a
-        ld      a,#8
-        sub     b
-        ld      b,a
-        ld      a,#0xFF
-.gsb_mask1_loop:
-        add     a,a
-        djnz    .gsb_mask1_loop
+        ld      (hl),a
+        inc     hl
+        exx
+        ld      a,l
+        exx
         and     e
-        ld      e,a
-
-.gsb_store_row:
-        ld      0(iy),d
-        ld      1(iy),e
-        inc     iy
-        inc     iy
-
-        ld      l,B_DSTROW_LO(ix)
-        ld      h,B_DSTROW_HI(ix)
+        ld      (hl),a
+        inc     hl
+        dec     b
+        exx                             ; EXX and POP preserve the row-count flags
+        pop     hl
+        jr      z,.gsb_clear
         call    __vid_nextrow
-        ld      B_DSTROW_LO(ix),l
-        ld      B_DSTROW_HI(ix),h
+        jr      .gsb_row_loop
 
-        ld      a,B_ROWCNT(ix)
-        dec     a
-        ld      B_ROWCNT(ix),a
-        jp      .gsb_row_loop
-
+.gsb_clear:
+        ;; The captured rows already contain fully masked output. Clear
+        ;; only the unused tail, preserving the fixed 32-byte payload.
+        exx
+        ld      a,c
+        or      a
+        jr      z,.gsb_done
+        ld      b,#0
+        ld      d,h
+        ld      e,l
+        inc     de
+        dec     c
+        ld      (hl),b
+        ldir
 .gsb_done:
         ld      sp,ix
         pop     ix
         pop     hl
-        pop     iy                      ; restore caller IY
         ret
 
         ;; ------------------------------------------------------------

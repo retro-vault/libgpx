@@ -62,7 +62,7 @@
         ;;   A = 1 accepted and clipped, 0 rejected entirely
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IY, and the alternate HL'/DE'
+        ;;   AF, BC, DE, HL, IY
         ;;
         ;; References:
         ;;   __rect_cmp16s_lt
@@ -248,7 +248,7 @@ __gpx_cohen_sutherland::
         ;; .cs_outc: outcode of a state endpoint vs the rect (IY)
         ;;   IN:  A = state offset (0 = p0, 4 = p1)
         ;;   OUT: A = code (L=1, R=2, T=4, B=8)
-        ;; Preserves B; clobbers C, DE, HL and the alternate HL'/DE'.
+        ;; Preserves B; clobbers C, DE, HL.
         ;; ------------------------------------------------------------
 .cs_outc:
         ld      l,L_S(ix)
@@ -266,58 +266,37 @@ __gpx_cohen_sutherland::
         inc     hl
         ld      h,(hl)
         ld      l,a                     ; HL = py, DE = px
-        push    de
-        push    hl
-        exx
-        pop     de                      ; DE' = py
-        pop     hl                      ; HL' = px
-        exx
+        push    hl                      ; preserve py while comparing px
+        ex      de,hl                   ; HL = px
         ld      c,#0
         ;; L: px < rx0 ?
-        exx
-        push    hl
-        exx
-        pop     hl                      ; HL = px
         ld      e,0(iy)
         ld      d,1(iy)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.co_r
         set     0,c
 .co_r:
         ;; R: rx1 < px ?
+        ex      de,hl                   ; comparator left px in HL
         ld      l,4(iy)
         ld      h,5(iy)
-        exx
-        push    hl
-        exx
-        pop     de                      ; DE = px
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.co_t
         set     1,c
 .co_t:
         ;; T: py < ry0 ?
-        exx
-        push    de
-        exx
         pop     hl                      ; HL = py
         ld      e,2(iy)
         ld      d,3(iy)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.co_b
         set     2,c
 .co_b:
         ;; B: ry1 < py ?
+        ex      de,hl                   ; comparator left py in HL
         ld      l,6(iy)
         ld      h,7(iy)
-        exx
-        push    de
-        exx
-        pop     de                      ; DE = py
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.co_ret
         set     3,c
 .co_ret:
@@ -343,7 +322,6 @@ __gpx_cohen_sutherland::
         ;; Preserves BC.
 .cs_absd:
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.ca_sub
         ex      de,hl
 .ca_sub:

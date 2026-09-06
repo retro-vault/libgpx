@@ -76,7 +76,7 @@ _gpx_create::
         ld      hl,#CPC_W_320
         ld      a,#(GA_RMR | 1 | GA_ROM_LO_OFF | GA_ROM_HI_OFF)
 .gc_mode_set:
-        ld      (.gc_rmr),a             ; Gate Array mode byte, used below
+        ld      e,a                     ; Gate Array mode survives the CRTC loop
         ld      (__cpc_width),hl
         ld      (__gpx_data),hl         ; gpx_t.width
         dec     hl
@@ -114,7 +114,7 @@ _gpx_create::
 
         ;; Selecting the mode also pages both ROMs out, which is what
         ;; puts RAM under 0x0000 and 0xC000 for a raw binary.
-        ld      a,(.gc_rmr)
+        ld      a,e
         out     (c),a
 
         call    _gpx_clrscr
@@ -144,10 +144,6 @@ _gpx_create::
         .db     0x00                    ; R13 display start low
 
         .area   _DATA
-
-        ;; Gate Array mode/ROM byte for the mode gpx_create was given.
-.gc_rmr:
-        .db     0
 
         ;; Internal active context pointer used by gpx_width/gpx_height.
 __gpx_ctx::

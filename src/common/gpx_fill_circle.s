@@ -33,6 +33,10 @@
         .globl  _gpx_fill_circle
         .globl  _gpx_draw_line
 
+        .globl  __gpx_circle_cmp
+        .globl  __ret_clean11
+        .globl  __gpx_neg_hl
+
         .area   _CODE
 
         ;; ------------------------------------------------------------
@@ -60,26 +64,18 @@ _gpx_fill_circle::
         ld      ix,#0
         add     ix,sp
 
-        ;; locals (19 bytes)
-        ;; -1..-2   gpx
+        ;; locals (12 bytes)
+        ;; -1..-2   dy of the row being drawn
         ;; -3..-4   x (centre)
         ;; -5..-6   xn
         ;; -7..-8   yn
         ;; -9..-10  f     (decision variable)
-        ;; -11..-12 ddx
-        ;; -13..-14 ddy
-        ;; -15..-16 dy of the row being drawn
-        ;; -17..-18 half width of that row
-        ;; -19      that row's pattern byte, as the line wants it
-        ld      b,h
-        ld      c,l                     ; gpx, out of the way of the frame
-        ld      hl,#-19
+        ;; -11..-12 half width of that row
+        push    af                      ; dy slots
+        push    de                      ; centre x: low at -4, high at -3
+        ld      hl,#-8
         add     hl,sp
         ld      sp,hl
-        ld      -1(ix),c
-        ld      -2(ix),b
-        ld      -3(ix),e
-        ld      -4(ix),d
 
         ;; a negative radius or an empty pattern draws nothing
         ld      a,7(ix)
@@ -118,36 +114,17 @@ _gpx_fill_circle::
         ld      -9(ix),l
         ld      -10(ix),h
 
-        ;; ddx = 1
-        ld      hl,#1
-        ld      -11(ix),l
-        ld      -12(ix),h
-
-        ;; ddy = -2r
-        ld      l,6(ix)
-        ld      h,7(ix)
-        add     hl,hl
-        call    .neg_hl
-        ld      -13(ix),l
-        ld      -14(ix),h
-
 .fc_loop:
-        ;; while (xn < yn)
-        call    .cmp_xn_yn
-        jp      p,.fc_done
-
-        ;; xn++, ddx += 2, f += ddx
+        ;; The positive radius and the previous step establish xn < yn.
+        ;; xn++, f += 2*xn + 1
         ld      l,-5(ix)
         ld      h,-6(ix)
         inc     hl
         ld      -5(ix),l
         ld      -6(ix),h
-        ld      l,-11(ix)
-        ld      h,-12(ix)
+        ;; ddx = 2*xn + 1; xn is already in HL.
+        add     hl,hl
         inc     hl
-        inc     hl
-        ld      -11(ix),l
-        ld      -12(ix),h
         ex      de,hl
         ld      l,-9(ix)
         ld      h,-10(ix)
@@ -170,36 +147,33 @@ _gpx_fill_circle::
         dec     hl
         ld      -7(ix),l
         ld      -8(ix),h                ; yn--
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        inc     hl
-        inc     hl
-        ld      -13(ix),l
-        ld      -14(ix),h               ; ddy += 2
+        ;; f -= 2*yn; yn is already in HL.
+        add     hl,hl
         ex      de,hl
         ld      l,-9(ix)
         ld      h,-10(ix)
-        add     hl,de
+        or      a
+        sbc     hl,de
         ld      -9(ix),l
-        ld      -10(ix),h               ; f += ddy
+        ld      -10(ix),h               ; f -= 2*yn
 
 .fc_stepped:
         ;; the pair of rows at +/-xn is final as soon as xn is, as long as
         ;; the walk has not passed the diagonal
-        call    .cmp_xn_yn
-        jp      p,.fc_check_diag
+        call    __gpx_circle_cmp
+        jp      m,.fc_row_xn
+        ld      a,h
+        or      l
+        jp      nz,.fc_done
 .fc_row_xn:
         ld      l,-5(ix)
         ld      h,-6(ix)                ; dy = xn
         ld      e,-7(ix)
         ld      d,-8(ix)                ; w = yn
+        push    af                      ; preserve the comparison through draw
         call    .row_pair
-        jp      .fc_loop
-.fc_check_diag:
-        ld      a,h
-        or      l
-        jr      z,.fc_row_xn            ; xn == yn: still one row pair
-        jp      .fc_loop
+        pop     af
+        jp      m,.fc_loop              ; equality was the final pair
 
 .fc_done:
         ld      sp,ix
@@ -207,24 +181,8 @@ _gpx_fill_circle::
 
         ;; callee cleanup: y(2), r(2), c(1), m(1), fpatt(2), fpatt_len(1),
         ;; clip(2) = 11
-        pop     de
-        ld      hl,#11
-        add     hl,sp
-        ld      sp,hl
-        push    de
-        ret
+        jp      __ret_clean11
 
-        ;; .cmp_xn_yn
-        ;; return: HL = xn - yn, sign flag set when xn < yn
-        ;; clobbers: AF, DE, HL
-.cmp_xn_yn:
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        ld      e,-7(ix)
-        ld      d,-8(ix)
-        or      a
-        sbc     hl,de
-        ret
 
         ;; .row_pair
         ;; draw the two rows dy above and below the centre
@@ -232,11 +190,11 @@ _gpx_fill_circle::
         ;; clobbers: AF, BC, DE, HL
 .row_pair:
         call    .row
-        ld      l,-15(ix)
-        ld      h,-16(ix)
-        call    .neg_hl
-        ld      e,-17(ix)
-        ld      d,-18(ix)
+        ld      l,-1(ix)
+        ld      h,-2(ix)
+        call    __gpx_neg_hl
+        ld      e,-11(ix)
+        ld      d,-12(ix)
         jp      .row
 
         ;; .row
@@ -244,10 +202,10 @@ _gpx_fill_circle::
         ;; param: HL = dy from the centre, DE = half width
         ;; clobbers: AF, BC, DE, HL
 .row:
-        ld      -15(ix),l
-        ld      -16(ix),h
-        ld      -17(ix),e
-        ld      -18(ix),d
+        ld      -1(ix),l
+        ld      -2(ix),h
+        ld      -11(ix),e
+        ld      -12(ix),d
 
         ;; the row's byte, counted from the top of the bounding box:
         ;; fpatt[(dy + r) % fpatt_len]
@@ -272,72 +230,61 @@ _gpx_fill_circle::
         ld      h,11(ix)
         add     hl,de
         ld      a,(hl)
+        or      a
+        ret     z                       ; an empty pattern row draws nothing
+        cp      #0xFF
+        jr      z,.row_draw             ; solid rows need no phase conversion
 
-        ;; MSB-first from the box's left edge becomes LSB-first from the
-        ;; line's start: reverse the byte, then rotate it right by how far
-        ;; this row starts inside the box
+        ;; Reverse once, then rotate by (r - width) modulo eight. Only the
+        ;; low coordinate bytes contribute to this phase.
         ld      b,#8
 .row_reverse:
         rlca
         rr      c
         djnz    .row_reverse
-        ld      a,c
-        ld      -19(ix),a
-        ld      l,6(ix)
-        ld      h,7(ix)
-        ld      e,-17(ix)
-        ld      d,-18(ix)
-        or      a
-        sbc     hl,de                   ; r - w, never negative
-        ld      a,l
+        ld      a,6(ix)
+        sub     -11(ix)
         and     #0x07
-        jr      z,.row_draw
         ld      b,a
-        ld      a,-19(ix)
+        ld      a,c
+        jr      z,.row_draw
 .row_rotate:
         rrca
         djnz    .row_rotate
-        ld      -19(ix),a
 
 .row_draw:
-        ;; gpx_draw_line(gpx, x-w, row, x+w, row, c, m, patt, clip). The
-        ;; callee does not keep IX and cleans its own arguments, so IX is
-        ;; saved underneath them.
-        push    ix
+        ;; All backend line entries preserve IX and ignore the context
+        ;; argument. Keep the shape frame live across their callee cleanup.
         ld      l,13(ix)
         ld      h,14(ix)
         push    hl                      ; clip
-        ld      a,-19(ix)
         push    af
         inc     sp                      ; lpatt
         ld      l,8(ix)
         ld      h,9(ix)
         push    hl                      ; c, m
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        ld      e,-17(ix)
-        ld      d,-18(ix)
+        ld      l,-4(ix)
+        ld      h,-3(ix)
+        ld      e,-11(ix)
+        ld      d,-12(ix)
         add     hl,de
         ex      de,hl                   ; DE = x + w
-        ld      l,-15(ix)
-        ld      h,-16(ix)
+        ld      l,-1(ix)
+        ld      h,-2(ix)
         ld      c,4(ix)
         ld      b,5(ix)
         add     hl,bc                   ; HL = y + dy
         push    hl                      ; y1
         push    de                      ; x1
         push    hl                      ; y0
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        ld      e,-17(ix)
-        ld      d,-18(ix)
+        ld      l,-11(ix)
+        ld      h,-12(ix)
+        add     hl,hl                   ; DE still holds x+w: subtract 2*w
+        ex      de,hl
         or      a
         sbc     hl,de
         ex      de,hl                   ; DE = x - w
-        ld      l,-1(ix)
-        ld      h,-2(ix)                ; gpx
         call    _gpx_draw_line
-        pop     ix                      ; saved below the argument block
         ret
 
         ;; .mod16_8
@@ -357,16 +304,4 @@ _gpx_fill_circle::
         sub     c
 .md_next:
         djnz    .md_loop
-        ret
-
-        ;; .neg_hl
-        ;; return: HL = -HL
-        ;; clobbers: AF, HL
-.neg_hl:
-        xor     a
-        sub     l
-        ld      l,a
-        sbc     a,a
-        sub     h
-        ld      h,a
         ret

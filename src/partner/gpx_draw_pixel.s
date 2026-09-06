@@ -1,6 +1,7 @@
         ;; gpx_draw_pixel.s
         ;;
         ;; Partner pixel primitive with optional clipping.
+        ;; The public wrapper and shared shapes use the same register core.
         ;;
         ;; GPL2 License (see: LICENSE)
         ;; Copyright (C) 2026 Tomaz Stih
@@ -11,6 +12,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_pixel
+        .globl  __gpx_plot_raw
         .globl  __gdata
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_set_color
@@ -20,166 +22,105 @@
         .include "_ef9367-defs.inc"
 
         .equ    EF9367_CMD_PLOT,       0x80
-        .equ    SCRWIDTH_HI,           0x04 ; x < 1024
-
-        ;; locals (4 bytes)
-        .equ    P_X_LO,               -4
-        .equ    P_X_HI,               -3
-        .equ    P_Y_LO,               -2
-        .equ    P_Y_HI,               -1
 
         .area   _CODE
 
         ;; ------------------------------------------------------------
-        ;; void gpx_draw_pixel(
-        ;;   gpx_t *gpx,        HL (ignored)
-        ;;   coord x,           DE
-        ;;   coord y,           SP+2 (2 bytes)
-        ;;   color c,           SP+4 (1 byte)
-        ;;   bmode m,           SP+5 (1 byte)
-        ;;   const rect_t *clip SP+6 (2 bytes)
-        ;;
-        ;; Callee cleans 6 bytes from stack.
-        ;;
+        ;; void gpx_draw_pixel(gpx_t *gpx, coord x, coord y,
+        ;;                     color c, bmode m, const rect_t *clip)
+        ;; HL = gpx (ignored), DE = x
+        ;; stack: y(2), c(1), m(1), clip(2); callee cleans all six bytes.
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX, IY
+        ;;   AF, BC, DE, HL and the alternate set; preserves IX/IY.
 _gpx_draw_pixel::
-        push    ix
-        ld      ix,#0
-        add     ix,sp
-
-        ld      hl,#-4
-        add     hl,sp
-        ld      sp,hl
-
-        ;; Cache x and y.
-        ld      P_X_LO(ix),e
-        ld      P_X_HI(ix),d
-        ld      a,4(ix)
-        ld      P_Y_LO(ix),a
-        ld      a,5(ix)
-        ld      P_Y_HI(ix),a
-
-        ;; x must be in [0,1023].
-        ld      a,P_X_HI(ix)
-        bit     7,a
-        jp      nz,.dpx_exit
-        cp      #SCRWIDTH_HI
-        jp      nc,.dpx_exit
-
-        ;; y must be in [0,height-1], height comes from __gdata.
-        ld      a,P_Y_HI(ix)
-        bit     7,a
-        jp      nz,.dpx_exit
-        ld      l,P_Y_LO(ix)
-        ld      h,P_Y_HI(ix)            ; HL = y
-        ld      de,(__gdata+2)          ; DE = height
-        or      a
-        sbc     hl,de                   ; y - height
-        jp      nc,.dpx_exit            ; reject when y >= height
-
-        ;; Clip check when clip != NULL.
-        ld      e,8(ix)
-        ld      d,9(ix)
-        ld      a,e
-        or      d
-        jr      z,.dpx_draw
-
-        push    de
-        pop     iy                      ; IY = clip
-
-        ;; reject if (x < clip->x0)
-        ld      l,P_X_LO(ix)
-        ld      h,P_X_HI(ix)
-        ld      e,0(iy)
-        ld      d,1(iy)
-        call    .dpx_cmp16s_lt
-        or      a
-        jp      nz,.dpx_exit
-
-        ;; reject if (x > clip->x1) => (clip->x1 < x)
-        ld      l,4(iy)
-        ld      h,5(iy)
-        ld      e,P_X_LO(ix)
-        ld      d,P_X_HI(ix)
-        call    .dpx_cmp16s_lt
-        or      a
-        jp      nz,.dpx_exit
-
-        ;; reject if (y < clip->y0)
-        ld      l,P_Y_LO(ix)
-        ld      h,P_Y_HI(ix)
-        ld      e,2(iy)
-        ld      d,3(iy)
-        call    .dpx_cmp16s_lt
-        or      a
-        jp      nz,.dpx_exit
-
-        ;; reject if (y > clip->y1) => (clip->y1 < y)
-        ld      l,6(iy)
-        ld      h,7(iy)
-        ld      e,P_Y_LO(ix)
-        ld      d,P_Y_HI(ix)
-        call    .dpx_cmp16s_lt
-        or      a
-        jp      nz,.dpx_exit
-
-.dpx_draw:
-        ;; Apply mode/color and emit one hardware plot command.
-        ld      a,7(ix)                 ; bmode
-        call    __ef9367_set_blit_mode
-        ld      a,6(ix)                 ; color
-        call    __ef9367_set_color
-        ld      l,P_X_LO(ix)
-        ld      h,P_X_HI(ix)
-        ld      e,P_Y_LO(ix)
-        ld      d,P_Y_HI(ix)
-        call    __ef9367_set_xy
-        ld      a,#EF9367_CMD_PLOT
-        call    __ef9367_exec_cmd
-
-.dpx_exit:
-        ld      sp,ix
-        pop     ix
-
-        ;; callee cleanup: y(2), c(1), m(1), clip(2) = 6 bytes
-        pop     de
-        ld      hl,#6
-        add     hl,sp
-        ld      sp,hl
-        push    de
-        ret
+        exx
+        pop     bc                      ; return address in alternate BC
+        exx
+        pop     hl                      ; y
+        pop     af                      ; A = mode, carry = color bit 0
+        rla
+        and     #0x03                   ; packed color/mode
+        pop     bc                      ; clip
+        exx
+        push    bc
+        exx
+        ;; fall through: the core returns straight to the public caller
 
         ;; ------------------------------------------------------------
-        ;; uint8_t dpx_cmp16s_lt(coord a, coord b)
-        ;; Arguments:
-        ;;   HL = a
-        ;;   DE = b
-        ;;
-        ;; Return:
-        ;;   A = 1 if (a < b), else 0
-        ;;
+        ;; __gpx_plot_raw (same interface on all three backends)
+        ;; DE = x, HL = y (signed 16-bit), BC = clip (0 => screen only)
+        ;; A: bit 0 = color (CO_FORE), bit 1 = mode (BM_XOR)
         ;; Clobbers:
-        ;;   AF, HL
-.dpx_cmp16s_lt:
-        ;; If signs differ, the negative value is smaller.
+        ;;   AF, BC, DE, HL; preserves IX/IY and alternate registers.
+__gpx_plot_raw::
+        push    af
+
+        ;; Unsigned upper bounds also reject all negative coordinates.
+        ld      a,d
+        cp      #4                      ; x < 1024
+        jr      nc,.pr_reject
+        ld      a,(__gdata+3)
+        dec     a                       ; heights 256/512 have low byte 0
+        cp      h
+        jr      c,.pr_reject
+
+        ld      a,b
+        or      c
+        jr      z,.pr_plot
+        push    ix
+        push    bc
+        pop     ix                      ; clip, keeping x/y in DE/HL
+
+        ;; Screen coordinates are nonnegative: a negative lower edge
+        ;; passes immediately, a negative upper edge rejects immediately.
+        bit     7,1(ix)
+        jr      nz,.pr_y0
+        ld      a,e
+        sub     0(ix)
+        ld      a,d
+        sbc     a,1(ix)
+        jr      c,.pr_clip_out
+.pr_y0:
+        bit     7,3(ix)
+        jr      nz,.pr_x1
+        ld      a,l
+        sub     2(ix)
         ld      a,h
-        xor     d
-        jp      m,.dpx_cmp_sign_diff
+        sbc     a,3(ix)
+        jr      c,.pr_clip_out
+.pr_x1:
+        bit     7,5(ix)
+        jr      nz,.pr_clip_out
+        ld      a,4(ix)
+        sub     e
+        ld      a,5(ix)
+        sbc     a,d
+        jr      c,.pr_clip_out
+        bit     7,7(ix)
+        jr      nz,.pr_clip_out
+        ld      a,6(ix)
+        sub     l
+        ld      a,7(ix)
+        sbc     a,h
+        jr      c,.pr_clip_out
+        pop     ix
 
-        ;; Same sign: signed compare via subtraction.
-        or      a
-        sbc     hl,de
-        jr      c,.dpx_cmp_true
-        xor     a
-        ret
+.pr_plot:
+        pop     af
+        push    af
+        rrca
+        and     #1
+        call    __ef9367_set_blit_mode
+        pop     af
+        and     #1
+        call    __ef9367_set_color
+        ex      de,hl                   ; hardware helper takes x in HL
+        call    __ef9367_set_xy
+        ld      a,#EF9367_CMD_PLOT
+        jp      __ef9367_exec_cmd
 
-.dpx_cmp_sign_diff:
-        bit     7,h
-        jr      nz,.dpx_cmp_true
-        xor     a
-        ret
-
-.dpx_cmp_true:
-        ld      a,#1
+.pr_clip_out:
+        pop     ix
+.pr_reject:
+        pop     af
         ret

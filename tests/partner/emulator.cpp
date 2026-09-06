@@ -207,8 +207,9 @@ static bool partner_style_on(uint8_t style, int step)
 
 static void partner_vector_draw(PartnerRunContext *ctx, uint8_t cmd)
 {
-    int adx = (int)ctx->gpu.dx;
-    int ady = (int)ctx->gpu.dy;
+    // Short commands carry their own deltas; they leave DX/DY unchanged.
+    int adx = (cmd & 0x80) ? ((cmd >> 5) & 3) : (int)ctx->gpu.dx;
+    int ady = (cmd & 0x80) ? ((cmd >> 3) & 3) : (int)ctx->gpu.dy;
     int sdx = 0;
     int sdy = 0;
     int b1 = (cmd >> 1) & 0x01;
@@ -294,7 +295,7 @@ static void partner_handle_command(PartnerRunContext *ctx, uint8_t cmd)
         partner_plot(ctx, (int)ctx->gpu.x, (int)ctx->gpu.y);
         return;
     default:
-        if (cmd & 0x10)
+        if ((cmd & 0x80) || ((cmd & 0xF0) == 0x10))
             partner_vector_draw(ctx, cmd);
         return;
     }

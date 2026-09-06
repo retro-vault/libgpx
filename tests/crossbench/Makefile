@@ -19,9 +19,11 @@ ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/
 	$(ADVANCED_SRCS)
 PARTNER_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/partner/*.s) \
 	$(wildcard $(ROOT_DIR)/src/partner/*.c) \
-	$(wildcard $(ROOT_DIR)/src/partner/*.inc)
+	$(wildcard $(ROOT_DIR)/src/partner/*.inc) \
+	$(ADVANCED_SRCS)
 CPC_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/cpc/*.s) \
-	$(wildcard $(ROOT_DIR)/src/cpc/*.inc)
+	$(wildcard $(ROOT_DIR)/src/cpc/*.inc) \
+	$(ADVANCED_SRCS)
 
 XB_BIN := $(BIN_DIR)/xbench
 XB_OUT := $(foreach n,$(XB_NAMES),$(XB_BIN)/$(n)_zx.ihx \

@@ -17,13 +17,14 @@
         .globl  __gpx_bmp_invert
         .globl  _gpx_draw_line
         .globl  __rect_cmp16s_lt
-        .globl  __gpx_draw_vector
+        .globl  __ef9367_set_xy_fast
         .globl  __gpx_vec_x0
         .globl  __gpx_vec_y0
         .globl  __gpx_vec_x1
         .globl  __gpx_vec_y1
         .globl  __ef9367_set_blit_mode
         .globl  __ef9367_set_color
+        .globl  __ef9367_set_pen
         .globl  __ef9367_set_line_style
 
         .include "_ef9367-defs.inc"
@@ -37,39 +38,24 @@
         .equ    BM_XOR,                0x01
         .equ    LPATT_SOLID,           0xFF
 
-        ;; locals (40 bytes)
+        ;; locals (12 bytes); y and clip stay in their consumed argument slots
         .equ    L_GPX_LO,              -1
         .equ    L_GPX_HI,              -2
         .equ    L_X_LO,                -3
         .equ    L_X_HI,                -4
-        .equ    L_Y_LO,                -5
-        .equ    L_Y_HI,                -6
-        .equ    L_BMP_LO,              -7
-        .equ    L_BMP_HI,              -8
-        .equ    L_CLIP_LO,             -9
-        .equ    L_CLIP_HI,             -10
+        .equ    L_Y_LO,                 4
+        .equ    L_Y_HI,                 5
+        .equ    L_CLIP_LO,              8
+        .equ    L_CLIP_HI,              9
 
-        .equ    L_W_LO,                -11
-        .equ    L_W_HI,                -12
-        .equ    L_H_LO,                -13
-        .equ    L_H_HI,                -14
-        .equ    L_MODE,                -15
-        .equ    L_BOXW,                -16
-        .equ    L_BOXH,                -17
-        ;; Does the EF9367 cursor still sit on the stroke loop's x0,y0? The
-        ;; tiny move stream is a connected path, so after a drawn stroke the
-        ;; pen is already where the next one starts and the whole coordinate
-        ;; setup can be skipped. A pen-up move or a clipped stroke breaks
-        ;; that and clears this.
-        .equ    L_CUR_OK,              -18
-        .equ    L_MOVES,               -33
-        .equ    L_I,                   -34
-        .equ    L_X0_LO,               -35
-        .equ    L_X0_HI,               -36
-        .equ    L_Y0_LO,               -37
-        .equ    L_Y0_HI,               -38
-        .equ    L_DAT_LO,              -39
-        .equ    L_DAT_HI,              -40
+        .equ    L_MODE,                -5
+        .equ    L_BOXW,                -6
+        .equ    L_BOXH,                -7
+        .equ    L_MOVES,               -8
+        .equ    L_X0_LO,               -9
+        .equ    L_X0_HI,               -10
+        .equ    L_Y0_LO,               -11
+        .equ    L_Y0_HI,               -12
 
         .area   _CODE
 
@@ -83,7 +69,7 @@
         ;;   stack: y, b, clip
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX
+        ;;   AF, BC, DE, HL, IY (IX is preserved)
         ;; XOR entry: same signature, strokes drawn in BM_XOR (used by
         ;; the show/hide sprite pair; XOR twice restores the screen).
 _gpx_draw_bmp_xor::
@@ -93,9 +79,7 @@ _gpx_draw_bmp_xor::
         jr      .bmp_entry
 _gpx_draw_bmp::
         xor     a
-        ld      (__gpx_bmp_invert),a    ; stock colours
-        ld      a,#BM_CPY
-        jr      .bmp_entry
+        ld      (__gpx_bmp_invert),a    ; stock colours, A already BM_CPY
 
         ;; ------------------------------------------------------------
         ;; __gpx_draw_bmp_mode
@@ -110,7 +94,7 @@ _gpx_draw_bmp::
         ;;   otherwise as gpx_draw_bmp
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX, IY
+        ;;   AF, BC, DE, HL, IY (IX is preserved)
 __gpx_draw_bmp_mode::
 .bmp_entry:
         push    ix
@@ -121,7 +105,7 @@ __gpx_draw_bmp_mode::
         ld      b,h                     ; gpx hi
         ld      c,l                     ; gpx lo
 
-        ld      hl,#-40
+        ld      hl,#-12
         add     hl,sp
         ld      sp,hl
         ld      L_MODE(ix),a            ; stroke blit mode (CPY or XOR)
@@ -131,42 +115,23 @@ __gpx_draw_bmp_mode::
         ld      L_GPX_HI(ix),b
         ld      L_X_LO(ix),e
         ld      L_X_HI(ix),d
-        ld      a,4(ix)
-        ld      L_Y_LO(ix),a
-        ld      a,5(ix)
-        ld      L_Y_HI(ix),a
-        ld      a,6(ix)
-        ld      L_BMP_LO(ix),a
-        ld      a,7(ix)
-        ld      L_BMP_HI(ix),a
-        ld      a,8(ix)
-        ld      L_CLIP_LO(ix),a
-        ld      a,9(ix)
-        ld      L_CLIP_HI(ix),a
 
         ;; gpx and bmp must be non-null
         ld      a,b
         or      c
         jp      z,.bmp_done
-        ld      a,L_BMP_LO(ix)
-        or      L_BMP_HI(ix)
+        ld      l,6(ix)
+        ld      h,7(ix)
+        ld      a,h
+        or      l
         jp      z,.bmp_done
 
         ;; encoding nibble
-        ld      l,L_BMP_LO(ix)
-        ld      h,L_BMP_HI(ix)
         ld      a,(hl)
-        and     #0xF0
-        rrca
-        rrca
-        rrca
-        rrca
+        and     #0xE0                   ; both tiny signature variants
 
-        cp      #BMP_ENC_TINY
-        jp      z,.bmp_tiny
-        cp      #BMP_ENC_TINY_MASK
-        jp      z,.bmp_tiny
-        jp      .bmp_done
+        cp      #(BMP_ENC_TINY << 4)
+        jp      nz,.bmp_done
 
         ;; ------------------------------------------------------------
         ;; tiny move-stream path
@@ -174,8 +139,6 @@ __gpx_draw_bmp_mode::
         ;; tiny payload supports two on-wire header layouts:
         ;;   compact: +0 sig, +1 w, +2 h, +3 size_lo, +4 size_hi, +5 data
         ;;   legacy:  +0 sig, +1 w, +2 h, +3 moves,            +4 data
-        ld      l,L_BMP_LO(ix)
-        ld      h,L_BMP_HI(ix)
         inc     hl
         ld      a,(hl)                  ; declared width (box pre-clip)
         ld      L_BOXW(ix),a
@@ -188,10 +151,8 @@ __gpx_draw_bmp_mode::
         inc     hl
         ld      a,(hl)                  ; size high (compact) or first move (legacy)
         or      a
-        jr      z,.bmp_tiny_compact
-        jr      .bmp_tiny_legacy
+        jr      nz,.bmp_tiny_legacy
 
-.bmp_tiny_compact:
         ;; compact data pointer = b + 5
         inc     hl
         jr      .bmp_tiny_have_dat
@@ -200,12 +161,8 @@ __gpx_draw_bmp_mode::
         ;; Legacy Tiny glyphs store width-1 and height-1. Convert them to
         ;; extents for the box pre-clip; compact cursor records above already
         ;; store literal dimensions.
-        ld      a,L_BOXW(ix)
-        inc     a
-        ld      L_BOXW(ix),a
-        ld      a,L_BOXH(ix)
-        inc     a
-        ld      L_BOXH(ix),a
+        inc     L_BOXW(ix)
+        inc     L_BOXH(ix)
 
         ;; legacy data pointer = b + 4
         ;; HL already points to first move byte
@@ -215,8 +172,7 @@ __gpx_draw_bmp_mode::
         or      a
         jp      z,.bmp_done
 
-        ld      L_DAT_LO(ix),l
-        ld      L_DAT_HI(ix),h
+        push    hl                      ; stream pointer across box clipping
 
         ;; ---- box pre-clip (per-bitmap clip box, tiny_clip_t idea) ----
         ;; The declared w x h box bounds every stroke: box fully inside
@@ -256,18 +212,17 @@ __gpx_draw_bmp_mode::
         push    hl
         pop     iy                      ; IY = clip fields
         ld      b,#1                    ; fully-inside until disproven
+        ;; The comparison helper returns A=0/1 and corresponding Z flags.
         ;; x axis
         ld      e,0(iy)
         ld      d,1(iy)                 ; DE = cx0
         ld      l,L_X0_LO(ix)
         ld      h,L_X0_HI(ix)
         call    __rect_cmp16s_lt        ; box_x1 < cx0 -> fully outside
-        or      a
         jp      nz,.bmp_done
         ld      l,L_X_LO(ix)
         ld      h,L_X_HI(ix)
         call    __rect_cmp16s_lt        ; x < cx0 -> not fully inside
-        or      a
         jr      z,.bmp_box_x1
         ld      b,#0
 .bmp_box_x1:
@@ -276,12 +231,10 @@ __gpx_draw_bmp_mode::
         ld      e,L_X_LO(ix)
         ld      d,L_X_HI(ix)
         call    __rect_cmp16s_lt        ; cx1 < x -> fully outside
-        or      a
         jp      nz,.bmp_done
         ld      e,L_X0_LO(ix)
         ld      d,L_X0_HI(ix)
         call    __rect_cmp16s_lt        ; cx1 < box_x1 -> not fully inside
-        or      a
         jr      z,.bmp_box_y0
         ld      b,#0
 .bmp_box_y0:
@@ -291,12 +244,10 @@ __gpx_draw_bmp_mode::
         ld      l,L_Y0_LO(ix)
         ld      h,L_Y0_HI(ix)
         call    __rect_cmp16s_lt        ; box_y1 < cy0 -> fully outside
-        or      a
         jp      nz,.bmp_done
         ld      l,L_Y_LO(ix)
         ld      h,L_Y_HI(ix)
         call    __rect_cmp16s_lt        ; y < cy0 -> not fully inside
-        or      a
         jr      z,.bmp_box_y1
         ld      b,#0
 .bmp_box_y1:
@@ -305,12 +256,10 @@ __gpx_draw_bmp_mode::
         ld      e,L_Y_LO(ix)
         ld      d,L_Y_HI(ix)
         call    __rect_cmp16s_lt        ; cy1 < y -> fully outside
-        or      a
         jp      nz,.bmp_done
         ld      e,L_Y0_LO(ix)
         ld      d,L_Y0_HI(ix)
         call    __rect_cmp16s_lt        ; cy1 < box_y1 -> not fully inside
-        or      a
         jr      z,.bmp_box_class
         ld      b,#0
 .bmp_box_class:
@@ -321,11 +270,11 @@ __gpx_draw_bmp_mode::
         ld      L_CLIP_LO(ix),a
         ld      L_CLIP_HI(ix),a
 .bmp_box_done:
+        pop     iy                      ; stream pointer for the whole loop
 
-        ;; The stroke loop tracks its running endpoints directly in the
-        ;; shared block __gpx_draw_vector reads, so a stroke costs no copy at
-        ;; all: advancing to the next move is two 16-bit moves, and the
-        ;; renderer is simply pointed at the block.
+        ;; Track running endpoints in the shared block. Unclipped strokes
+        ;; issue packed short-vector commands; clipped strokes pass these
+        ;; coordinates to the line renderer.
         ;; x0 = x, y0 = y (no origin bytes in payload)
         ld      l,L_X_LO(ix)
         ld      h,L_X_HI(ix)
@@ -343,39 +292,26 @@ __gpx_draw_bmp_mode::
         ld      a,#EF9367_CR2_SOLID
         call    __ef9367_set_line_style
 
-        ;; i = 0, and the pen is not yet anywhere useful
-        xor     a
-        ld      L_I(ix),a
-        ld      L_CUR_OK(ix),a
+        ;; An unclipped stream runs entirely on the GDP cursor, including
+        ;; pen-up moves. Only clipped streams need software endpoints.
+        ld      a,L_CLIP_LO(ix)
+        or      L_CLIP_HI(ix)
+        jp      z,.bmp_native
 
 .bmp_tiny_loop:
-        ld      a,L_I(ix)
-        cp      L_MOVES(ix)
-        jp      nc,.bmp_done
-
-        ;; mv = data[i]
-        ld      l,L_DAT_LO(ix)
-        ld      h,L_DAT_HI(ix)
-        ld      e,a
-        ld      d,#0x00
-        add     hl,de
-        ld      a,(hl)
-        ld      c,a                     ; C = move byte
+        ld      c,0(iy)                 ; C = move byte
+        inc     iy
 
         ;; x1 = x0 +/- dx
         ld      a,c
-        and     #0x60
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
+        rlca
+        rlca
+        rlca
         and     #0x03
         ld      e,a
         ld      d,#0x00
         ld      hl,(__gpx_vec_x0)
-        ld      a,c
-        bit     1,a
+        bit     1,c
         jr      z,.bmp_dx_add
         or      a
         sbc     hl,de
@@ -387,7 +323,6 @@ __gpx_draw_bmp_mode::
 
         ;; y1 = y0 +/- dy
         ld      a,c
-        and     #0x18
         rrca
         rrca
         rrca
@@ -395,8 +330,7 @@ __gpx_draw_bmp_mode::
         ld      e,a
         ld      d,#0x00
         ld      hl,(__gpx_vec_y0)
-        ld      a,c
-        bit     2,a
+        bit     2,c
         jr      z,.bmp_dy_add
         or      a
         sbc     hl,de
@@ -406,117 +340,27 @@ __gpx_draw_bmp_mode::
 .bmp_dy_done:
         ld      (__gpx_vec_y1),hl
 
-        ;; color code: (bit0 ? 2 : 0) + (bit7 ? 1 : 0)
-        ld      b,#0
+        ;; Neither ink bit means pen-up; bit 0 takes priority for eraser.
         ld      a,c
-        bit     0,a
-        jr      z,.bmp_cc_b7
-        ld      b,#2
-.bmp_cc_b7:
-        bit     7,a
-        jr      z,.bmp_cc_done
-        inc     b
-.bmp_cc_done:
-        ;; draw only for fore/back
-        ld      a,b
-        cp      #1
-        jr      z,.bmp_tiny_fore
-        cp      #2
-        jr      z,.bmp_tiny_back
-        cp      #3
-        jr      z,.bmp_tiny_back
-        ld      L_CUR_OK(ix),a          ; A is 0 here: pen-up move, cursor stale
-        jp      .bmp_tiny_advance
-
-.bmp_tiny_fore:
-        ld      b,#CO_FORE
-        jr      .bmp_tiny_draw
-.bmp_tiny_back:
-        ld      b,#CO_BACK
-
-.bmp_tiny_draw:
-        ld      a,(__gpx_bmp_invert)    ; swap ink and paper if asked
+        and     #0x81
+        jr      z,.bmp_tiny_advance
+        rra                             ; carry = background flag
+        sbc     a,a
+        inc     a                       ; foreground = 1, background = 0
+        ld      b,a
+        ld      a,(__gpx_bmp_invert)
         xor     b
         ld      b,a
-        ;; Strokes are always solid and, once the box pre-clip above has
-        ;; found the bitmap wholly inside the window, never clipped. That is
-        ;; the overwhelmingly common case -- every glyph of a text run, every
-        ;; sprite that is not straddling an edge -- so it goes straight to
-        ;; the vector renderer. The public entry would otherwise push eleven
-        ;; bytes of arguments, copy them into a 37-byte frame, re-derive that
-        ;; the pattern is solid and that there is nothing to clip, and unwind
-        ;; again, all for a stroke that is often three pixels long.
-        ld      a,L_CLIP_LO(ix)
-        or      L_CLIP_HI(ix)
-        jp      nz,.bmp_stroke_clipped
-
-        push    bc                      ; set_color takes C as scratch
-        ld      a,b                     ; stroke colour
-        call    __ef9367_set_color
-        pop     bc
-
-        ld      a,L_CUR_OK(ix)
-        or      a
-        jr      z,.bmp_stroke_absolute
-
-        ;; ---- incremental stroke ----
-        ;; The pen is already on this stroke's origin, so there is no
-        ;; coordinate setup at all: just the two delta registers and the
-        ;; direction command. The move byte holds |dx| in bits 6:5, |dy| in
-        ;; bits 4:3, and its two sign bits already sit exactly where the
-        ;; EF9367 direction command wants them, so the command byte is three
-        ;; logic operations on it.
-        ld      a,c
-        and     #0x60
-        rrca
-        rrca
-        rrca
-        rrca
-        rrca
-        ld      e,a                     ; |dx|
-        ld      a,c
-        and     #0x18
-        rrca
-        rrca
-        rrca
-        ld      d,a                     ; |dy|
-        ld      a,c
-        and     #0x06                   ; both sign bits, already in place
-        or      #0b00010001             ; base delta-vector command
-        xor     #0b00000100             ; y runs the other way on the GDP
-        ld      b,a                     ; command survives the fence
-.bmp_inc_wait:
-        in      a,(EF9367_STS_NI)       ; the running vector reads DX/DY
-        and     #EF9367_STS_NI_READY
-        jr      z,.bmp_inc_wait
-        ld      a,e
-        out     (#EF9367_DX),a
-        ld      a,d
-        out     (#EF9367_DY),a
-        ld      a,b
-        out     (#EF9367_CMD),a
-        jp      .bmp_tiny_advance
-
-.bmp_stroke_absolute:
-        ld      iy,#__gpx_vec_x0        ; endpoints are already in place
-        call    __gpx_draw_vector
-        ld      a,#1                    ; pen now sits on x1,y1
-        ld      L_CUR_OK(ix),a
-        jp      .bmp_tiny_advance
-
 .bmp_stroke_clipped:
-        xor     a
-        ld      L_CUR_OK(ix),a          ; clipping moves the pen unpredictably
+        push    iy                      ; line clipping borrows IY
         ;; gpx_draw_line(gpx, x0, y0, x1, y1, color, L_MODE, 0xFF, clip)
         ld      l,L_CLIP_LO(ix)
         ld      h,L_CLIP_HI(ix)
         push    hl                      ; clip
 
         ld      a,#LPATT_SOLID
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; lpatt
+        push    af                      ; lpatt
+        inc     sp
 
         ld      l,b                     ; color
         ld      h,L_MODE(ix)            ; CPY normally, XOR for sprites
@@ -535,6 +379,7 @@ __gpx_draw_bmp_mode::
         ld      h,L_GPX_HI(ix)
         ld      de,(__gpx_vec_x0)
         call    _gpx_draw_line
+        pop     iy
 
 .bmp_tiny_advance:
         ;; x0 = x1, y0 = y1, in place in the shared endpoint block
@@ -543,11 +388,52 @@ __gpx_draw_bmp_mode::
         ld      hl,(__gpx_vec_y1)
         ld      (__gpx_vec_y0),hl
 
-        ;; i++
-        ld      a,L_I(ix)
-        inc     a
-        ld      L_I(ix),a
-        jp      .bmp_tiny_loop
+        dec     L_MOVES(ix)
+        jp      nz,.bmp_tiny_loop
+        jr      .bmp_done
+
+.bmp_native:
+        ;; The GDP owns the unclipped cursor. Short commands encode all
+        ;; four delta bits directly, so no software coordinate arithmetic or
+        ;; writes to DX/DY are needed, even for a pen-up move.
+        ld      hl,(__gpx_vec_x0)
+        ld      de,(__gpx_vec_y0)
+        call    __ef9367_set_xy_fast
+        ld      b,L_MOVES(ix)
+        ld      a,(__gpx_bmp_invert)
+        ld      e,a                     ; fixed ink/paper inversion
+        ld      d,#0xFF                 ; no cached pen/colour choice yet
+.bmp_native_loop:
+        ld      c,0(iy)
+        inc     iy
+        ld      a,c
+        and     #0x81                   ; raw ink choice, independent of delta
+        cp      d
+        jr      z,.bmp_native_wait      ; same state needs no GDP helper call
+        ld      d,a
+        push    bc                      ; setters borrow C; B is loop count
+        or      a
+        jr      z,.bmp_native_pen       ; neither ink bit: pen up
+        rra                             ; carry = background flag
+        sbc     a,a
+        inc     a                       ; foreground = 1, background = 0
+        xor     e                       ; fixed ink/paper inversion
+        call    __ef9367_set_color
+        ld      a,#1                    ; pen down
+.bmp_native_pen:
+        call    __ef9367_set_pen
+        pop     bc
+.bmp_native_wait:
+        in      a,(EF9367_STS_NI)
+        and     #EF9367_STS_NI_READY
+        jr      z,.bmp_native_wait
+        ld      a,c
+        or      #0x81                   ; short vector, oblique direction
+        xor     #0x04                   ; the GDP Y axis points upwards
+        out     (#EF9367_CMD),a
+        djnz    .bmp_native_loop
+        ld      a,#1
+        call    __ef9367_set_pen        ; later primitives expect a lowered pen
 
 .bmp_done:
         ld      sp,ix

@@ -43,15 +43,15 @@
         ;; Clobbers:
         ;;   AF, DE
 _gpx_get_stock_bmp::
-        cp      #GPXSB_CURSOR_CLASSIC
+        or      a
         jr      z,.classic
-        cp      #GPXSB_CURSOR_STD
+        dec     a
         jr      z,.std
-        cp      #GPXSB_CURSOR_HOURGLASS
+        dec     a
         jr      z,.hourglass
-        cp      #GPXSB_CURSOR_CARET
+        dec     a
         jr      z,.caret
-        cp      #GPXSB_CURSOR_HAND
+        dec     a
         jr      z,.hand
 
         ld      de,#0x0000

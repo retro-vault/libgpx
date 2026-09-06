@@ -1,0 +1,148 @@
+# Optimization pass, 6 September 2026
+
+Compared with commit `5677bfb`, using the installed X Tools 2.8.0 images and their MCP emulators. Three optimization passes cover all three backends, the shared shape code, and a final focused bitmap/sprite pass. Font formats, font payloads, public signatures and structure layouts are unchanged.
+
+## Size
+
+These are uncompressed `_CODE` bytes, including embedded fonts and cursors, summed across archive members. CPC startup is excluded. An application links only the members it uses; archive file size is not the Z80 memory cost.
+
+| Backend | Before | After | Saved | Reduction |
+|---|---:|---:|---:|---:|
+| ZX Spectrum | 10,388 | 9,015 | 1,373 | 13.22% |
+| Partner | 9,909 | 9,007 | 902 | 9.10% |
+| CPC | 11,158 | 9,815 | 1,343 | 12.04% |
+
+The shared advanced code shrank from **2,750 to 2,158 bytes**. Core-only code is now 6,857 bytes on Spectrum, 6,849 on Partner and 7,657 on CPC. Writable library data is unchanged at 8 bytes on Spectrum, reduced from 40 to 37 on Partner, and from 26 to 25 on CPC.
+
+Notable local stack reductions: Spectrum bitmap workspace 76 → 38 bytes; CPC bitmap workspace 80 → 45; Partner line frame 37 → 15 and bitmap frame 40 → 12; circle outline locals 16 → 10, filled-circle locals 19 → 12, and polygon-fill workspace 252 → 238. These are local frames, not whole-call peak stack measurements.
+
+## Speed
+
+The following is the reduction in elapsed T-states for the existing crossbench workloads. The same workload is used before and after; positive values mean less time. Clears are effectively unchanged. All 44 measured crossbench combinations were unchanged or faster.
+
+| Workload | ZX Spectrum | Partner | CPC 640×200 | CPC 320×200 |
+|---|---:|---:|---:|---:|
+| Circle outlines | 26.5% | 42.9% | 27.8% | 27.4% |
+| Filled circles | 24.4% | 20.7% | 20.1% | 19.1% |
+| Full-screen clears | 0.0% | 0.0% | 0.0% | 0.0% |
+| Solid rectangle fills | 15.8% | 28.9% | 2.9% | 2.3% |
+| Patterned rectangle fills | 2.4% | 60.4% | 2.2% | 1.5% |
+| Solid rays | 4.6% | 3.0% | 2.6% | 2.5% |
+| Patterned rays | 5.1% | 6.7% | 2.7% | 2.6% |
+| Polygon outlines | 6.1% | 8.8% | 6.9% | 6.6% |
+| Polygon fills | 40.5% | 38.6% | 37.4% | 36.9% |
+| Sprite show/hide | 26.2% | 62.6% | 23.4% | 32.0% |
+| Text | 19.9% | 46.5% | 15.5% | 26.8% |
+
+Raw counts and per-module sizes are retained in [optimization-2026-09.json](optimization-2026-09.json). The README contains the resulting absolute crossbench times.
+
+### Benchmark corrections
+
+- The Partner bitmap microbenchmark previously supplied an unsupported raster payload to the Tiny renderer and measured rejection. It now uses a real 16×8 Tiny bitmap. Both first-pass comparison runs used that corrected input; bitmap drawing took 12.8% less time.
+- CPC line clipping previously discarded the high byte of an X clipping edge. The existing unit benchmark therefore clipped its 30 diagonal lines against X=48/24 instead of X=560/280. Correcting the bug draws substantially more work, making comparison with that historical timing misleading. In the first pass, against a baseline containing only the clipping correction, line timing improved from 10,653,756 to 10,490,708 T-states in 640 mode, and 7,812,952 to 7,661,144 in 320 mode.
+- The current Partner emulator models command-dependent GDP busy time. Its phase microbenchmarks can charge completion of an asynchronous command to the next phase. No clear-screen speedup is claimed from that effect; the isolated crossbench clear is unchanged.
+
+## Follow-up: hardware pattern composition and remaining hot paths
+
+Relative to the first pass, Spectrum saves another **182 bytes** and CPC **192 bytes**. Partner spends **148 additional bytes** overall for its new hardware dispatch; it remains **801 bytes smaller** than the original checkout. Its line/kernel pair grows by 430 bytes, offset by reductions elsewhere. No tables or writable data were added. Another 54 warm-call measurements check representative recipe thresholds from 31 to 255 steps; none is slower than the first pass. This is a deliberate speed/size tradeoff: native long patterns take about 5.4–5.9k T per call instead of 105.6k, two-pass patterns about 8.8–9.2k, and three-pass patterns about 12.3–12.8k. Unsupported long patterns also improve through byte-counted scalar loops.
+
+Pattern bytes here are LSB-first, matching the line API. All operations stop at the original endpoint:
+
+| Target | Hardware construction | Mode |
+|---|---|---|
+| `55` | `33 XOR (33 << 1)` | XOR |
+| `11` | `0F XOR (0F << 1)` | XOR |
+| `77` | `0F XOR (0F << 3)` | XOR |
+| `2D` | `0F XOR (0F << 1) XOR (0F << 2)` | XOR |
+| `77` | `33 OR (33 << 1)` through two same-color writes | Copy |
+| `1F`, `3F`, `7F` | `0F OR (0F << 1/2/3)` through two same-color writes | Copy |
+
+The corresponding rotations are supported. Native dotted/dashed styles and compositions cover **40 non-solid copy patterns** and **30 non-solid XOR patterns**. The latter, plus 00/FF, exhaust the 32-byte XOR space generated by the 33/0F styles. At most seven scalar prefix pixels establish phase. Hardware commands contain 256 pixels (delta 255), and the next starts 256 pixels later. Tiny or unsuitable spans retain the scalar path; patterned diagonals retain their existing rasterization.
+
+The same chunk rule fixes an inherited long solid horizontal XOR defect: shared endpoints were drawn twice. The independent fill oracle reproduced the original gap at x=257 for a span beginning at x=3, then verified its correction. Existing recorded scenarios do not hit this defect and remain byte-identical. Rectangle rows now call the prepared renderer directly; pattern remainder setup is bounded even for origins at -32768.
+
+Other follow-up changes use the register pixel core for circles and singleton lines, retain polygon edge runs in registers, skip sorting empty rows, call horizontal spans directly, discard unused shape context values, simplify stack cleanup and span masks, and skip solid-pattern reversal. Circle outlines improve another 19–30% across the four crossbench configurations; polygon fills improve another 9–15%. Partner patterned rectangle fills improve another **59.9%**.
+
+One small cost remains outside those whole-workload gains: the Partner solid diagonal microbenchmark takes 9 additional T per call (about 0.17%) for the guard that selects corrected long horizontal chunking. All 44 original crossbench comparisons remain unchanged or faster.
+
+## Final pass: bitmaps and sprites
+
+Relative to the second pass, this saves another **821 code bytes**: 361 on Spectrum, 101 on Partner and 359 on CPC. Writable data and all bitmap/font formats and payloads are unchanged. Backend-specific measurements below compare identical before/after workloads; they are reductions in T-states, not comparisons between machines. CPC uses 384 varied bitmap calls per display mode, including deep clipping and no-op cases; Spectrum and Partner use their existing microbenchmarks.
+
+| Backend | Bitmap time reduction | Sprite show/hide time reduction |
+|---|---:|---:|
+| ZX Spectrum | 17.2% | 19.2% |
+| Partner | 74.9% | 57.5% |
+| CPC 640×200 | 19.7% | 17.5% |
+| CPC 320×200 | 24.7% | 19.3% |
+
+The fixed-work crossbench sprite workload separately improves **18.7%, 55.9%, 18.5% and 20.2%**, respectively. Its text workload improves another **15.6%, 34.1%, 12.5% and 15.3%**. Other crossbench workloads retain their second-pass times.
+
+- Spectrum selects the compositor once per bitmap, keeps only one source-row pointer, and retains masked source-window state and coverage in registers. Its raw sprite blitter shifts both planes together, derives the AND bytes directly from the pinned OR pointer and keeps the destination row on the stack. Standard AND planes need no alignment shift. The show wrapper retains the sprite descriptor in IY instead of copying its fields into locals. Capture keeps the destination, masks and row counts in alternate registers and clears only trailing unused rows.
+- CPC uses the same source-window and dispatch reductions. It prepares a replacement mask and new bits, then applies `old XOR ((old AND replacement_mask) XOR new_bits)` directly to packed screen bytes. This eliminates gathering/scattering an intermediate destination byte while preserving the unused color plane. Capture computes masks and group count once, retains state in registers and clears only trailing rows. Bitmap locals fall from 76 to 45 bytes; capture locals from 8 to 2.
+- Partner maps Tiny move bytes directly to the GDP's packed short-vector commands. The chip maintains the unclipped cursor, including pen-up moves. The stream pointer, move count, inversion and previous pen/color choice stay in registers. Partial clips retain the existing endpoint-clipping path. The renderer shrinks from 655 to 564 bytes, the sprite wrapper from 51 to 41, and its frame from 21 to 12 bytes. Native rendering restores the lowered pen expected by following primitives.
+
+Spectrum's unchanged 20-byte mask helper now has its own archive member. A real public `gpx_hide_sprite`-only program links **554 instead of 1,638 code bytes**, avoiding the full bitmap renderer and its clipping dependency. Full-library code is unchanged by this extraction. Paired archive tests check all helper inputs, clipped hides, registers, stack and forced table page crossings. The existing lookup branch varies by one T-state when the table crosses a page, so code relocation can slightly change individual scenario timings.
+
+The independent additions pass on both pre-pass and final binaries: **362 Spectrum bitmap cases**, **1,037 Spectrum sprite/invalid-descriptor cases**, **512 CPC captures**, **768 CPC bitmap cases** and **384 CPC sprite pairs**. They check arbitrary AND/OR planes, all bit alignments, clipping, full save-under payloads, memory guards and preserved register/stack contracts; Spectrum also checks attributes and CPC checks both framebuffer planes. All 54 Spectrum oracle scenarios and all 8 CPC golden phases plus the existing 908 independent CPC checks pass.
+
+Partner adds **32 Tiny phases** across both display heights and every command byte, with **11,108,352 independently predicted pixels** and **8,192 following-primitive markers**. Every complete phase raster, including partially clipped strokes, matches the pre-pass binary. The final frozen candidate also reproduces all 21 existing MCP phase rasters exactly. The host emulator now decodes the documented packed commands; its five suites pass with both old and new binaries. Existing recorded-golden discrepancies remain unchanged and were not blessed.
+
+Fresh full and `ADVANCED=0` archives build on all three backends. An archive-linked sprite workload runs to HALT and restores its initial raster on Spectrum, Partner and both CPC modes, with the same T-state counts as the object-linked crossbench. All **24 documentation screenshots** were regenerated from the final code and remain byte-identical to the previous captures.
+
+A CPC variant using both shift directions was rejected: it cost 40 additional bytes for only another 1.4–1.6% sprite improvement and about 0.1% in text. Partner stroke coalescing was rejected because it would change XOR pixels at shared endpoints. No decompression tables, new mutable state or format changes were introduced.
+
+## Changes
+
+- Shared shapes: derive circle decision increments from coordinates; compare the midpoint coordinates once per step; reverse polygon patterns once per row; bypass empty/solid pattern conversion; use only low coordinate bytes for modulo-eight phase; sort crossings in registers; exploit monotonic edge runs and their known major axes; replace mutable edge row counters with the sequential scanline invariant. Identical negation and circle-comparison bodies are separate archive members, saving space without changing call cost or pulling unrelated helpers into single-shape applications.
+- Spectrum: carry-based byte-sized Bresenham errors after clipping; combined masked-plane shifts; compact span arithmetic and bitmap workspace; cache sprite clipping masks and row state; simplify glyph lookup, rectangle clipping, pattern fills, pixel bounds and setters; remove dead bitmap padding and redundant frame setup.
+- CPC: retain the gathered eight-pixel value in a register rather than a temporary memory byte; combine masked-plane shifts; simplify nibble composition and screen bank transitions; use bounded pattern remainder calculation, 256-step line chunks and positive Y-major deficits; reduce rectangle/helper overhead. Fix the clipped-edge high-byte defect.
+- Partner: simplify signed clipping and coordinate transforms; retain counters and vector commands in registers; reduce Tiny decoding and argument-marshalling overhead; skip empty/solid pattern work; remove unused stack slots and dead dispatch code; wait for the GDP before changing active vector deltas.
+- Validation/builds: add independent regression coverage; fix the C text oracle to select the OR ink plane of masked glyphs; make CPC regressions part of its normal test target; track shared sources in crossbench, freshness and packaging dependencies; correct misleading benchmark comments.
+
+## Validation
+
+- Follow-up pattern oracle: **8,192 calls**, **8,388,608 independently predicted pixels**, and all 8,192 returned pattern bytes. Every byte is exercised over mixed existing graphics with copy/XOR, both colors, both directions, short spans, 255/256 boundaries, long spans and clipped origins. Patterned rasters equal the first pass; FF also passes the corrected scalar expectation.
+- Follow-up direct checks: **1,240 pixel ABI/clipping cases and 120 circles** across all five display modes, preserving IX/IY and checking stack cleanup; **60 full-raster Partner fill cases** across both heights, extreme signed origins, pattern lengths up to 255 and normalized clips. A separate MCP style probe validates finite pattern identities. Another agent independently reviewed the final register, clipping, command-fence and composition paths.
+- Spectrum: all **54** differential scenarios pass against the independent C oracle on the MCP emulator, including new 0/1/2/254/255-point polygons, shallow reversed edge runs, random polygons, large clipped circles, custom font byte orders and masked glyphs, sprite alignment/background hashes, and extreme fill phases. Hashes after each randomized shape prevent later drawing from concealing an earlier mismatch.
+- CPC: all **8** golden phases and **908** independent raw-framebuffer/comparison cases pass across both display modes. Coverage includes unused-plane preservation, masked composition, bank and 256/512-step boundaries, clipped X edges above 255, and extreme fill-pattern phases. The corrected 640-mode line golden changes 373 pixels; its entire phase was independently reconstructed before replacing the golden.
+- Partner: all **21** MCP phase rasters match the actual preoptimization rasters exactly. Five existing host suites pass. The new host helper test executes 1,048,576 signed comparisons, 1,048,576 direction-command cases and 131,072 Y-coordinate transformations, including register preservation.
+- Arithmetic: the compact carry-returning signed comparator was checked for all 131,072 high-byte/borrow combinations. Spectrum line stepping was checked across all 49,152 screen-sized delta pairs. Another agent independently reviewed the shared circle/polygon invariants and the changed bitmap, line and GDP paths.
+- Full and `ADVANCED=0` archives build for all three platforms. The circle and polygon demos link against the real Spectrum and Partner archives; an archive-linked CPC polygon benchmark runs successfully with the same measured time as its object-linked counterpart. Assembly style and whitespace checks pass.
+
+### Existing Partner test failures
+
+The recorded Partner goldens already disagree with the original checkout in **11 GDP phases**. Conformance also already fails in these three places, with exactly the same observed differences after optimization:
+
+| Scenario / phase | Observed difference | Existing allowance |
+|---|---:|---:|
+| `conf_lines` / 0 | 414 pixels | 260 |
+| `conf_lines` / 5 | 2 pixels | 0 |
+| `conf_octants` / 2 | 20 pixels | 10 |
+
+Both CPC modes match Spectrum exactly in every conformance phase. The Partner baseline failures were reproduced in an untouched worktree at `5677bfb`; its golden images and conformance budgets were not relaxed. Consequently `make conformance` and the Partner recorded-golden gate still report these inherited failures. The before/after Partner raster comparison is an additional regression check, not a claim that those existing gates pass.
+
+## Reproduce
+
+```sh
+make lib partner-lib cpc-lib
+make zx-tests
+make cpc-tests
+make -C tests/partner run helpers pattern-tests tiny-tests
+make -C tests/crossbench build
+python3 tests/mcp/pixel_core_regressions.py
+python3 tests/mcp/probe_partner_styles.py
+make partner-gdp-tests          # inherited golden differences above
+make conformance                # inherited Partner differences above
+make crossbench ARGS=--tstates
+make zx-bench
+make cpc-bench
+make partner-gdp-bench
+make check-style
+make ADVANCED=0 lib partner-lib cpc-lib
+make lib partner-lib cpc-lib     # restore the default full archives
+```
+
+## Ideas not retained
+
+Large lookup tables, additional unrolled raster variants, per-operation copies of whole kernels, and self-modifying dispatch would increase code size or compromise reentrancy. CPC X-major errors must remain 16-bit because its horizontal range exceeds 255. The Partner retains hardware solid vectors: replacing those with the exact software rasterizer would sacrifice its main performance advantage. Font compression or format changes were excluded. The 16-step dash-dot style was also investigated on MCP: two shifted passes plus a prefix repair can form 0C, and four passes plus repair can form 04. GF(2) enumeration shows all 256 eight-bit patterns can be formed from shifted dash-dot masks, but most require four to eight passes plus finite-prefix handling. A recipe/repair engine or a straightforward 512-byte table would add further code; that extension was not retained in this size-focused pass. A faster XOR/mask byte-reversal network also costs more bytes than the retained loops; solid rows now bypass those loops entirely. Shared remainder helpers would save a few bytes but add call overhead and core/advanced build coupling. No global optimum is claimed; the retained changes have measured benefits and independent correctness checks.

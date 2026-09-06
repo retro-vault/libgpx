@@ -43,39 +43,11 @@
         .equ    SPR_CLIP_LO,             8
         .equ    SPR_CLIP_HI,             9
 
-        ;; gpx_show_sprite locals (12 bytes)
-        .equ    S_BMP_LO,                -2
-        .equ    S_BMP_HI,                -1
-        .equ    S_BG_LO,                 -4
-        .equ    S_BG_HI,                 -3
-        .equ    S_X_LO,                  -5
-        .equ    S_Y_LO,                  -6
-        .equ    S_W,                     -7
-        .equ    S_H,                     -8
-        .equ    S_VISW,                  -9
-        .equ    S_VISH,                  -10
-        .equ    S_CLIP_HI,               -11
-        .equ    S_CLIP_LO,               -12
-
-        .macro  LD16HL off
-        ld      l,off(ix)
-        ld      h,off+1(ix)
-        .endm
-
-        .macro  ST16HL off
-        ld      off(ix),l
-        ld      off+1(ix),h
-        .endm
-
-        .macro  LD16DE off
-        ld      e,off(ix)
-        ld      d,off+1(ix)
-        .endm
-
-        .macro  ST16DE off
-        ld      off(ix),e
-        ld      off+1(ix),d
-        .endm
+        ;; Sprite fields stay in IY; only bitmap dimensions need locals.
+        .equ    S_W,                     -1
+        .equ    S_H,                     -2
+        .equ    S_VISW,                  -3
+        .equ    S_VISH,                  -4
 
         .area   _CODE
 
@@ -94,71 +66,41 @@
         ;;        least GPX_SPRITE_BG_SIZE bytes
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX, IY
+        ;;   AF, BC, DE, HL. Preserves IX and IY.
         ;;
         ;; References:
         ;;   __gpx_store_background
         ;;   __gpx_sprite_blit_raw
 _gpx_show_sprite::
+        ld      a,d
+        or      e
+        ret     z
+
+        push    iy
+        push    de
+        pop     iy                      ; sprite fields survive helper calls
         push    ix
         ld      ix,#0
         add     ix,sp
-
-        ld      hl,#-12
+        ld      hl,#-4
         add     hl,sp
         ld      sp,hl
 
-        ld      a,d
-        or      e
-        jp      z,.gs_done
-
-        ex      de,hl
-        ld      a,(hl)
-        ld      S_X_LO(ix),a
-        inc     hl
-        ld      a,(hl)
-        or      a
+        ld      a,SPR_X_HI(iy)
+        or      SPR_Y_HI(iy)
         jp      nz,.gs_done
-        inc     hl
-        ld      a,(hl)
-        ld      S_Y_LO(ix),a
-        inc     hl
-        ld      a,(hl)
-        or      a
-        jp      nz,.gs_done
-
-        ld      a,S_Y_LO(ix)
+        ld      a,SPR_Y_LO(iy)
         cp      #SCRHEIGHT
         jp      nc,.gs_done
 
-        ;; store bitmap/background pointers, null-testing as they stream by
-        inc     hl
-        ld      a,(hl)
-        ld      S_BMP_LO(ix),a
-        ld      c,a
-        inc     hl
-        ld      a,(hl)
-        ld      S_BMP_HI(ix),a
-        or      c
+        ld      a,SPR_BG_LO(iy)
+        or      SPR_BG_HI(iy)
         jp      z,.gs_done
-        inc     hl
-        ld      a,(hl)
-        ld      S_BG_LO(ix),a
-        ld      c,a
-        inc     hl
-        ld      a,(hl)
-        ld      S_BG_HI(ix),a
-        or      c
+        ld      l,SPR_BMP_LO(iy)
+        ld      h,SPR_BMP_HI(iy)
+        ld      a,h
+        or      l
         jp      z,.gs_done
-        inc     hl
-        ld      a,(hl)                  ; optional window rect
-        ld      S_CLIP_LO(ix),a
-        inc     hl
-        ld      a,(hl)
-        ld      S_CLIP_HI(ix),a
-
-        ld      l,S_BMP_LO(ix)
-        ld      h,S_BMP_HI(ix)
 
         ld      a,(hl)
         and     #BMP_SIG_ENC_MASK
@@ -193,10 +135,10 @@ _gpx_show_sprite::
         ;; visible width = min(w, 256 - x)
         ld      a,S_W(ix)
         dec     a
-        ld      b,S_X_LO(ix)
+        ld      b,SPR_X_LO(iy)
         add     a,b
         jr      nc,.gs_no_right_clip
-        ld      a,S_X_LO(ix)
+        ld      a,SPR_X_LO(iy)
         cpl
         inc     a
         jr      .gs_store_visw
@@ -208,10 +150,10 @@ _gpx_show_sprite::
         ;; visible height = min(h, 192 - y)
         ld      a,S_H(ix)
         dec     a
-        add     a,S_Y_LO(ix)
+        add     a,SPR_Y_LO(iy)
         cp      #SCRHEIGHT
         jr      c,.gs_no_bottom_clip
-        ld      b,S_Y_LO(ix)
+        ld      b,SPR_Y_LO(iy)
         ld      a,#SCRHEIGHT
         sub     b
         jr      .gs_store_vish
@@ -221,8 +163,8 @@ _gpx_show_sprite::
         ld      S_VISH(ix),a
 
         ;; background sprite header
-        ld      l,S_BG_LO(ix)
-        ld      h,S_BG_HI(ix)
+        ld      l,SPR_BG_LO(iy)
+        ld      h,SPR_BG_HI(iy)
         ld      (hl),#BMP_SIG_1BPP_STRIDE2
         inc     hl
         ld      a,S_W(ix)
@@ -238,43 +180,44 @@ _gpx_show_sprite::
         xor     a
         ld      (hl),a
 
-        ld      l,S_BG_LO(ix)
-        ld      h,S_BG_HI(ix)
-        ld      b,S_Y_LO(ix)
-        ld      c,S_X_LO(ix)
+        ld      l,SPR_BG_LO(iy)
+        ld      h,SPR_BG_HI(iy)
+        ld      b,SPR_Y_LO(iy)
+        ld      c,SPR_X_LO(iy)
         ld      d,S_VISW(ix)
         ld      e,S_VISH(ix)
         call    __gpx_store_background
 
         ;; window rect set? draw through the clipping blitter instead
         ;; (capture above stays full-box, so hide heals clipped pixels)
-        ld      a,S_CLIP_LO(ix)
-        or      S_CLIP_HI(ix)
+        ld      a,SPR_CLIP_LO(iy)
+        or      SPR_CLIP_HI(iy)
         jr      nz,.gs_clipped
 
-        ld      l,S_BMP_LO(ix)
-        ld      h,S_BMP_HI(ix)
-        ld      b,S_Y_LO(ix)
-        ld      c,S_X_LO(ix)
+        ld      l,SPR_BMP_LO(iy)
+        ld      h,SPR_BMP_HI(iy)
+        ld      b,SPR_Y_LO(iy)
+        ld      c,SPR_X_LO(iy)
         xor     a                       ; standard bitmaps keep zero bits transparent
         call    __gpx_sprite_blit_raw
         jr      .gs_done
 
 .gs_clipped:
-        ld      l,S_CLIP_LO(ix)
-        ld      h,S_CLIP_HI(ix)
+        ld      l,SPR_CLIP_LO(iy)
+        ld      h,SPR_CLIP_HI(iy)
         push    hl                      ; clip
-        ld      l,S_BMP_LO(ix)
-        ld      h,S_BMP_HI(ix)
+        ld      l,SPR_BMP_LO(iy)
+        ld      h,SPR_BMP_HI(iy)
         push    hl                      ; bitmap
-        ld      l,S_Y_LO(ix)
+        ld      l,SPR_Y_LO(iy)
         ld      h,#0
         push    hl                      ; y
-        ld      e,S_X_LO(ix)
+        ld      e,SPR_X_LO(iy)
         ld      d,#0                    ; DE = x (gpx arg unused by draw_bmp)
         call    _gpx_draw_bmp
 
 .gs_done:
         ld      sp,ix
         pop     ix
+        pop     iy
         ret

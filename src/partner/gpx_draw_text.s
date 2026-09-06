@@ -197,16 +197,11 @@ _gpx_draw_text::
         ld      c,l
         ld      b,h
 
-        ;; Accept supported signatures and read glyph width.
+        ;; Encodings 0/1 share the raster width; 2/3 share Tiny width-1.
         ld      a,(hl)
-        and     #BMP_ENC_MASK
-        cp      #BMP_SIG_1BPP
-        jr      z,.dt_w8
-        cp      #BMP_SIG_1BPP_MASK
+        and     #0xE0
         jr      z,.dt_w8
         cp      #BMP_SIG_TINY
-        jr      z,.dt_tiny_w8
-        cp      #BMP_SIG_TINY_MASK
         jr      z,.dt_tiny_w8
         jp      .dt_add_empty
 
@@ -364,10 +359,8 @@ _gpx_draw_text::
         push    hl                      ; clip
 
         ld      a,#1
-        dec     sp
-        ld      hl,#0
-        add     hl,sp
-        ld      (hl),a                  ; fpatt_len
+        push    af                      ; fpatt_len
+        inc     sp
 
         ld      hl,#.dt_solid
         push    hl                      ; fpatt

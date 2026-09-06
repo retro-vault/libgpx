@@ -102,62 +102,37 @@ __clip_seg:
         ld      d,b                     ; DE = seg_lo
         call    __rect_cmp16s_lt        ; seg_hi < seg_lo ?
         ex      de,hl                   ; HL = seg_lo, DE = seg_hi
-        ret     c                       ; carry already set => reject
-        or      a                       ; carry clear => keep
-        ret
+        ret                             ; comparison already returned the carry
 
 
-        ;; uint8_t _rect_cmp16s_lt(coord a, coord b)
-        ;;   HL = a
-        ;;   DE = b
-        ;; returns A=1 when (a < b), else A=0
+        ;; ------------------------------------------------------------
+        ;; __rect_cmp16s_lt
+        ;; Compare signed HL < DE, preserving BC/DE/HL. Carry is sign XOR
+        ;; overflow of the 16-bit subtraction. RLA copies sign to carry
+        ;; while preserving P/V, so only signed overflow needs an inversion.
+        ;; A is scratch; callers needing a 0/1 value synthesize it from carry.
 __rect_cmp16s_lt:
-        ;; CARRY set when HL < DE (signed), clear otherwise. Clobbers A only;
-        ;; BC, DE and HL are preserved. Callers branch on carry directly, so
-        ;; none of them pays an `or a` to test a 0/1 return any more.
-        ;;
-        ;; Both operands are on-screen coordinates most of the time, so the
-        ;; high bytes are both zero and a plain 8-bit compare answers it.
-        ld      a,h
-        or      d
-        jr      nz,.rc_wide
         ld      a,l
-        cp      e
-        ret
-
-.rc_wide:
+        sub     e
         ld      a,h
-        xor     d
-        jp      m,.rc_diff              ; signs differ
-        ld      a,h
-        cp      d
-        ret     nz                      ; carry = (hi < hi)
-        ld      a,l
-        cp      e
-        ret                             ; carry = (lo < lo)
-
-.rc_diff:
-        ;; different signs: the negative one is the smaller
-        ld      a,h
-        rlca                            ; carry = sign bit of HL
+        sbc     a,d
+        rla
+        ret     po
+        ccf
         ret
 
         ;; ------------------------------------------------------------
         ;; __rect_unpack_norm
         ;;
-        ;; Unpack rect_t from DE into caller frame at HL (caller IX value)
+        ;; Unpack rect_t from DE directly into the caller frame at IX
         ;; using caller-local layout:
         ;;   [-1..-2] x0, [-3..-4] x1, [-5..-6] y0, [-7..-8] y1
         ;; and normalize endpoints so x0<=x1 and y0<=y1.
         ;;
         ;;   DE = const rect_t *src (x0,y0,x1,y1 in struct order)
-        ;;   HL = caller frame base (IX)
+        ;;   IX = caller frame base (preserved)
         ;; ------------------------------------------------------------
 __rect_unpack_norm:
-        push    ix
-        push    hl
-        pop     ix
-
         ;; x0
         ld      a,(de)
         ld      -1(ix),a
@@ -197,16 +172,10 @@ __rect_unpack_norm:
         call    __rect_cmp16s_lt
         jr      nc,.ru_x_ok
 
-        ld      c,-1(ix)
-        ld      b,-2(ix)
-        ld      a,-3(ix)
-        ld      -1(ix),a
-        ld      a,-4(ix)
-        ld      -2(ix),a
-        ld      a,c
-        ld      -3(ix),a
-        ld      a,b
-        ld      -4(ix),a
+        ld      -1(ix),l
+        ld      -2(ix),h
+        ld      -3(ix),e
+        ld      -4(ix),d
 
 .ru_x_ok:
         ;; if (y1 < y0) swap
@@ -217,17 +186,10 @@ __rect_unpack_norm:
         call    __rect_cmp16s_lt
         jr      nc,.ru_done
 
-        ld      c,-5(ix)
-        ld      b,-6(ix)
-        ld      a,-7(ix)
-        ld      -5(ix),a
-        ld      a,-8(ix)
-        ld      -6(ix),a
-        ld      a,c
-        ld      -7(ix),a
-        ld      a,b
-        ld      -8(ix),a
+        ld      -5(ix),l
+        ld      -6(ix),h
+        ld      -7(ix),e
+        ld      -8(ix),d
 
 .ru_done:
-        pop     ix
         ret

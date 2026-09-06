@@ -2,8 +2,10 @@
 """Per-primitive Z80 cost for the Partner GDP backend.
 
 Runs tests/partner/gdp-bench scenarios on idp-mcp and differences the T-state
-counter across each phase. Note the emulator gives every EF9367 command the
-same fixed busy time, so these are the library's CPU cost, not GDP draw time.
+counter across each phase. The current emulator models command-dependent
+GDP busy time, so these include CPU work and time spent waiting for the GDP.
+An asynchronous command can finish during the next phase; crossbench isolates
+whole workloads when that distinction matters.
 
   --save FILE   write the results as a baseline
   --against F   compare against a saved baseline
@@ -28,6 +30,12 @@ SLICE = 60_000_000
 
 # phase index -> (label, iteration count)
 LABELS = {
+    "bench_patterns": [("settle", 1)] + [
+        (f"hline {pattern:02X} {mode}", 40)
+        for mode in ("CPY", "XOR")
+        for pattern in (0xAA, 0x55, 0xCC, 0x33, 0xF0, 0x0F,
+                        0x11, 0x88, 0x77, 0xEE, 0x1F, 0x3F, 0x7F, 0xA5, 0x5A, 0x9B)
+    ],
     "bench_prims": [
         ("settle", 1),
         ("draw_line solid (hw vector)", 200),

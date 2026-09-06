@@ -313,10 +313,12 @@ __gpx_bresenham_line::
         sbc     hl,de
         jr      nc,.bl_dxp
         set     0,c                     ; x runs left
-        ex      de,hl
-        ld      hl,#0
-        or      a
-        sbc     hl,de                   ; HL = |dx|
+        xor     a
+        sub     l
+        ld      l,a
+        sbc     a,a
+        sub     h
+        ld      h,a                     ; HL = -HL = |dx|
 .bl_dxp:
         ld      L_DX(ix),l
         ld      L_DX+1(ix),h
@@ -337,26 +339,26 @@ __gpx_bresenham_line::
         ld      c,L_DY(ix)
         ld      d,L_DX+1(ix)
         ld      e,L_DX(ix)
-        ld      a,L_FLAGS(ix)
-        and     #0x01
-        jr      z,.bl_err_y
-        ld      h,d                     ; err = dx/2
+        ;; The skip phase used the original major axis. Rasterization uses
+        ;; the clipped deltas, and both loops start with a positive half of
+        ;; their own major delta. The y loop treats it as a deficit.
+        ld      h,d
         ld      l,e
+        or      a
+        sbc     hl,bc
+        ld      a,#1
+        jr      nc,.bl_err_x
+        xor     a
+        ld      h,b
+        ld      l,c
+        jr      .bl_err_half
+.bl_err_x:
+        ld      h,d
+        ld      l,e
+.bl_err_half:
+        ld      L_FLAGS(ix),a
         srl     h
         rr      l
-        jr      .bl_err_ok
-.bl_err_y:
-        ld      a,c                     ; err = -(dy/2)
-        srl     a
-        ld      l,a
-        ld      h,#0
-        or      a
-        jr      z,.bl_err_ok
-        xor     a
-        sub     l
-        ld      l,a
-        sbc     a,a
-        ld      h,a
 .bl_err_ok:
         exx
 
@@ -541,9 +543,7 @@ xadv:
         .endif
 rot:
         djnz    lp
-        call    .bl_chunk               ; dx can exceed 255 on this machine
-        ld      a,b
-        or      a
+        call    .bl_chunk               ; NZ: another chunk, B=0 means 256
         jp      nz,lp
         jp      .bl_last
 wrap:
@@ -631,13 +631,11 @@ lp:
 np:
         exx
         or      a
-        adc     hl,de                   ; err += dx (adc sets S/Z)
-        exx                             ; flags survive exx
-        jp      m,yadv                  ; err < 0: no x step
-        jr      z,yadv                  ; err == 0: no x step
+        sbc     hl,de                   ; deficit -= dx
+        exx                             ; carry means the deficit went negative
+        jp      nc,yadv                 ; equality does not step x
         exx
-        or      a
-        sbc     hl,bc                   ; err -= dy
+        add     hl,bc                   ; deficit += dy, back into [0,dy)
         exx
         ex      af,af'
         bit     0,a
@@ -830,23 +828,19 @@ xlwrap:
         jr      .bo_y
 .bo_x2:
         ;; x < EX0 ?  (both non-negative, so an unsigned 16-bit compare)
-        push    de
-        ld      e,L_EX0(ix)
-        ld      d,L_EX0+1(ix)
-        call    .bo_cmp                 ; carry when HL < DE
-        pop     de
+        ld      a,l
+        sub     L_EX0(ix)
+        ld      a,h
+        sbc     a,L_EX0+1(ix)           ; carry when x < EX0
         jr      nc,.bo_x3
         set     OC_LEFT,c
         jr      .bo_y
 .bo_x3:
         ;; EX1 < x ?
-        push    de
-        ld      e,L_EX1(ix)
-        ld      d,L_EX1+1(ix)
-        ex      de,hl
-        call    .bo_cmp                 ; carry when EX1 < x
-        ex      de,hl
-        pop     de
+        ld      a,L_EX1(ix)
+        sub     l
+        ld      a,L_EX1+1(ix)
+        sbc     a,h                     ; carry when EX1 < x
         jr      nc,.bo_y
         set     OC_RIGHT,c
 .bo_y:
@@ -875,15 +869,6 @@ xlwrap:
         ld      a,c
         ret
 
-        ;; Unsigned 16-bit HL < DE, carry set when true. Only reached with
-        ;; non-negative values, so it needs no sign folding.
-.bo_cmp:
-        push    hl
-        or      a
-        sbc     hl,de
-        pop     hl
-        ret
-
         ;; endpoint equality tests (Z set when equal / parallel to edge)
 .bl_eqy:
         ld      a,A_Y0(ix)
@@ -910,8 +895,7 @@ xlwrap:
         jr      z,.ba_sub
         ex      de,hl
 .ba_sub:
-        or      a                       ; clear carry, keep A
-        sbc     hl,de
+        sbc     hl,de                   ; AND above already cleared carry
         ret
 
         ;; intersection: n = a0 +/- m1*m2/m3 (magnitudes u16, trunc division)
@@ -967,7 +951,7 @@ xlwrap:
         ld      d,L_X0+1(ix)
 .bi_m2:
         ld      l,L_NB(ix)              ; m2 = |nb - b0|
-        ld      h,#0
+        ld      h,L_NB+1(ix)            ; x clip edges may be above 255
         call    .bl_absd
         ex      de,hl                   ; DE = m2
         ld      l,a                     ; fold m2 sign
@@ -1037,13 +1021,13 @@ xlwrap:
         ;;
         ;; Hand the x-major raster its next run of steps. dx reaches 639 in
         ;; mode 2, which does not fit djnz's counter, so the loop runs in
-        ;; chunks of at most 255. Everything the raster carries -- pattern,
+        ;; chunks of at most 256. Everything the raster carries -- pattern,
         ;; masks, VRAM pointer and the alternate set's error term -- lives
         ;; in registers this does not touch, so a chunk boundary is
         ;; invisible to the line being drawn.
         ;;
         ;; Return:
-        ;;   B = steps in this chunk, 0 when the line is finished
+        ;;   NZ = chunk available, B = steps (0 means 256); Z = finished
         ;;
         ;; Clobbers:
         ;;   AF, B
@@ -1052,16 +1036,14 @@ xlwrap:
         ld      a,L_STEPS+1(ix)
         or      a
         jr      nz,.bl_chunk_full
-        ld      b,L_STEPS(ix)           ; under 256 left: take them all
+        ld      b,L_STEPS(ix)           ; final partial chunk
         xor     a
         ld      L_STEPS(ix),a
+        or      b                       ; Z only when no steps remain
         ret
 .bl_chunk_full:
-        ld      b,#255
-        ld      a,L_STEPS(ix)
-        sub     #255
-        ld      L_STEPS(ix),a
-        ld      a,L_STEPS+1(ix)
-        sbc     a,#0x00
+        dec     a                       ; consume 256 steps; low byte stays
         ld      L_STEPS+1(ix),a
+        ld      b,#0                    ; djnz naturally counts a full 256
+        inc     a                       ; original high byte > 0: return NZ
         ret

@@ -41,7 +41,6 @@ _gpx_clrscr::
 
         ;; attributes (0x5800..0x5aff): 3 whole pages.
         ;; paper = white (light gray on composite displays), ink = black
-        ld      hl,#ATTRBEG
         ld      b,#0x03
         ld      a,#0x38
         call    .cls_pages

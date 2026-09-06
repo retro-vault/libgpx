@@ -36,8 +36,12 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  __gpx_bresenham_line_local
+        .globl  __gpx_horizontal_prepared
+        .globl  __gpx_native_horizontal
         .globl  __rect_cmp16s_lt
         .globl  __ef9367_max_y
+        .globl  __ef9367_cache_bmode
+        .globl  __ef9367_set_line_style
 
         .include "_ef9367-defs.inc"
 
@@ -68,7 +72,7 @@
         ;;   LPATT_RET rotated across the plotted segment.
         ;;
         ;; Clobbers:
-        ;;   AF, BC, DE, HL
+        ;;   AF, BC, DE, HL, AF', BC'
 __gpx_bresenham_line_local:
         ;; ---- dx and the x step direction ----
         ld      l,S_X1_LO(ix)
@@ -78,27 +82,15 @@ __gpx_bresenham_line_local:
         ld      (__bs_x0),de            ; loop origin
         call    __rect_cmp16s_lt        ; A = (x1 < x0)
         or      a
-        jr      z,.gbl_dx_pos
-
-        ld      a,#0xFF                 ; walk left
+        ld      a,#1                    ; x grows unless endpoints reverse
+        jr      z,.gbl_dx_ordered
+        ex      de,hl                   ; comparator preserves both operands
+        ld      a,#0xFF
+.gbl_dx_ordered:
         ld      (__bs_sx),a
-        ld      hl,(__bs_x0)            ; HL = x0
-        ld      e,S_X1_LO(ix)
-        ld      d,S_X1_HI(ix)           ; DE = x1
         or      a
-        sbc     hl,de                   ; dx = x0 - x1
-        jr      .gbl_dx_done
+        sbc     hl,de
 
-.gbl_dx_pos:
-        ld      a,#0x01                 ; walk right
-        ld      (__bs_sx),a
-        ld      l,S_X1_LO(ix)
-        ld      h,S_X1_HI(ix)           ; HL = x1
-        ld      de,(__bs_x0)            ; DE = x0
-        or      a
-        sbc     hl,de                   ; dx = x1 - x0
-
-.gbl_dx_done:
         ld      (__bs_dx),hl
 
         ;; ---- ty = max_y - y0, and the step that walks it ----
@@ -115,29 +107,15 @@ __gpx_bresenham_line_local:
         ld      h,S_Y1_HI(ix)           ; HL = y1, DE still y0
         call    __rect_cmp16s_lt        ; A = (y1 < y0)
         or      a
-        jr      z,.gbl_dy_pos
-
-        ld      a,#0x01                 ; y0 falls, so ty rises
+        ld      a,#0xFF                 ; increasing y decreases GDP y
+        jr      z,.gbl_dy_ordered
+        ex      de,hl
+        ld      a,#1
+.gbl_dy_ordered:
         ld      (__bs_sty),a
-        ld      l,S_Y0_LO(ix)
-        ld      h,S_Y0_HI(ix)           ; HL = y0
-        ld      e,S_Y1_LO(ix)
-        ld      d,S_Y1_HI(ix)           ; DE = y1
         or      a
-        sbc     hl,de                   ; dy = y0 - y1
-        jr      .gbl_dy_done
+        sbc     hl,de
 
-.gbl_dy_pos:
-        ld      a,#0xFF                 ; y0 rises, so ty falls
-        ld      (__bs_sty),a
-        ld      l,S_Y1_LO(ix)
-        ld      h,S_Y1_HI(ix)           ; HL = y1
-        ld      e,S_Y0_LO(ix)
-        ld      d,S_Y0_HI(ix)           ; DE = y0
-        or      a
-        sbc     hl,de                   ; dy = y1 - y0
-
-.gbl_dy_done:
         ld      (__bs_dy),hl
 
         ;; A horizontal line is the common case by a wide margin -- every row
@@ -168,14 +146,17 @@ __gpx_bresenham_line_local:
         jr      z,.gbl_n_have
         ld      hl,(__bs_dy)
 .gbl_n_have:
-        ld      (__bs_n),hl
+        push    hl
+        exx
+        pop     bc                      ; BC' counts steps without RAM traffic
+        exx
 
         ld      c,LPATT_RET(ix)         ; pattern rides in C from here on
 
 .gbl_loop:
         ;; ---- plot, if this pattern bit is set ----
-        bit     0,c
-        jr      z,.gbl_after_plot
+        rrc     c                       ; carry is this pixel's pattern bit
+        jr      nc,.gbl_after_plot
 
         ;; Fence on READY: the previous plot uses X and Y as parameters, so
         ;; they must not move under it. Nothing is issued between here and
@@ -200,12 +181,12 @@ __gpx_bresenham_line_local:
 
 .gbl_after_plot:
         ;; ---- any steps left? ----
-        ld      hl,(__bs_n)
-        ld      a,h
-        or      l
+        exx
+        ld      a,b
+        or      c
         jr      z,.gbl_done
-        dec     hl
-        ld      (__bs_n),hl
+        dec     bc
+        exx
 
         ;; ---- e2 = err * 2, kept in DE across both tests ----
         ld      hl,(__bs_err)
@@ -272,10 +253,11 @@ __gpx_bresenham_line_local:
         ld      (__bs_ty),hl
 
 .gbl_rot:
-        rrc     c
         jp      .gbl_loop
 
 .gbl_done:
+        exx                             ; recover the pattern register set
+        rlc     c                       ; return phase advances by steps, not pixels
         ld      LPATT_RET(ix),c         ; hand the rotated pattern back
         ret
 
@@ -289,29 +271,144 @@ __gpx_bresenham_line_local:
         ;; than branched on every pixel.
         ;;
         ;; Registers through both loops:
-        ;;   HL = x, DE = steps remaining, B = pattern
+        ;;   Core entry: HL=x, DE=steps, B=pattern, C=out-of-range flag.
+        ;;   Scalar loop: HL=x, D=blocks, B=pixels in block, C=pattern.
+        ;;   Rotating before the plot exposes the next bit through carry;
+        ;;   DJNZ counts pixels without a 16-bit zero test at every pixel.
 .gbl_horizontal:
-        ;; Fence before touching Y: a plot already in flight reads it.
-.gbl_h_ywait:
+        ld      hl,(__bs_ty)
+        call    .gbl_h_set_y
+        ld      de,(__bs_dx)            ; steps remaining
+        ld      hl,(__bs_x0)            ; running x
+        ld      b,LPATT_RET(ix)         ; pattern
+        ld      a,h                     ; HL already holds x0
+        or      S_X1_HI(ix)
+        and     #0xFC
+        ld      c,a                     ; nonzero excludes wrapping coordinates
+        call    .gbl_h_core
+        ld      LPATT_RET(ix),b
+        ret
+
+        ;; ------------------------------------------------------------
+        ;; __gpx_horizontal_prepared
+        ;; Draw an already clipped, nonempty horizontal row, left to right.
+        ;; Mode and color have already been programmed by the caller.
+        ;;
+        ;; Arguments: HL=x0, DE=x1, BC=y, A=LSB-first pattern (1..FF).
+        ;; Return: A=pattern rotated by x1-x0.
+        ;; Clobbers: AF, BC, DE, HL, AF'. Preserves IX and IY.
+__gpx_horizontal_prepared::
+        push    af
+        push    hl
+        ex      de,hl
+        or      a
+        sbc     hl,de
+        push    hl                      ; x1-x0
+        ld      hl,(__ef9367_max_y)
+        or      a
+        sbc     hl,bc
+        call    .gbl_h_set_y
+        pop     de
+        pop     hl
+        pop     af
+        ld      b,a
+        ld      c,#0                    ; caller guarantees visible endpoints
+        ld      a,#1
+        ld      (__bs_sx),a
+        call    .gbl_h_core
+        ld      a,b
+        ret
+
+        ;; HL is the already transformed GDP y coordinate.
+.gbl_h_set_y:
         in      a,(EF9367_STS_NI)
         and     #EF9367_STS_NI_READY
-        jr      z,.gbl_h_ywait
-        ld      hl,(__bs_ty)
+        jr      z,.gbl_h_set_y
         ld      a,l
         out     (#EF9367_YPOS_LO),a
         ld      a,h
         out     (#EF9367_YPOS_HI),a
+        ret
 
-        ld      de,(__bs_dx)            ; steps remaining
-        ld      hl,(__bs_x0)            ; running x
-        ld      b,LPATT_RET(ix)         ; pattern
+.gbl_h_core:
+        ld      a,b
+        inc     a                       ; FF -> solid style zero, even for points
+        jp      z,.gbl_h_native
+        ;; Hardware setup pays for itself on longer, visible horizontal
+        ;; spans. Keep the scalar path for tiny spans and coordinates that
+        ;; can wrap the GDP's 12-bit cursor within a vector.
+        ld      a,d
+        or      a
+        jr      nz,.gbl_h_try_style
+        ld      a,e
+        cp      #32
+        jr      c,.gbl_h_scalar
+.gbl_h_try_style:
+        ld      a,c
+        or      a
+        jr      nz,.gbl_h_scalar
+        ld      a,b
+        rrca
+        xor     b                       ; adjacent-bit transitions
+        cp      #0xFF
+        jp      z,.gbl_h_alternating
+        cp      #0x55
+        jp      z,.gbl_h_dotted
+        cp      #0xAA
+        jp      z,.gbl_h_dotted
+        cp      #0x11
+        jp      z,.gbl_h_dashed
+        cp      #0x22
+        jp      z,.gbl_h_dashed
+        cp      #0x44
+        jp      z,.gbl_h_dashed
+        cp      #0x88
+        jp      z,.gbl_h_dashed
+        ;; After native and alternating patterns, equal nibbles identify
+        ;; the remaining two-pass patterns: 11 and 77, plus rotations.
+        ld      a,b
+        rrca
+        rrca
+        rrca
+        rrca
+        xor     b
+        jp      z,.gbl_h_xor_dashed
+        inc     a                       ; opposite nibbles: remaining XOR basis
+        jp      z,.gbl_h_xor_three
+        ;; Copy can union two four-on strokes into a five/six/seven-on run.
+        ;; Find its canonical rotation before peeling the visible prefix.
+        ld      a,(__ef9367_cache_bmode)
+        or      a
+        jr      nz,.gbl_h_scalar
+        ld      a,b
+        ld      c,#8
+.gbl_h_copy_run:
+        cp      #0x1F
+        jr      z,.gbl_h_copy_have
+        cp      #0x3F
+        jr      z,.gbl_h_copy_have
+        cp      #0x7F
+        jr      z,.gbl_h_copy_have
+        rrca
+        dec     c
+        jr      nz,.gbl_h_copy_run
+        jr      .gbl_h_scalar
+.gbl_h_copy_have:
+        ld      c,a
+        ld      a,#0x82
+        jp      .gbl_h_peel_setup
+.gbl_h_scalar:
+        ld      c,b                     ; pattern; B counts pixels within a block
+        ld      b,e
+        inc     b                       ; first block has (steps.low+1) pixels
+        inc     d                       ; then steps.high complete 256-pixel blocks
         ld      a,(__bs_sx)
         inc     a                       ; 0xFF -> 0, so Z means walk left
         jr      z,.gbl_h_lloop
 
 .gbl_h_rloop:
-        bit     0,b
-        jr      z,.gbl_h_rnext
+        rrc     c
+        jr      nc,.gbl_h_rnext
 .gbl_h_rwait:
         in      a,(EF9367_STS_NI)
         and     #EF9367_STS_NI_READY
@@ -323,17 +420,15 @@ __gpx_bresenham_line_local:
         ld      a,#EF9367_CMD_PLOT
         out     (#EF9367_CMD),a
 .gbl_h_rnext:
-        ld      a,d
-        or      e
-        jr      z,.gbl_h_done
-        dec     de
         inc     hl
-        rrc     b
-        jr      .gbl_h_rloop
+        djnz    .gbl_h_rloop
+        dec     d
+        jr      nz,.gbl_h_rloop
+        jr      .gbl_h_done
 
 .gbl_h_lloop:
-        bit     0,b
-        jr      z,.gbl_h_lnext
+        rrc     c
+        jr      nc,.gbl_h_lnext
 .gbl_h_lwait:
         in      a,(EF9367_STS_NI)
         and     #EF9367_STS_NI_READY
@@ -345,16 +440,214 @@ __gpx_bresenham_line_local:
         ld      a,#EF9367_CMD_PLOT
         out     (#EF9367_CMD),a
 .gbl_h_lnext:
-        ld      a,d
-        or      e
-        jr      z,.gbl_h_done
-        dec     de
         dec     hl
-        rrc     b
-        jr      .gbl_h_lloop
+        djnz    .gbl_h_lloop
+        dec     d
+        jr      nz,.gbl_h_lloop
 
 .gbl_h_done:
-        ld      LPATT_RET(ix),b         ; hand the rotated pattern back
+        rlc     c                       ; expose the final endpoint's phase
+        ld      b,c
+        ret
+
+        ;; Native styles start with an on run: 33 is 1100 in time order,
+        ;; 0F is 11110000. Peel at most seven pixels to obtain that phase.
+        ;; A vector includes its endpoint, so full chunks contain 256
+        ;; pixels (DELTA=255); the next origin advances by 256, not 255.
+.gbl_h_dotted:
+        ld      c,#0x33
+        ld      a,#1
+        jr      .gbl_h_peel_setup
+.gbl_h_dashed:
+        ld      c,#0x0F
+        ld      a,#2
+.gbl_h_peel_setup:
+        push    af
+.gbl_h_peel:
+        ld      a,b
+        cp      c
+        jr      z,.gbl_h_peel_done
+        bit     0,b
+        call    nz,.gbl_h_plot
+        call    .gbl_h_advance
+        rrc     b
+        jr      .gbl_h_peel
+.gbl_h_peel_done:
+        pop     af
+        bit     7,a
+        jr      nz,.gbl_h_xor_first
+        jp      .gbl_h_native
+
+        ;; 33 XOR (33 starting one pixel later) = 55, over exactly the
+        ;; requested finite interval. AA skips its first clear pixel.
+        ;; Copy uses a union instead: 33 OR (33 << 1) = 77. All touched
+        ;; pixels belong to the target, and repeated identical writes agree.
+        ;; Other XOR compositions cannot use copy on an arbitrary old raster.
+.gbl_h_xor_three:
+        ld      c,#0x2D                 ; 0F XOR (0F << 1) XOR (0F << 2)
+        ld      a,#0x82
+        jr      .gbl_h_xor_check
+.gbl_h_alternating:
+        ld      c,#0x55
+        ld      a,#0x81                 ; dotted, two XOR passes
+        jr      .gbl_h_xor_check
+.gbl_h_xor_dashed:
+        ld      a,b
+        and     #0x0F
+        ld      c,a
+        dec     a
+        and     c                       ; one set nibble bit -> sparse 11
+        ld      c,#0x11
+        jr      z,.gbl_h_xor_have
+        ld      c,#0x77                 ; three set nibble bits -> dense 77
+.gbl_h_xor_have:
+        ld      a,#0x82                 ; dashed, two XOR passes
+.gbl_h_xor_check:
+        push    af
+        ld      a,(__ef9367_cache_bmode)
+        dec     a                       ; BM_XOR is 1
+        jr      nz,.gbl_h_xor_copy
+        pop     af
+        jp      .gbl_h_peel_setup
+.gbl_h_xor_copy:
+        pop     af
+        ld      a,c
+        cp      #0x77                   ; 33 OR (33 << 1) = 77 in copy mode
+        jp      nz,.gbl_h_scalar
+        ld      a,#0x81
+        jp      .gbl_h_peel_setup
+.gbl_h_xor_first:
+        and     #3
+        ld      c,a                     ; remember which native style was selected
+        push    af                      ; native style for the second pass
+        push    hl
+        push    de
+        push    bc
+        call    .gbl_h_native
+        ld      a,b
+        ex      af,af'                  ; final logical pattern survives pass 2
+        pop     bc
+        pop     de
+        pop     hl
+        ld      a,c
+        ld      c,#1
+        cp      #2
+        jr      nz,.gbl_h_xor_advance
+        bit     4,b                     ; 2D's three passes advance one each
+        jr      z,.gbl_h_xor_advance
+        bit     5,b
+        jr      z,.gbl_h_xor_advance
+        inc     c                       ; copy 3F: second four-on run at +2
+        bit     6,b
+        jr      z,.gbl_h_xor_advance
+        inc     c                       ; 77 XOR / 7F copy: second run at +3
+.gbl_h_xor_advance:
+        call    .gbl_h_advance
+        dec     c
+        jr      nz,.gbl_h_xor_advance
+        ld      a,b
+        cp      #0x2D
+        jr      z,.gbl_h_third_pass
+        pop     af
+        call    .gbl_h_native
+        jr      .gbl_h_composed_done
+.gbl_h_third_pass:
+        pop     af
+        push    hl
+        push    de
+        call    .gbl_h_native
+        pop     de
+        pop     hl
+        call    .gbl_h_advance
+        ld      a,#2
+        call    .gbl_h_native
+.gbl_h_composed_done:
+        ex      af,af'
+        ld      b,a
+        ret
+
+        ;; HL advances one pixel in the line direction; DE loses one step.
+        ;; Only the bounded prefix and second XOR origin use this helper.
+.gbl_h_advance:
+        dec     de
+        ld      a,(__bs_sx)
+        inc     a
+        jr      z,.gbl_h_advance_left
+        inc     hl
+        ret
+.gbl_h_advance_left:
+        dec     hl
+        ret
+
+        ;; Plot one prefix pixel, retaining the pattern and native target.
+.gbl_h_plot:
+        in      a,(EF9367_STS_NI)
+        and     #EF9367_STS_NI_READY
+        jr      z,.gbl_h_plot
+        ld      a,l
+        out     (#EF9367_XPOS_LO),a
+        ld      a,h
+        out     (#EF9367_XPOS_HI),a
+        ld      a,#EF9367_CMD_PLOT
+        out     (#EF9367_CMD),a
+        ret
+
+        ;; A = style, HL = origin, DE = major steps, B = logical pattern.
+        ;; Draw aligned native chunks, then rotate B by DE mod 8. The same
+        ;; kernel serves both passes of the alternating XOR composition.
+.gbl_h_native:
+        push    bc
+        call    __ef9367_set_line_style
+        pop     bc
+        ld      c,#0x10
+        ld      a,(__bs_sx)
+        inc     a
+        jr      nz,.gbl_h_native_wait
+        ld      c,#0x16
+        ;; ------------------------------------------------------------
+        ;; __gpx_native_horizontal
+        ;; Internal continuation for solid vector callers that already
+        ;; programmed Y and style: HL=x, DE=steps, B=pattern, C=command.
+        ;; Return: B rotated by the number of major steps.
+        ;; Clobbers: AF, BC, DE, HL. Preserves IX and IY.
+__gpx_native_horizontal::
+.gbl_h_native_wait:
+        in      a,(EF9367_STS_NI)
+        and     #EF9367_STS_NI_READY
+        jr      z,.gbl_h_native_wait
+        ld      a,l
+        out     (#EF9367_XPOS_LO),a
+        ld      a,h
+        out     (#EF9367_XPOS_HI),a
+        xor     a
+        out     (#EF9367_DY),a
+        ld      a,d
+        or      a
+        ld      a,#255
+        jr      nz,.gbl_h_native_issue
+        ld      a,e
+.gbl_h_native_issue:
+        out     (#EF9367_DX),a
+        ld      a,c
+        out     (#EF9367_CMD),a
+        ld      a,d
+        or      a
+        jr      z,.gbl_h_native_done
+        dec     d                       ; steps -= 256
+        inc     h                       ; origin += 256, or -= 256 if left
+        bit     1,c
+        jr      z,.gbl_h_native_wait
+        dec     h
+        dec     h
+        jr      .gbl_h_native_wait
+.gbl_h_native_done:
+        ld      a,e
+        and     #7
+        ret     z
+.gbl_h_native_rot:
+        rrc     b
+        dec     a
+        jr      nz,.gbl_h_native_rot
         ret
 
         .area   _DATA
@@ -370,8 +663,6 @@ __bs_dx:
 __bs_dy:
         .dw     0x0000
 __bs_err:
-        .dw     0x0000
-__bs_n:
         .dw     0x0000
 __bs_sx:
         .db     0x00

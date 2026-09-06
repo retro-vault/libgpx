@@ -53,7 +53,7 @@ crossbench:
 # are compared against tests/partner/gdp-golden; pass ARGS="--bless" to
 # re-record them. See EMULATION.md before doing that.
 partner-gdp-tests:
-	$(MAKE) -C partner gdp
+	$(MAKE) -C partner pattern-tests tiny-tests
 	$(PYTHON) $(PARTNER_RUNNER) $(ARGS)
 
 partner-gdp-bench:
@@ -63,6 +63,8 @@ partner-gdp-bench:
 zx-tests:
 	$(MAKE) -C zx build
 	$(PYTHON) $(ZX_RUNNER)
+	$(PYTHON) $(ROOT_DIR)/tests/zx/bitmap_regressions.py
+	$(PYTHON) $(ROOT_DIR)/tests/mcp/sprite_regressions.py
 
 zx-bench:
 	$(MAKE) -C zx bench

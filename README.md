@@ -156,20 +156,24 @@ connects these programs to the API concepts they exercise.
 | Display | 256 x 192 | 1024 x 256 | 640 x 200 / 320 x 200 |
 | Z80 clock | 3.5 MHz | 4 MHz | 4 MHz |
 | Drawing | software | EF9367 coprocessor | software |
-| Library size | 10,350 B | 9,876 B | 11,131 B |
-| ...core only (`ADVANCED=0`) | 7,600 B | 7,126 B | 8,381 B |
+| Library size | 9,015 B | 9,007 B | 9,815 B |
+| ...core only (`ADVANCED=0`) | 6,857 B | 6,849 B | 7,657 B |
 
 The CPC is the largest because one library serves both display modes, and
 mode 1 packs four pixels to a byte where mode 2 packs eight -- so the span,
 blit and line paths each carry a second form. The Partner is the smallest
 because the chip does the rasterising.
 
-The advanced half costs the same 2,750 bytes on every backend, because
-circles and polygons are one shared module set rather than three: 1,603 B
-for `gpx_fill_polygon`, 499 for `gpx_fill_circle`, 429 for
-`gpx_draw_circle` and 219 for `gpx_draw_polygon`. A program pays only for
-what it calls -- the library is an archive, so a program that draws no
-polygons never links that 1,603 B, whichever way `ADVANCED` is set.
+The advanced half costs the same 2,158 bytes on every backend: 1,274 B
+for `gpx_fill_polygon`, 375 for `gpx_fill_circle`, 327 for
+`gpx_draw_circle`, 159 for `gpx_draw_polygon`, and 23 in shared arithmetic
+helpers. A program pays only for the archive members it calls. Each helper
+has its own member, so selecting one shape does not pull another shape's
+helpers into the program.
+
+The [September 2026 optimization report](docs/research/OPTIMIZATION-2026-09.md)
+records before/after sizes, raw timings, validation and known test limitations.
+Font data and formats are unchanged.
 
 ### Speed
 
@@ -184,45 +188,39 @@ Milliseconds, because the Spectrum's Z80 runs at 3.5 MHz and the other two at
 
 | Benchmark | ZX Spectrum | Partner | CPC 640x200 | CPC 320x200 |
 |---|--:|--:|--:|--:|
-| 64 solid rays, all octants | 755 | **68** | 683 | 714 |
-| the same rays, dashed | 720 | 1,749 | **648** | 679 |
-| 8 solid fills, 248x184 | 821 | 667 | **587** | 734 |
-| 8 patterned/XOR fills | 903 | 10,266 | **760** | 1,139 |
-| 16 circle outlines, 4 radii | **1,668** | 2,204 | 1,964 | 1,940 |
-| 8 solid discs, r=90 | 1,965 | **1,248** | 2,156 | 2,217 |
-| 8 ten-point star outlines | 282 | **87** | 276 | 283 |
-| 8 ten-point star fills | 5,464 | **4,443** | 5,573 | 5,612 |
-| 200 sprite show+hide pairs | **2,034** | 5,432 | 3,057 | 3,784 |
-| 60 lines of text, 3 modes | 5,989 | 11,835 | **5,724** | 7,083 |
+| 64 solid rays, all octants | 721 | **66** | 665 | 696 |
+| the same rays, dashed | 683 | 1,632 | **630** | 661 |
+| 8 solid fills, 248x184 | 691 | **474** | 570 | 717 |
+| 8 patterned/XOR fills | 881 | 4,069 | **743** | 1,122 |
+| 16 circle outlines, 4 radii | **1,226** | 1,259 | 1,417 | 1,408 |
+| 8 solid discs, r=90 | 1,485 | **989** | 1,723 | 1,793 |
+| 8 ten-point star outlines | 265 | **79** | 258 | 264 |
+| 8 ten-point star fills | 3,250 | **2,729** | 3,491 | 3,539 |
+| 200 sprite show+hide pairs | **1,500** | 2,032 | 2,340 | 2,573 |
+| 60 lines of text, 3 modes | **4,796** | 6,331 | 4,835 | 5,186 |
 | 16 full-screen clears | **455** | 538 | 558 | 558 |
 
-What the table is really showing:
+What the table shows:
 
-* **The Partner wins wherever the EF9367 can do the work itself** -- a solid
-  vector is 10x faster than the fastest software Bresenham here -- and loses
-  badly wherever it cannot. A pattern cannot be handed to the chip's area
-  fill, so patterned fills fall back to software and cost 11x what the
-  Spectrum pays. It is a vector machine, and it rewards being used as one.
-* **Circles and polygons split the Partner exactly along that line.** A
-  polygon outline is slanted vectors, which is what the chip is for: 87 ms
-  against 276 on the CPC, the widest win in the table after plain lines. A
-  circle outline is per-pixel plotting, which it cannot accelerate at all,
-  and it becomes the *slowest* machine for that one row. Filling either
-  shape puts it back in front, because every scanline is a horizontal run.
-* **A polygon fill costs far more than a circle fill of similar area**, on
-  every machine: each scanline walks ten edge records and sorts their
-  crossings before a single pixel is drawn. That bookkeeping, not the
-  filling, is what the row measures.
-* **The CPC leads on raster work** despite pushing 2.6x the Spectrum's pixels
-  in mode 2, partly from the faster clock and partly because its span, fill
-  and line paths are the most heavily tuned. Its weak spot is sprites, where
-  saving and restoring the background costs more than on the Spectrum.
-* **CPC mode 1 is consistently slower than mode 2** for the same picture:
-  four pixels to a byte means a read-modify-write where mode 2 can store, and
-  the blitter has to gather two screen bytes into one eight-pixel value.
-* **Clears are not really comparable**: `gpx_clrscr()` clears the whole
-  display, and the displays are different sizes -- the Partner is clearing
-  five times the Spectrum's pixels for its 538 ms.
+* **Partner hardware vectors remain fastest for solid lines.** Selected
+  horizontal patterns now use one to three hardware passes. This mixed
+  patterned-fill workload still takes 4.6 times the Spectrum's time because
+  it also needs scalar plotting, including alternating patterns in copy mode.
+* **Direct pixel calls bring Partner circle outlines close to Spectrum.**
+  Filled circles and polygons put Partner first because their scanlines use
+  hardware horizontal runs. Its star outline takes 79 ms versus 258 on CPC.
+* **Polygon fills carry substantial edge-processing cost.** Each row walks
+  edge records and sorts crossings before emitting spans; reducing that work
+  helps every backend.
+* **CPC is strong on byte-based raster work.** Mode 1 generally adds packing
+  work to spans and bitmaps because four pixels occupy each screen byte;
+  circle outlines are a small exception. Spectrum remains fastest for the
+  sprite workload here.
+* **Partner Tiny bitmaps now use packed GDP commands.** Connected strokes
+  and pen-up moves avoid software delta decoding, reducing this sprite
+  workload from 4,607 to 2,032 ms and text from 9,610 to 6,331 ms.
+* **Clears cover different amounts of memory.** Partner clears over five
+  times as many pixels as Spectrum; this row is not a fixed-area comparison.
 
 Measured with `make crossbench`; the emulators are cycle-accurate, so the
 numbers are reproducible rather than sampled.
@@ -238,6 +236,12 @@ make cpc-bench       # CPC micro-benchmarks, in T-states, both modes
 make conformance     # one program on all three backends, compared pixel for pixel
 make crossbench      # the same picture timed on all three, for comparison
 ```
+
+The current Partner emulator has pre-existing recorded-golden and conformance
+mismatches, reproduced before and after the optimization pass. See the
+[validation report](docs/research/OPTIMIZATION-2026-09.md#existing-partner-test-failures)
+for the exact failing phases; neither its goldens nor its acceptance budgets
+were relaxed.
 
 `make conformance` is the gate that keeps the backends from drifting
 apart: it compiles a scenario once per backend, runs it on every

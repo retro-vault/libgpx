@@ -68,7 +68,7 @@ PARTNER_ASM_SRCS := \
 PARTNER_ASM_RELS := $(patsubst $(ROOT_DIR)/src/partner/%.s,$(PARTNER_BUILD_DIR)/%.rel,$(PARTNER_ASM_SRCS))
 PARTNER_COMMON_RELS := $(PARTNER_ASM_RELS)
 
-.PHONY: build run partner-visuals gdp gdp-bench gdp-tests clean
+.PHONY: build run helpers pattern-tests tiny-tests partner-visuals gdp gdp-bench gdp-tests clean
 
 build: $(PARTNER_TEST_IHXS) $(PARTNER_HOST_TESTS)
 
@@ -76,8 +76,18 @@ gdp: $(GDP_IHXS) $(GDP_MAPS)
 
 gdp-bench: $(GDP_BENCH_IHXS) $(GDP_BENCH_MAPS)
 
-gdp-tests: gdp
+pattern-tests: gdp gdp-bench
+	python3 $(ROOT_DIR)/tests/mcp/check_partner_patterns.py
+	python3 $(ROOT_DIR)/tests/partner/test_fill_phase_mcp.py
+
+tiny-tests:
+	python3 $(ROOT_DIR)/tests/mcp/check_partner_tiny.py
+
+gdp-tests: pattern-tests tiny-tests
 	python3 $(ROOT_DIR)/tests/mcp/run_partner_tests.py $(ARGS)
+
+helpers: gdp-bench $(TEST_BUILD_DIR)/test_partner_helpers_emulator
+	cd $(ROOT_DIR) && $(TEST_BUILD_DIR)/test_partner_helpers_emulator
 
 run: build
 	cd $(ROOT_DIR) && $(TEST_BUILD_DIR)/test_partner_bmp_emulator
@@ -135,4 +145,4 @@ $(GDP_BENCH_MAPS): %.map: %.ihx
 clean:
 	rm -rf $(GDP_BIN)
 	rm -rf $(PARTNER_BUILD_DIR)
-	rm -f $(PARTNER_HOST_TESTS) $(PARTNER_VIS_HARNESS)
+	rm -f $(PARTNER_HOST_TESTS) $(PARTNER_VIS_HARNESS) $(TEST_BUILD_DIR)/test_partner_helpers_emulator

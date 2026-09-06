@@ -37,55 +37,27 @@
         .equ    BMP_SIG_1BPP_MASK,       0x10
         .equ    SCRHEIGHT,               192
 
-        .equ    P_SRCAND_LO,             -2
-        .equ    P_SRCAND_HI,             -1
-        .equ    P_SRCOR_LO,              -4
-        .equ    P_SRCOR_HI,              -3
-        .equ    P_ROWADV_LO,             -6
-        .equ    P_ROWADV_HI,             -5
-        .equ    P_STDMODE,               -7
-        .equ    P_STRIDE,                -8
-        .equ    P_HLEFT,                 -9
-        ;; Destination row pointer, derived once and then stepped by
-        ;; __vid_nextrow. The low slot was the old per-row y counter, which
-        ;; only existed to rebuild the row address every row; the high slot
-        ;; is the one byte the frame grew by.
-        .equ    P_DSTROW_LO,             -10
-        .equ    P_DSTROW_HI,             -22
-        .equ    P_SHIFT,                 -11
-        .equ    P_XBYTE,                 -12
-        .equ    P_INS0,                  -13
-        .equ    P_INS1,                  -14
-        .equ    P_INS2,                  -15
-        .equ    P_SPAN,                  -16
-        .equ    P_MASKED,                -17
-        .equ    P_VISW,                  -18
-        .equ    P_AND0,                  -19
-        .equ    P_AND1,                  -20
-        .equ    P_AND2,                  -21
-
-        .macro  LD16HL off
-        ld      l,off(ix)
-        ld      h,off+1(ix)
-        .endm
-
-        .macro  ST16HL off
-        ld      off(ix),l
-        ld      off+1(ix),h
-        .endm
-
-        .macro  LD16DE off
-        ld      e,off(ix)
-        ld      d,off+1(ix)
-        .endm
-
-        .macro  ST16DE off
-        ld      off(ix),e
-        ld      off+1(ix),d
-        .endm
+        .equ    P_ROWADV,                -1
+        .equ    P_STDMODE,               -2
+        .equ    P_STRIDE,                -3
+        .equ    P_HLEFT,                 -4
+        .equ    P_Y,                     -5
+        .equ    P_SHIFT,                 -6
+        .equ    P_XBYTE,                 -7
+        .equ    P_INS0,                  -8
+        .equ    P_INS1,                  -9
+        .equ    P_INS2,                  -10
+        .equ    P_SPAN,                  -11
+        .equ    P_MASKED,                -12
+        .equ    P_VISW,                  -13
+        .equ    P_AND0,                  -14
+        .equ    P_AND1,                  -15
+        .equ    P_AND2,                  -16
 
         .area   _CODE
 
+        ;; Clobbers:
+        ;;   AF, BC, DE, HL. Preserves IX and IY.
 __gpx_sprite_blit_raw:
         ld      d,h
         ld      e,l
@@ -94,12 +66,12 @@ __gpx_sprite_blit_raw:
         ld      ix,#0
         add     ix,sp
 
-        ld      hl,#-22
+        ld      hl,#-16
         add     hl,sp
         ld      sp,hl
 
         ld      P_STDMODE(ix),a
-        ld      P_DSTROW_LO(ix),b       ; parks y until xbyte is known
+        ld      P_Y(ix),b               ; parks y until xbyte is known
         ld      l,e
         ld      h,d
 
@@ -108,9 +80,10 @@ __gpx_sprite_blit_raw:
         ld      P_SHIFT(ix),a
 
         ld      a,c
-        srl     a
-        srl     a
-        srl     a
+        rrca
+        rrca
+        rrca
+        and     #0x1f
         ld      P_XBYTE(ix),a
 
         ld      a,(hl)
@@ -185,37 +158,17 @@ __gpx_sprite_blit_raw:
         ld      de,#3
         add     hl,de
 
+        ;; IY points at the OR plane. The masked AND bytes are immediately
+        ;; before it, so no second source pointer is needed.
+        ld      e,P_STRIDE(ix)
+        ld      d,#0
         ld      a,P_MASKED(ix)
         or      a
-        jr      z,.gbr_ptrs_std
-
-        ST16HL  P_SRCAND_LO
-        ld      e,P_STRIDE(ix)
-        ld      d,#0x00
+        jr      z,.gbr_ptrs_ready
         add     hl,de
-        ST16HL  P_SRCOR_LO
-        ld      a,P_STRIDE(ix)
-        add     a,a
-        ld      e,a
-        ld      d,#0x00
-        ST16DE  P_ROWADV_LO
-        jr      .gbr_ptrs_done
-
-.gbr_ptrs_std:
-        ST16HL  P_SRCOR_LO
-        xor     a
-        ld      P_SRCAND_LO(ix),a
-        ld      P_SRCAND_HI(ix),a
-        ld      e,P_STRIDE(ix)
-        ld      d,#0x00
-        ST16DE  P_ROWADV_LO
-
-.gbr_ptrs_done:
-        ;; Pin the OR-plane source pointer in IY for the row loop (linear,
-        ;; advanced by ROWADV/row). Survives __vid_rowaddr; no per-row IX
-        ;; round-trip of this pointer. (AND plane stays in IX, masked-only.)
-        ld      l,P_SRCOR_LO(ix)
-        ld      h,P_SRCOR_HI(ix)
+        sla     e
+.gbr_ptrs_ready:
+        ld      P_ROWADV(ix),e
         push    hl
         pop     iy
 
@@ -229,9 +182,10 @@ __gpx_sprite_blit_raw:
         add     a,P_VISW(ix)
         ld      e,a
         add     a,#7
-        srl     a
-        srl     a
-        srl     a
+        rrca
+        rrca
+        rrca
+        and     #0x1f
         ld      P_SPAN(ix),a
 
         ;; right-keep = 0xff >> ((shift+visw) & 7), 0 -> 0
@@ -272,120 +226,77 @@ __gpx_sprite_blit_raw:
         ld      P_INS2(ix),a
 
 .gbr_setup_and:
-        ;; A plain sprite's AND plane is a constant, so shift it once here
-        ;; rather than rebuilding the identical bytes on every row.
-        ld      a,P_MASKED(ix)
-        or      a
-        jr      nz,.gbr_first_row
+        ;; The insertion masks discard all padding. Within the visible
+        ;; width a plain AND plane is uniformly FF (transparent) or 00
+        ;; (copy), regardless of alignment.
         ld      a,P_STDMODE(ix)
-        or      a
-        jr      z,.gbr_std_transparent
-        xor     a
-        ld      d,a
-        ld      e,a
-        jr      .gbr_std_shift
-.gbr_std_transparent:
-        ld      d,#0xFF
-        ld      e,#0xFF
-.gbr_std_shift:
-        xor     a
-        ld      b,a
-        ld      a,P_SHIFT(ix)
-        or      a
-        jr      z,.gbr_std_done
-.gbr_std_loop:
-        srl     d
-        rr      e
-        rr      b
-        dec     a
-        jr      nz,.gbr_std_loop
-.gbr_std_done:
-        ld      P_AND0(ix),d
-        ld      P_AND1(ix),e
-        ld      P_AND2(ix),b
+        sub     #1
+        sbc     a,a
+        ld      P_AND0(ix),a
+        ld      P_AND1(ix),a
+        ld      P_AND2(ix),a
 
 .gbr_first_row:
         ;; First destination row address, derived once. Every later row is one
         ;; __vid_nextrow away. The row base low byte is a multiple of 0x20 and
         ;; xbyte is 0..31, so the add cannot carry.
-        ld      b,P_DSTROW_LO(ix)       ; y, parked at entry
+        ld      b,P_Y(ix)               ; y, parked at entry
         call    __vid_rowaddr
         ld      a,P_XBYTE(ix)
         add     a,l
-        ld      P_DSTROW_LO(ix),a
-        ld      P_DSTROW_HI(ix),h
+        ld      l,a
 
 .gbr_row_loop:
-        ld      a,P_HLEFT(ix)
-        or      a
-        jp      z,.gbr_done
+        push    hl                      ; destination row base
 
-        ld      l,P_DSTROW_LO(ix)
-        ld      h,P_DSTROW_HI(ix)
-        push    hl
-
+        ;; Gather the OR plane into B:C:L and the optional AND plane into
+        ;; D:E:H. Both windows share one shift loop for masked sprites.
+        ld      b,0(iy)
+        ld      c,#0
+        ld      d,-1(iy)
+        ld      e,#0xff
+        ld      a,P_STRIDE(ix)
+        dec     a
+        jr      z,.gbr_sources_ready
+        ld      c,1(iy)
+        ld      e,d
+        ld      d,-2(iy)
+.gbr_sources_ready:
+        ld      hl,#0
         ld      a,P_MASKED(ix)
         or      a
-        jr      z,.gbr_or_plane         ; plain: AND bytes are already set
-
-        LD16DE  P_SRCAND_LO
-        ex      de,hl
-        ld      d,(hl)
-        ld      a,P_STRIDE(ix)
-        cp      #2
-        jr      nz,.gbr_and_second_ff
-        inc     hl
-        ld      e,(hl)
-        jr      .gbr_and_ready
-.gbr_and_second_ff:
-        ld      e,#0xFF
-        jr      .gbr_and_ready
-
-.gbr_and_ready:
-        ;; shift AND plane into D:E:B, park in the frame
-        xor     a
-        ld      b,a
+        jr      z,.gbr_or_plane
         ld      a,P_SHIFT(ix)
         or      a
         jr      z,.gbr_and_shift_done
-.gbr_and_shift_loop:
+.gbr_mask_shift_loop:
         srl     d
         rr      e
-        rr      b
+        rr      h
+        srl     b
+        rr      c
+        rr      l
         dec     a
-        jr      nz,.gbr_and_shift_loop
+        jr      nz,.gbr_mask_shift_loop
 .gbr_and_shift_done:
         ld      P_AND0(ix),d
         ld      P_AND1(ix),e
-        ld      P_AND2(ix),b
-
+        ld      P_AND2(ix),h
+        jr      .gbr_shift_done
 .gbr_or_plane:
-        ;; OR plane straight from the pinned source into B:C, shifted
-        ;; into B:C:D — stays in registers through composition
-        ld      b,0(iy)
-        ld      a,P_STRIDE(ix)
-        cp      #2
-        jr      nz,.gbr_or_second_zero
-        ld      c,1(iy)
-        jr      .gbr_or_ready
-.gbr_or_second_zero:
-        xor     a
-        ld      c,a
-.gbr_or_ready:
-        xor     a
-        ld      d,a
         ld      a,P_SHIFT(ix)
         or      a
-        jr      z,.gbr_or_shift_done
-        ld      e,a
+        jr      z,.gbr_shift_done
 .gbr_or_shift_loop:
         srl     b
         rr      c
-        rr      d
-        dec     e
+        rr      l
+        dec     a
         jr      nz,.gbr_or_shift_loop
-.gbr_or_shift_done:
-        pop     hl                      ; destination
+.gbr_shift_done:
+        ld      d,l
+        pop     hl
+        push    hl                      ; retain base through composition
 
         ;; compose: new = (old & ANDn) | ORn, then merge under INSn via
         ;; old ^ ((old ^ new) & INSn)
@@ -427,33 +338,15 @@ __gpx_sprite_blit_raw:
         ld      (hl),a
 
 .gbr_next_row:
-        ;; A sprite is at most 16x16, so a row stride is at most 4 bytes:
-        ;; 8-bit adds throughout, with a carry into the high byte.
-        ld      e,P_ROWADV_LO(ix)
-        ld      d,#0x00
-        add     iy,de                   ; pinned OR source pointer
+        dec     P_HLEFT(ix)
+        jr      z,.gbr_done
 
-        ld      a,P_MASKED(ix)
-        or      a
-        jr      z,.gbr_after_and_advance
-        ld      a,P_ROWADV_LO(ix)
-        add     a,P_SRCAND_LO(ix)
-        ld      P_SRCAND_LO(ix),a
-        jr      nc,.gbr_after_and_advance
-        inc     P_SRCAND_HI(ix)
-
-.gbr_after_and_advance:
-        ;; Step the destination one display row instead of rebuilding the
-        ;; interleaved address from y.
-        ld      l,P_DSTROW_LO(ix)
-        ld      h,P_DSTROW_HI(ix)
+        ld      e,P_ROWADV(ix)
+        ld      d,#0
+        add     iy,de
+        pop     hl
         call    __vid_nextrow
-        ld      P_DSTROW_LO(ix),l
-        ld      P_DSTROW_HI(ix),h
 
-        ld      a,P_HLEFT(ix)
-        dec     a
-        ld      P_HLEFT(ix),a
         jp      .gbr_row_loop
 
 .gbr_done:

@@ -71,16 +71,15 @@
 __gpx_xbyte::
         ld      a,l
         srl     h
-        rr      a
+        rra
         srl     h
-        rr      a                       ; x >> 2: mode 1 stops here
+        rra                             ; x >> 2: mode 1 stops here
         ld      l,a
         ld      a,(__cpc_mode1)
         or      a
         ld      a,l
         ret     nz
-        srl     h
-        rr      a                       ; mode 2 packs eight pixels a byte
+        rra                             ; OR above cleared carry: divide by two
         ret
 
         ;; ------------------------------------------------------------
@@ -179,13 +178,10 @@ __gpx_hline::
         ld      d,h                     ; DE = y
         call    __clip_seg
         jp      c,.ghl_reject
-        ld      c,13(ix)                ; reload clip (__clip_seg uses BC)
-        ld      b,14(ix)
-
-        ;; primary X-axis clip via shared __clip_seg (BC = clip ptr).
-        ;; IY = &clip->x0; clip->x1 is at IY+4.
-        ld      iy,#0
-        add     iy,bc
+        ;; __clip_seg preserves IY at &clip->y0. Move back to x0
+        ;; without reloading the clip pointer and rebuilding IY.
+        dec     iy
+        dec     iy
         ld      l,-2(ix)
         ld      h,-1(ix)                ; HL = x0
         ld      e,-4(ix)
@@ -198,47 +194,27 @@ __gpx_hline::
         ld      -3(ix),d                ; x1 = clamped hi
 
 .ghl_draw_core:
-        ;; patt_start = ror(lpatt, (x0 - x0_orig) & 7)
-        ld      a,-2(ix)
-        sub     -5(ix)
-        and     #0x07                   ; Z set when shift==0, A=shift
-        ld      b,a                     ; B = rotate count
-        ld      a,12(ix)                ; A = lpatt
-        jr      z,.ghl_pstart_store
-.ghl_pstart_rot:
-        rrca
-        djnz    .ghl_pstart_rot
-.ghl_pstart_store:
-        ld      -6(ix),a
-
-        ;; n = x0 & 7 -- the pattern period is eight pixels in both modes
-        ld      a,-2(ix)
-        and     #0x07
-        ld      c,a
-
-        ;; patt_byte = rotl(reverse_bits(patt_start), (8 - n) & 7)
-        ld      a,-6(ix)
-        ld      d,#0
+        ;; Clipping changes the start pattern and its pixel position by
+        ;; equal amounts. Their rotations cancel, so the byte-grid pattern
+        ;; depends only on the original x0 and original line pattern.
+        ld      a,12(ix)
+        cp      #0xFF
+        jr      z,.ghl_pbyte_store      ; solid rows need no phase conversion
         ld      b,#8
 .ghl_rev_loop:
         rrca
-        rl      d
+        rl      d                       ; eight shifts replace every old bit
         djnz    .ghl_rev_loop
 
-        ld      a,c
-        or      a
+        ld      a,-5(ix)
+        and     #0x07
+        ld      b,a
+        ld      a,d
         jr      z,.ghl_pbyte_store
-        ld      a,#8
-        sub     c
-        ld      c,a
-        ld      a,d
 .ghl_pbyte_rot:
-        rlca
-        dec     c
-        jr      nz,.ghl_pbyte_rot
-        ld      d,a
+        rrca
+        djnz    .ghl_pbyte_rot
 .ghl_pbyte_store:
-        ld      a,d
         ld      -7(ix),a
 
         ;; Span descriptor for __gpx_span_row: IY = &descriptor (ix - 16).
@@ -269,12 +245,12 @@ __gpx_hline::
         call    __gpx_span_row
 
 .ghl_ret_pattern:
-        ;; return patt = ror(patt_start, (x1-x0) & 7)
+        ;; Skipped and drawn rotations combine into x1 - original x0.
         ld      a,-4(ix)
-        sub     -2(ix)
+        sub     -5(ix)
         and     #0x07                   ; Z set when shift==0, A=shift
         ld      b,a                     ; B = rotate count
-        ld      a,-6(ix)                ; A = patt_start
+        ld      a,12(ix)                ; original lpatt
         jr      z,.ghl_return
 .ghl_pret_rot:
         rrca
@@ -328,11 +304,11 @@ __gpx_span_setup::
         ld      0(iy),a
 
         ;; mask_last = solid << (pixmask - (x1 & pixmask))
-        ld      a,(__cpc_pixmask)
-        and     e
+        ld      a,e
+        cpl
         ld      b,a
         ld      a,(__cpc_pixmask)
-        sub     b
+        and     b
         ld      b,a
         ld      a,(__cpc_solid)
         jr      z,.ss_last_done

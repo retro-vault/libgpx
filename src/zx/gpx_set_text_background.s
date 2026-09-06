@@ -26,31 +26,22 @@
         ;;   stack: background
         ;;
         ;; Clobbers:
-        ;;   AF, B, DE, HL, IX
+        ;;   AF, B, DE, HL
 _gpx_set_text_background::
-        push    ix
-        ld      ix,#0
-        add     ix,sp
-
-        ld      b,4(ix)                 ; preserve setting during NULL check
+        pop     de                      ; return address
+        dec     sp
+        pop     af                      ; A = background, F = discarded ret high
+        push    de                      ; sole stack argument already consumed
+        ld      b,a
         ld      a,h
         or      l
-        jr      z,.gstb_done
-
+        ret     z
         ld      a,b
-        and     #0x01                   ; normalize to a public textbg value
+        and     #0x01
         inc     hl
         inc     hl
         inc     hl
         inc     hl
-        inc     hl                      ; -> gpx->text_background
+        inc     hl
         ld      (hl),a
-
-.gstb_done:
-        pop     ix
-
-        ;; callee cleanup: background(1)
-        pop     de
-        inc     sp
-        push    de
         ret

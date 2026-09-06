@@ -1,0 +1,2327 @@
+{
+  "baseline_commit": "5677bfb",
+  "date": "2026-09-06",
+  "size_bytes": {
+    "before": {
+      "zx": {
+        "code": 10388,
+        "data": 8,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1135
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 455
+          },
+          "_gpx_sprite_blit_raw": {
+            "_CODE": 570
+          },
+          "_gpx_store_background": {
+            "_CODE": 225
+          },
+          "_rect_helpers": {
+            "_CODE": 211
+          },
+          "_video": {
+            "_CODE": 53
+          },
+          "gpx_bmp": {
+            "_CODE": 1334
+          },
+          "gpx_clrscr": {
+            "_CODE": 49
+          },
+          "gpx_create": {
+            "_CODE": 15,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 429
+          },
+          "gpx_draw_line": {
+            "_CODE": 95
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 164
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 219
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 280
+          },
+          "gpx_draw_text": {
+            "_CODE": 501
+          },
+          "gpx_fill_circle": {
+            "_CODE": 499
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1603
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 395
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_hide_sprite": {
+            "_CODE": 34
+          },
+          "gpx_measure_text": {
+            "_CODE": 154
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 30
+          },
+          "gpx_show_sprite": {
+            "_CODE": 298
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      },
+      "partner": {
+        "code": 9909,
+        "data": 40,
+        "modules": {
+          "_ef9367": {
+            "_CODE": 247,
+            "_DATA": 7
+          },
+          "_gpx_bresenham_line": {
+            "_CODE": 394,
+            "_DATA": 14
+          },
+          "_gpx_cohen_sutherland": {
+            "_CODE": 453
+          },
+          "_gpx_cursors_tiny": {
+            "_CODE": 281
+          },
+          "_gpx_font-unscii-8-tiny": {
+            "_CODE": 2107
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_qmath": {
+            "_CODE": 10
+          },
+          "_rect_helpers": {
+            "_CODE": 166
+          },
+          "gpx_clrscr": {
+            "_CODE": 6
+          },
+          "gpx_create": {
+            "_CODE": 108,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_bmp": {
+            "_CODE": 715,
+            "_DATA": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 429
+          },
+          "gpx_draw_line": {
+            "_CODE": 420,
+            "_DATA": 9
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 222
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 219
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 356
+          },
+          "gpx_draw_text": {
+            "_CODE": 501,
+            "_DATA": 1
+          },
+          "gpx_fill_circle": {
+            "_CODE": 499
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1603
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 817
+          },
+          "gpx_height": {
+            "_CODE": 17
+          },
+          "gpx_measure_text": {
+            "_CODE": 155
+          },
+          "gpx_set_page": {
+            "_CODE": 35
+          },
+          "gpx_set_text_background": {
+            "_CODE": 30
+          },
+          "gpx_show_sprite": {
+            "_CODE": 51
+          },
+          "gpx_width": {
+            "_CODE": 15
+          }
+        }
+      },
+      "cpc": {
+        "code": 11158,
+        "data": 26,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1740
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 839,
+            "_DATA": 2
+          },
+          "_gpx_mode": {
+            "_CODE": 8,
+            "_DATA": 5
+          },
+          "_gpx_store_background": {
+            "_CODE": 274
+          },
+          "_rect_helpers": {
+            "_CODE": 203,
+            "_DATA": 8
+          },
+          "_video": {
+            "_CODE": 64
+          },
+          "gpx_bmp": {
+            "_CODE": 1585
+          },
+          "gpx_clrscr": {
+            "_CODE": 49,
+            "_DATA": 2
+          },
+          "gpx_create": {
+            "_CODE": 134,
+            "_DATA": 9
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 429
+          },
+          "gpx_draw_line": {
+            "_CODE": 95
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 179
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 219
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 280
+          },
+          "gpx_draw_text": {
+            "_CODE": 497
+          },
+          "gpx_fill_circle": {
+            "_CODE": 499
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1603
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 401
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_measure_text": {
+            "_CODE": 154
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 30
+          },
+          "gpx_show_sprite": {
+            "_CODE": 236
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      }
+    },
+    "after": {
+      "zx": {
+        "code": 9015,
+        "data": 8,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1132
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_ffshr": {
+            "_CODE": 20
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 412
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_sprite_blit_raw": {
+            "_CODE": 424
+          },
+          "_gpx_store_background": {
+            "_CODE": 186
+          },
+          "_rect_helpers": {
+            "_CODE": 161
+          },
+          "_video": {
+            "_CODE": 53
+          },
+          "gpx_bmp": {
+            "_CODE": 923
+          },
+          "gpx_clrscr": {
+            "_CODE": 46
+          },
+          "gpx_create": {
+            "_CODE": 15,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 94
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 159
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 501
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 377
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_hide_sprite": {
+            "_CODE": 34
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 264
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      },
+      "partner": {
+        "code": 9007,
+        "data": 37,
+        "modules": {
+          "_ef9367": {
+            "_CODE": 210,
+            "_DATA": 7
+          },
+          "_gpx_bresenham_line": {
+            "_CODE": 735,
+            "_DATA": 12
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cohen_sutherland": {
+            "_CODE": 431
+          },
+          "_gpx_cursors_tiny": {
+            "_CODE": 281
+          },
+          "_gpx_font-unscii-8-tiny": {
+            "_CODE": 2107
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_qmath": {
+            "_CODE": 10
+          },
+          "_rect_helpers": {
+            "_CODE": 118
+          },
+          "gpx_clrscr": {
+            "_CODE": 6
+          },
+          "gpx_create": {
+            "_CODE": 108,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_bmp": {
+            "_CODE": 564,
+            "_DATA": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 435,
+            "_DATA": 8
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 127
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 339
+          },
+          "gpx_draw_text": {
+            "_CODE": 487,
+            "_DATA": 1
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 576
+          },
+          "gpx_height": {
+            "_CODE": 14
+          },
+          "gpx_measure_text": {
+            "_CODE": 142
+          },
+          "gpx_set_page": {
+            "_CODE": 35
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 41
+          },
+          "gpx_width": {
+            "_CODE": 12
+          }
+        }
+      },
+      "cpc": {
+        "code": 9815,
+        "data": 25,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1685
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 797,
+            "_DATA": 2
+          },
+          "_gpx_mode": {
+            "_CODE": 8,
+            "_DATA": 5
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_store_background": {
+            "_CODE": 206
+          },
+          "_rect_helpers": {
+            "_CODE": 153,
+            "_DATA": 8
+          },
+          "_video": {
+            "_CODE": 58
+          },
+          "gpx_bmp": {
+            "_CODE": 1142
+          },
+          "gpx_clrscr": {
+            "_CODE": 46,
+            "_DATA": 2
+          },
+          "gpx_create": {
+            "_CODE": 130,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 94
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 164
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 497
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 388
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 19
+          },
+          "gpx_show_sprite": {
+            "_CODE": 232
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      }
+    },
+    "pass1": {
+      "zx": {
+        "code": 9558,
+        "data": 8,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1132
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 419
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_sprite_blit_raw": {
+            "_CODE": 557
+          },
+          "_gpx_store_background": {
+            "_CODE": 196
+          },
+          "_rect_helpers": {
+            "_CODE": 161
+          },
+          "_video": {
+            "_CODE": 53
+          },
+          "gpx_bmp": {
+            "_CODE": 1127
+          },
+          "gpx_clrscr": {
+            "_CODE": 46
+          },
+          "gpx_create": {
+            "_CODE": 15,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 348
+          },
+          "gpx_draw_line": {
+            "_CODE": 95
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 159
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 195
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 501
+          },
+          "gpx_fill_circle": {
+            "_CODE": 406
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1360
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 377
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_hide_sprite": {
+            "_CODE": 34
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 298
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      },
+      "partner": {
+        "code": 8960,
+        "data": 37,
+        "modules": {
+          "_ef9367": {
+            "_CODE": 210,
+            "_DATA": 7
+          },
+          "_gpx_bresenham_line": {
+            "_CODE": 335,
+            "_DATA": 12
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cohen_sutherland": {
+            "_CODE": 431
+          },
+          "_gpx_cursors_tiny": {
+            "_CODE": 281
+          },
+          "_gpx_font-unscii-8-tiny": {
+            "_CODE": 2107
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_qmath": {
+            "_CODE": 10
+          },
+          "_rect_helpers": {
+            "_CODE": 118
+          },
+          "gpx_clrscr": {
+            "_CODE": 6
+          },
+          "gpx_create": {
+            "_CODE": 108,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_bmp": {
+            "_CODE": 655,
+            "_DATA": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 348
+          },
+          "gpx_draw_line": {
+            "_CODE": 405,
+            "_DATA": 8
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 161
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 195
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 339
+          },
+          "gpx_draw_text": {
+            "_CODE": 487,
+            "_DATA": 1
+          },
+          "gpx_fill_circle": {
+            "_CODE": 406
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1360
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 650
+          },
+          "gpx_height": {
+            "_CODE": 14
+          },
+          "gpx_measure_text": {
+            "_CODE": 142
+          },
+          "gpx_set_page": {
+            "_CODE": 35
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 51
+          },
+          "gpx_width": {
+            "_CODE": 12
+          }
+        }
+      },
+      "cpc": {
+        "code": 10366,
+        "data": 25,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1685
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 803,
+            "_DATA": 2
+          },
+          "_gpx_mode": {
+            "_CODE": 8,
+            "_DATA": 5
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_store_background": {
+            "_CODE": 274
+          },
+          "_rect_helpers": {
+            "_CODE": 153,
+            "_DATA": 8
+          },
+          "_video": {
+            "_CODE": 58
+          },
+          "gpx_bmp": {
+            "_CODE": 1429
+          },
+          "gpx_clrscr": {
+            "_CODE": 46,
+            "_DATA": 2
+          },
+          "gpx_create": {
+            "_CODE": 130,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 348
+          },
+          "gpx_draw_line": {
+            "_CODE": 95
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 175
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 195
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 497
+          },
+          "gpx_fill_circle": {
+            "_CODE": 406
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1360
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 388
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 19
+          },
+          "gpx_show_sprite": {
+            "_CODE": 236
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      }
+    },
+    "pass2": {
+      "zx": {
+        "code": 9376,
+        "data": 8,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1132
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 412
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_sprite_blit_raw": {
+            "_CODE": 557
+          },
+          "_gpx_store_background": {
+            "_CODE": 196
+          },
+          "_rect_helpers": {
+            "_CODE": 161
+          },
+          "_video": {
+            "_CODE": 53
+          },
+          "gpx_bmp": {
+            "_CODE": 1127
+          },
+          "gpx_clrscr": {
+            "_CODE": 46
+          },
+          "gpx_create": {
+            "_CODE": 15,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 94
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 159
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 501
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 377
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_hide_sprite": {
+            "_CODE": 34
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 298
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      },
+      "partner": {
+        "code": 9108,
+        "data": 37,
+        "modules": {
+          "_ef9367": {
+            "_CODE": 210,
+            "_DATA": 7
+          },
+          "_gpx_bresenham_line": {
+            "_CODE": 735,
+            "_DATA": 12
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cohen_sutherland": {
+            "_CODE": 431
+          },
+          "_gpx_cursors_tiny": {
+            "_CODE": 281
+          },
+          "_gpx_font-unscii-8-tiny": {
+            "_CODE": 2107
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 44
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_qmath": {
+            "_CODE": 10
+          },
+          "_rect_helpers": {
+            "_CODE": 118
+          },
+          "gpx_clrscr": {
+            "_CODE": 6
+          },
+          "gpx_create": {
+            "_CODE": 108,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_bmp": {
+            "_CODE": 655,
+            "_DATA": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 435,
+            "_DATA": 8
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 127
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 339
+          },
+          "gpx_draw_text": {
+            "_CODE": 487,
+            "_DATA": 1
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 576
+          },
+          "gpx_height": {
+            "_CODE": 14
+          },
+          "gpx_measure_text": {
+            "_CODE": 142
+          },
+          "gpx_set_page": {
+            "_CODE": 35
+          },
+          "gpx_set_text_background": {
+            "_CODE": 18
+          },
+          "gpx_show_sprite": {
+            "_CODE": 51
+          },
+          "gpx_width": {
+            "_CODE": 12
+          }
+        }
+      },
+      "cpc": {
+        "code": 10174,
+        "data": 25,
+        "modules": {
+          "_gpx_bresenham_line": {
+            "_CODE": 1685
+          },
+          "_gpx_circle_cmp": {
+            "_CODE": 16
+          },
+          "_gpx_cursors": {
+            "_CODE": 130
+          },
+          "_gpx_font_envy": {
+            "_CODE": 1440
+          },
+          "_gpx_get_stock_bmp": {
+            "_CODE": 39
+          },
+          "_gpx_get_system_font": {
+            "_CODE": 4
+          },
+          "_gpx_get_tiny_font": {
+            "_CODE": 4
+          },
+          "_gpx_hline": {
+            "_CODE": 797,
+            "_DATA": 2
+          },
+          "_gpx_mode": {
+            "_CODE": 8,
+            "_DATA": 5
+          },
+          "_gpx_neg_hl": {
+            "_CODE": 7
+          },
+          "_gpx_store_background": {
+            "_CODE": 274
+          },
+          "_rect_helpers": {
+            "_CODE": 153,
+            "_DATA": 8
+          },
+          "_video": {
+            "_CODE": 58
+          },
+          "gpx_bmp": {
+            "_CODE": 1429
+          },
+          "gpx_clrscr": {
+            "_CODE": 46,
+            "_DATA": 2
+          },
+          "gpx_create": {
+            "_CODE": 130,
+            "_DATA": 8
+          },
+          "gpx_destroy": {
+            "_CODE": 1
+          },
+          "gpx_draw_circle": {
+            "_CODE": 327
+          },
+          "gpx_draw_line": {
+            "_CODE": 94
+          },
+          "gpx_draw_pixel": {
+            "_CODE": 164
+          },
+          "gpx_draw_polygon": {
+            "_CODE": 159
+          },
+          "gpx_draw_rectangle": {
+            "_CODE": 277
+          },
+          "gpx_draw_text": {
+            "_CODE": 497
+          },
+          "gpx_fill_circle": {
+            "_CODE": 375
+          },
+          "gpx_fill_polygon": {
+            "_CODE": 1274
+          },
+          "gpx_fill_rectangle": {
+            "_CODE": 388
+          },
+          "gpx_height": {
+            "_CODE": 9
+          },
+          "gpx_measure_text": {
+            "_CODE": 126
+          },
+          "gpx_set_page": {
+            "_CODE": 1
+          },
+          "gpx_set_text_background": {
+            "_CODE": 19
+          },
+          "gpx_show_sprite": {
+            "_CODE": 236
+          },
+          "gpx_width": {
+            "_CODE": 7
+          }
+        }
+      }
+    }
+  },
+  "crossbench_tstates": {
+    "before": {
+      "xb_circle": {
+        "zx": 5838543,
+        "partner": 8814636,
+        "cpc-640x200": 7856116,
+        "cpc-320x200": 7760116
+      },
+      "xb_circlefill": {
+        "zx": 6877379,
+        "partner": 4990439,
+        "cpc-640x200": 8623332,
+        "cpc-320x200": 8867556
+      },
+      "xb_clrscr": {
+        "zx": 1593669,
+        "partner": 2150471,
+        "cpc-640x200": 2232820,
+        "cpc-320x200": 2232820
+      },
+      "xb_fill": {
+        "zx": 2873788,
+        "partner": 2667623,
+        "cpc-640x200": 2349444,
+        "cpc-320x200": 2936644
+      },
+      "xb_fillpat": {
+        "zx": 3160634,
+        "partner": 41064007,
+        "cpc-640x200": 3038340,
+        "cpc-320x200": 4555844
+      },
+      "xb_line": {
+        "zx": 2643695,
+        "partner": 273531,
+        "cpc-640x200": 2731224,
+        "cpc-320x200": 2855652
+      },
+      "xb_linepat": {
+        "zx": 2519308,
+        "partner": 6994527,
+        "cpc-640x200": 2590888,
+        "cpc-320x200": 2716020
+      },
+      "xb_poly": {
+        "zx": 988997,
+        "partner": 346910,
+        "cpc-640x200": 1105876,
+        "cpc-320x200": 1132372
+      },
+      "xb_polyfill": {
+        "zx": 19123036,
+        "partner": 17773573,
+        "cpc-640x200": 22293396,
+        "cpc-320x200": 22449396
+      },
+      "xb_sprite": {
+        "zx": 7119196,
+        "partner": 21728620,
+        "cpc-640x200": 12226852,
+        "cpc-320x200": 15136852
+      },
+      "xb_text": {
+        "zx": 20959418,
+        "partner": 47340501,
+        "cpc-640x200": 22893992,
+        "cpc-320x200": 28333192
+      }
+    },
+    "after": {
+      "xb_circle": {
+        "zx": 4291573,
+        "partner": 5037068,
+        "cpc-640x200": 5668980,
+        "cpc-320x200": 5630580
+      },
+      "xb_circlefill": {
+        "zx": 5199007,
+        "partner": 3957041,
+        "cpc-640x200": 6893380,
+        "cpc-320x200": 7172356
+      },
+      "xb_clrscr": {
+        "zx": 1593640,
+        "partner": 2150471,
+        "cpc-640x200": 2232500,
+        "cpc-320x200": 2232500
+      },
+      "xb_fill": {
+        "zx": 2418670,
+        "partner": 1896387,
+        "cpc-640x200": 2281764,
+        "cpc-320x200": 2869156
+      },
+      "xb_fillpat": {
+        "zx": 3084770,
+        "partner": 16275863,
+        "cpc-640x200": 2970660,
+        "cpc-320x200": 4488356
+      },
+      "xb_line": {
+        "zx": 2522004,
+        "partner": 265457,
+        "cpc-640x200": 2660040,
+        "cpc-320x200": 2785248
+      },
+      "xb_linepat": {
+        "zx": 2391352,
+        "partner": 6527359,
+        "cpc-640x200": 2519976,
+        "cpc-320x200": 2645888
+      },
+      "xb_poly": {
+        "zx": 928872,
+        "partner": 316302,
+        "cpc-640x200": 1030004,
+        "cpc-320x200": 1057652
+      },
+      "xb_polyfill": {
+        "zx": 11374835,
+        "partner": 10916009,
+        "cpc-640x200": 13963572,
+        "cpc-320x200": 14157844
+      },
+      "xb_sprite": {
+        "zx": 5250994,
+        "partner": 8127840,
+        "cpc-640x200": 9361948,
+        "cpc-320x200": 10291948
+      },
+      "xb_text": {
+        "zx": 16786273,
+        "partner": 25324091,
+        "cpc-640x200": 19338232,
+        "cpc-320x200": 20745432
+      }
+    },
+    "pass1": {
+      "xb_circle": {
+        "zx": 5401691,
+        "partner": 7235154,
+        "cpc-640x200": 7012916,
+        "cpc-320x200": 6974516
+      },
+      "xb_circlefill": {
+        "zx": 5756099,
+        "partner": 4096345,
+        "cpc-640x200": 7524708,
+        "cpc-320x200": 7803684
+      },
+      "xb_clrscr": {
+        "zx": 1593640,
+        "partner": 2150471,
+        "cpc-640x200": 2232500,
+        "cpc-320x200": 2232500
+      },
+      "xb_fill": {
+        "zx": 2418719,
+        "partner": 1944263,
+        "cpc-640x200": 2281860,
+        "cpc-320x200": 2869252
+      },
+      "xb_fillpat": {
+        "zx": 3084854,
+        "partner": 40551125,
+        "cpc-640x200": 2970756,
+        "cpc-320x200": 4488452
+      },
+      "xb_line": {
+        "zx": 2522228,
+        "partner": 265841,
+        "cpc-640x200": 2660308,
+        "cpc-320x200": 2785516
+      },
+      "xb_linepat": {
+        "zx": 2391352,
+        "partner": 6650631,
+        "cpc-640x200": 2519972,
+        "cpc-320x200": 2645884
+      },
+      "xb_poly": {
+        "zx": 946546,
+        "partner": 329384,
+        "cpc-640x200": 1050420,
+        "cpc-320x200": 1078068
+      },
+      "xb_polyfill": {
+        "zx": 13312889,
+        "partner": 12054249,
+        "cpc-640x200": 16082900,
+        "cpc-320x200": 16276532
+      },
+      "xb_sprite": {
+        "zx": 6462677,
+        "partner": 18452650,
+        "cpc-640x200": 11489048,
+        "cpc-320x200": 12899048
+      },
+      "xb_text": {
+        "zx": 19891621,
+        "partner": 38889431,
+        "cpc-640x200": 22115992,
+        "cpc-320x200": 24506232
+      }
+    },
+    "pass2": {
+      "xb_circle": {
+        "zx": 4291573,
+        "partner": 5037068,
+        "cpc-640x200": 5668980,
+        "cpc-320x200": 5630580
+      },
+      "xb_circlefill": {
+        "zx": 5199007,
+        "partner": 3957041,
+        "cpc-640x200": 6893380,
+        "cpc-320x200": 7172356
+      },
+      "xb_clrscr": {
+        "zx": 1593640,
+        "partner": 2150471,
+        "cpc-640x200": 2232500,
+        "cpc-320x200": 2232500
+      },
+      "xb_fill": {
+        "zx": 2418670,
+        "partner": 1896387,
+        "cpc-640x200": 2281764,
+        "cpc-320x200": 2869156
+      },
+      "xb_fillpat": {
+        "zx": 3084770,
+        "partner": 16275863,
+        "cpc-640x200": 2970660,
+        "cpc-320x200": 4488356
+      },
+      "xb_line": {
+        "zx": 2522004,
+        "partner": 265457,
+        "cpc-640x200": 2660040,
+        "cpc-320x200": 2785248
+      },
+      "xb_linepat": {
+        "zx": 2391352,
+        "partner": 6527359,
+        "cpc-640x200": 2519976,
+        "cpc-320x200": 2645888
+      },
+      "xb_poly": {
+        "zx": 928872,
+        "partner": 316302,
+        "cpc-640x200": 1030004,
+        "cpc-320x200": 1057652
+      },
+      "xb_polyfill": {
+        "zx": 11374835,
+        "partner": 10916009,
+        "cpc-640x200": 13963572,
+        "cpc-320x200": 14157844
+      },
+      "xb_sprite": {
+        "zx": 6462677,
+        "partner": 18426250,
+        "cpc-640x200": 11489048,
+        "cpc-320x200": 12899048
+      },
+      "xb_text": {
+        "zx": 19880079,
+        "partner": 38441111,
+        "cpc-640x200": 22104472,
+        "cpc-320x200": 24494712
+      }
+    }
+  },
+  "clock_mhz": {
+    "zx": 3.5,
+    "partner": 4,
+    "cpc-640x200": 4,
+    "cpc-320x200": 4
+  },
+  "partner_pattern_tstates_per_call": {
+    "pass1": {
+      "bench_patterns:hline AA CPY": 105635.1,
+      "bench_patterns:hline 55 CPY": 105631.9,
+      "bench_patterns:hline CC CPY": 105631.9,
+      "bench_patterns:hline 33 CPY": 105631.9,
+      "bench_patterns:hline F0 CPY": 105631.9,
+      "bench_patterns:hline 0F CPY": 105631.9,
+      "bench_patterns:hline 11 CPY": 88223.9,
+      "bench_patterns:hline 88 CPY": 88223.9,
+      "bench_patterns:hline 77 CPY": 123039.9,
+      "bench_patterns:hline EE CPY": 123039.9,
+      "bench_patterns:hline 1F CPY": 114335.9,
+      "bench_patterns:hline 3F CPY": 123039.9,
+      "bench_patterns:hline 7F CPY": 131743.9,
+      "bench_patterns:hline A5 CPY": 105631.9,
+      "bench_patterns:hline 5A CPY": 105631.9,
+      "bench_patterns:hline 9B CPY": 114335.9,
+      "bench_patterns:hline AA XOR": 105644.125,
+      "bench_patterns:hline 55 XOR": 105634.725,
+      "bench_patterns:hline CC XOR": 105634.725,
+      "bench_patterns:hline 33 XOR": 105634.725,
+      "bench_patterns:hline F0 XOR": 105634.725,
+      "bench_patterns:hline 0F XOR": 105634.725,
+      "bench_patterns:hline 11 XOR": 88226.725,
+      "bench_patterns:hline 88 XOR": 88226.725,
+      "bench_patterns:hline 77 XOR": 123042.725,
+      "bench_patterns:hline EE XOR": 123042.725,
+      "bench_patterns:hline 1F XOR": 114338.725,
+      "bench_patterns:hline 3F XOR": 123042.725,
+      "bench_patterns:hline 7F XOR": 131746.725,
+      "bench_patterns:hline A5 XOR": 105634.725,
+      "bench_patterns:hline 5A XOR": 105634.725,
+      "bench_patterns:hline 9B XOR": 114339.1
+    },
+    "after": {
+      "bench_patterns:hline 0F CPY": 5457.65,
+      "bench_patterns:hline 0F XOR": 5460.475,
+      "bench_patterns:hline 11 CPY": 60077.9,
+      "bench_patterns:hline 11 XOR": 8927.475,
+      "bench_patterns:hline 1F CPY": 8912.3,
+      "bench_patterns:hline 1F XOR": 86115.725,
+      "bench_patterns:hline 33 CPY": 5401.65,
+      "bench_patterns:hline 33 XOR": 5404.475,
+      "bench_patterns:hline 3F CPY": 8895.15,
+      "bench_patterns:hline 3F XOR": 94819.725,
+      "bench_patterns:hline 55 CPY": 77326.9,
+      "bench_patterns:hline 55 XOR": 8768.475,
+      "bench_patterns:hline 5A CPY": 77476.9,
+      "bench_patterns:hline 5A XOR": 12233.725,
+      "bench_patterns:hline 77 CPY": 8962.3,
+      "bench_patterns:hline 77 XOR": 8913.225,
+      "bench_patterns:hline 7F CPY": 8921.4,
+      "bench_patterns:hline 7F XOR": 103523.725,
+      "bench_patterns:hline 88 CPY": 60077.9,
+      "bench_patterns:hline 88 XOR": 9200.475,
+      "bench_patterns:hline 9B CPY": 86621.9,
+      "bench_patterns:hline 9B XOR": 86116.1,
+      "bench_patterns:hline A5 CPY": 77476.9,
+      "bench_patterns:hline A5 XOR": 12776.975,
+      "bench_patterns:hline AA CPY": 77330.1,
+      "bench_patterns:hline AA XOR": 8881.025,
+      "bench_patterns:hline CC CPY": 5594.05,
+      "bench_patterns:hline CC XOR": 5594.225,
+      "bench_patterns:hline EE CPY": 9060.15,
+      "bench_patterns:hline EE XOR": 8984.475,
+      "bench_patterns:hline F0 CPY": 5840.55,
+      "bench_patterns:hline F0 XOR": 5843.375
+    }
+  },
+  "partner_existing_raster_differences": {
+    "test_gdp_bmp": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_clip": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_lines": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_pixel": [
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_rect": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_sprite": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ],
+    "test_gdp_text": [
+      {
+        "count": 0,
+        "first": []
+      },
+      {
+        "count": 0,
+        "first": []
+      }
+    ]
+  },
+  "partner_short_span_tstates": {
+    "CC/0/31": {
+      "pass1": 4709,
+      "after": 4030
+    },
+    "CC/0/32": {
+      "pass1": 4776,
+      "after": 2431
+    },
+    "CC/0/33": {
+      "pass1": 4843,
+      "after": 2455
+    },
+    "CC/0/40": {
+      "pass1": 5584,
+      "after": 2431
+    },
+    "CC/0/48": {
+      "pass1": 6392,
+      "after": 2431
+    },
+    "CC/0/64": {
+      "pass1": 8008,
+      "after": 2431
+    },
+    "CC/0/96": {
+      "pass1": 11240,
+      "after": 2431
+    },
+    "CC/0/128": {
+      "pass1": 14472,
+      "after": 2461
+    },
+    "CC/0/255": {
+      "pass1": 27333,
+      "after": 2797
+    },
+    "55/1/31": {
+      "pass1": 4711,
+      "after": 4032
+    },
+    "55/1/32": {
+      "pass1": 4846,
+      "after": 2807
+    },
+    "55/1/33": {
+      "pass1": 4913,
+      "after": 2663
+    },
+    "55/1/40": {
+      "pass1": 5654,
+      "after": 2807
+    },
+    "55/1/48": {
+      "pass1": 6462,
+      "after": 2807
+    },
+    "55/1/64": {
+      "pass1": 8078,
+      "after": 2807
+    },
+    "55/1/96": {
+      "pass1": 11310,
+      "after": 2807
+    },
+    "55/1/128": {
+      "pass1": 14542,
+      "after": 2837
+    },
+    "55/1/255": {
+      "pass1": 27335,
+      "after": 3490
+    },
+    "A5/1/31": {
+      "pass1": 4711,
+      "after": 4032
+    },
+    "A5/1/32": {
+      "pass1": 4846,
+      "after": 4105
+    },
+    "A5/1/33": {
+      "pass1": 4913,
+      "after": 4177
+    },
+    "A5/1/40": {
+      "pass1": 5654,
+      "after": 4105
+    },
+    "A5/1/48": {
+      "pass1": 6462,
+      "after": 4105
+    },
+    "A5/1/64": {
+      "pass1": 8078,
+      "after": 4105
+    },
+    "A5/1/96": {
+      "pass1": 11310,
+      "after": 4135
+    },
+    "A5/1/128": {
+      "pass1": 14542,
+      "after": 4255
+    },
+    "A5/1/255": {
+      "pass1": 27335,
+      "after": 5144
+    },
+    "77/0/31": {
+      "pass1": 5253,
+      "after": 4574
+    },
+    "77/0/32": {
+      "pass1": 5388,
+      "after": 2999
+    },
+    "77/0/33": {
+      "pass1": 5523,
+      "after": 2855
+    },
+    "77/0/40": {
+      "pass1": 6332,
+      "after": 2999
+    },
+    "77/0/48": {
+      "pass1": 7276,
+      "after": 2999
+    },
+    "77/0/64": {
+      "pass1": 9164,
+      "after": 2999
+    },
+    "77/0/96": {
+      "pass1": 12940,
+      "after": 2999
+    },
+    "77/0/128": {
+      "pass1": 16716,
+      "after": 2999
+    },
+    "77/0/255": {
+      "pass1": 31685,
+      "after": 3682
+    },
+    "1F/0/31": {
+      "pass1": 4981,
+      "after": 4302
+    },
+    "1F/0/32": {
+      "pass1": 5116,
+      "after": 2979
+    },
+    "1F/0/33": {
+      "pass1": 5251,
+      "after": 2835
+    },
+    "1F/0/40": {
+      "pass1": 5992,
+      "after": 2979
+    },
+    "1F/0/48": {
+      "pass1": 6868,
+      "after": 2979
+    },
+    "1F/0/64": {
+      "pass1": 8620,
+      "after": 2979
+    },
+    "1F/0/96": {
+      "pass1": 12124,
+      "after": 2979
+    },
+    "1F/0/128": {
+      "pass1": 15628,
+      "after": 2979
+    },
+    "1F/0/255": {
+      "pass1": 29509,
+      "after": 3632
+    },
+    "11/1/31": {
+      "pass1": 4167,
+      "after": 3488
+    },
+    "11/1/32": {
+      "pass1": 4302,
+      "after": 2996
+    },
+    "11/1/33": {
+      "pass1": 4369,
+      "after": 2852
+    },
+    "11/1/40": {
+      "pass1": 4974,
+      "after": 2996
+    },
+    "11/1/48": {
+      "pass1": 5646,
+      "after": 2996
+    },
+    "11/1/64": {
+      "pass1": 6990,
+      "after": 2996
+    },
+    "11/1/96": {
+      "pass1": 9678,
+      "after": 2996
+    },
+    "11/1/128": {
+      "pass1": 12366,
+      "after": 2996
+    },
+    "11/1/255": {
+      "pass1": 22983,
+      "after": 3649
+    }
+  },
+  "bitmap_sprite_followup": {
+    "code_saved": {
+      "zx": 361,
+      "partner": 101,
+      "cpc": 359
+    },
+    "zx_microbench_tstates": {
+      "before": {
+        "bench_bmp": 23639025,
+        "bench_sprite": 9639731,
+        "bench_text": 25288220
+      },
+      "after": {
+        "bench_bmp": 19574709,
+        "bench_sprite": 7793466,
+        "bench_text": 21707842
+      }
+    },
+    "cpc": {
+      "code_bytes": {
+        "gpx_bmp": [
+          1429,
+          1142
+        ],
+        "_gpx_store_background": [
+          274,
+          206
+        ],
+        "gpx_show_sprite": [
+          236,
+          232
+        ]
+      },
+      "workspace_bytes": {
+        "bitmap": [
+          76,
+          45
+        ],
+        "capture": [
+          8,
+          2
+        ]
+      },
+      "tstates": {
+        "sprite_640": {
+          "before": 6165988,
+          "after": 5084800,
+          "reduction_percent": 17.535
+        },
+        "sprite_320": {
+          "before": 6887396,
+          "after": 5560448,
+          "reduction_percent": 19.266
+        },
+        "text_640": {
+          "before": 34406572,
+          "after": 29742732,
+          "reduction_percent": 13.555
+        },
+        "text_320": {
+          "before": 38377132,
+          "after": 32115852,
+          "reduction_percent": 16.315
+        },
+        "capture_640": {
+          "before": 2453464,
+          "after": 1559952,
+          "reduction_percent": 36.418
+        },
+        "capture_320": {
+          "before": 2780652,
+          "after": 1896248,
+          "reduction_percent": 31.806
+        },
+        "bitmap_640": {
+          "before": 32849740,
+          "after": 26372560,
+          "reduction_percent": 19.718
+        },
+        "bitmap_320": {
+          "before": 51844444,
+          "after": 39046608,
+          "reduction_percent": 24.685
+        }
+      },
+      "validation": {
+        "capture_cases": 512,
+        "bitmap_cases": 768,
+        "sprite_pairs": 384,
+        "existing_regressions": 908
+      },
+      "rejected": {
+        "bidirectional_shifts": {
+          "code_bytes_added": 40,
+          "sprite_640_tstates": [
+            5124000,
+            5043360
+          ],
+          "sprite_320_tstates": [
+            5599648,
+            5519008
+          ],
+          "reason": "Size-first: added40B for1.4\u20131.6% sprite gain and0.1% text"
+        }
+      }
+    },
+    "validation": {
+      "zx_bitmap_cases": 362,
+      "zx_sprite_cases": 1037,
+      "zx_oracle_scenarios": 54,
+      "cpc_golden_phases": 8
+    },
+    "unchanged_font_sha256": {
+      "src/zx/_gpx_font_envy.s": "6c7a34a4ce3df0ffaff6f552178aec20c5e909ceceda6072742496665ee61095",
+      "src/cpc/_gpx_font_envy.s": "6c7a34a4ce3df0ffaff6f552178aec20c5e909ceceda6072742496665ee61095",
+      "src/partner/_gpx_font-unscii-8-tiny.s": "353cece50f225d1819711455b86ccc8296f3ca43f8e54da68ea99123a8e38e55"
+    },
+    "partner": {
+      "code_bytes": {
+        "draw_bmp": {
+          "before": 655,
+          "after": 564
+        },
+        "show_sprite": {
+          "before": 51,
+          "after": 41
+        }
+      },
+      "frame_bytes": {
+        "before": 21,
+        "after": 12
+      },
+      "scalar_pixel_checks": 11108352,
+      "following_primitive_checks": 8192,
+      "tiny_phase_count": 32,
+      "tiny_raster_sha256": "1ebb7a379d344f409a2d83f7f106934ed83a024f34923e0081e6ac6c7ae69548",
+      "gdp_existing_phase_count": 21,
+      "microbench": {
+        "bench_prims:draw_bmp 16x8": {
+          "before": 15266.795,
+          "after": 3838.795,
+          "reduction_pct": 74.85526595464208
+        },
+        "bench_prims:draw_text 30 chars": {
+          "before": 884514.95,
+          "after": 644903.95,
+          "reduction_pct": 27.089536474199786
+        },
+        "bench_prims:sprite show+hide": {
+          "before": 89575.93,
+          "after": 38081.93,
+          "reduction_pct": 57.48642520373497
+        }
+      },
+      "crossbench": {
+        "xb_sprite": {
+          "before": 18426250,
+          "after": 8127840,
+          "reduction_pct": 55.889885353775185
+        },
+        "xb_text": {
+          "before": 38441111,
+          "after": 25324091,
+          "reduction_pct": 34.12237487100724
+        }
+      },
+      "gdp_existing_final_binary_check": {
+        "phase_count": 21,
+        "all_rasters_equal": true,
+        "bitmap_code_bytes": 564,
+        "sprite_code_bytes": 41,
+        "bitmap_source_sha256": "d7915681aa983218ea99c3f4126ee946a5bd85579e89ba48c8de6017e124195f",
+        "sprite_source_sha256": "70802676bf976f220173336cb443f94da8abe8ee9a87a070ff719798a987d9ea",
+        "log": "partner-bitmap-frozen-compare.log",
+        "rasters": "partner-bitmap-frozen-phase-rasters.json"
+      }
+    },
+    "zx_mask_archive_extraction": {
+      "hide_before": {
+        "code": 1638,
+        "helper": 34214,
+        "table": 34226,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13595,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14447,
+          1991,
+          15902,
+          2216,
+          16915,
+          2198,
+          17144,
+          2111
+        ]
+      },
+      "hide_after": {
+        "code": 554,
+        "helper": 33249,
+        "table": 33261,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13595,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14447,
+          1991,
+          15902,
+          2216,
+          16915,
+          2198,
+          17144,
+          2111
+        ]
+      },
+      "full_before": {
+        "code": 9038,
+        "helper": 37711,
+        "table": 37723,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13595,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14447,
+          1991,
+          15902,
+          2216,
+          16915,
+          2198,
+          17144,
+          2111
+        ]
+      },
+      "full_after": {
+        "code": 9038,
+        "helper": 34069,
+        "table": 34081,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73,
+          73
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13595,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14447,
+          1991,
+          15902,
+          2216,
+          16915,
+          2198,
+          17144,
+          2111
+        ]
+      },
+      "hide_before_carry": {
+        "code": 1638,
+        "helper": 34288,
+        "table": 34300,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          72,
+          72,
+          72,
+          72
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13599,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14445,
+          1990,
+          15905,
+          2216,
+          16915,
+          2198,
+          17144,
+          2110
+        ]
+      },
+      "hide_after_carry": {
+        "code": 554,
+        "helper": 33264,
+        "table": 33276,
+        "helper_T": [
+          73,
+          73,
+          73,
+          73,
+          72,
+          72,
+          72,
+          72
+        ],
+        "hide_T": [
+          10844,
+          1841,
+          13599,
+          1977,
+          14421,
+          2064,
+          14781,
+          1951,
+          14445,
+          1990,
+          15905,
+          2216,
+          16915,
+          2198,
+          17144,
+          2110
+        ]
+      }
+    },
+    "archive_sprite_witness": {
+      "zx": 5250994,
+      "partner": 8127840,
+      "cpc-640x200": 9361948,
+      "cpc-320x200": 10291948
+    },
+    "documentation_captures": {
+      "count": 24,
+      "changed": 0
+    }
+  }
+}

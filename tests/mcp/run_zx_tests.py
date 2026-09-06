@@ -115,6 +115,7 @@ def check_fresh(names):
     reports a pass for code that was never assembled."""
     srcs = []
     for root in (os.path.join(ROOT, "src", "zx"),
+                 os.path.join(ROOT, "src", "common"),
                  os.path.join(ROOT, "tests", "zx", "test-src")):
         for entry in os.listdir(root):
             if entry.endswith((".s", ".c", ".h")):

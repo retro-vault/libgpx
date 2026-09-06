@@ -301,6 +301,12 @@ __gpx_bresenham_line::
         set     1,c                     ; y runs up
 .bl_dyp:
         ld      L_DY(ix),a
+        ;; Choose the raster axis from the surviving segment. The original
+        ;; axis above is needed only for the pattern phase before clipping.
+        cp      L_DX(ix)
+        sbc     a,a
+        and     #1
+        ld      L_FLAGS(ix),a           ; dx > dy: x-major
         ld      a,c
         ex      af,af'                  ; A' = direction flags
 
@@ -318,17 +324,10 @@ __gpx_bresenham_line::
         ld      h,#0
         jr      .bl_err_ok
 .bl_err_y:
-        ld      a,c                     ; err = -(dy/2)
+        ld      a,c                     ; y-major stores the deficit dy/2
         srl     a
         ld      l,a
         ld      h,#0
-        or      a
-        jr      z,.bl_err_ok
-        xor     a
-        sub     l
-        ld      l,a
-        sbc     a,a
-        ld      h,a
 .bl_err_ok:
         exx
 
@@ -403,9 +402,9 @@ __gpx_bresenham_line::
         jr      .by_loop                ; upward vertical: generic loop
 
         ;; ---- x-major raster: B=steps C=patt D/E=masks HL=vram ----
-        ;; alt: HL'=err DE'=dx BC'=dy; A' bit0=left bit1=up
+        ;; alt: L'=err DE'=dx BC'=dy; H' is ignored, A' holds directions.
         ;; ---- x-major rasters: B=steps C=patt D/E=masks HL=vram ----
-        ;; alt: HL'=err DE'=dx BC'=dy; A' bit1=up. Two variants, one per x
+        ;; alt: L'=err DE'=dx BC'=dy; A' bit1=up. Two variants, one per x
         ;; direction, so the only per-pixel branch left is the y step.
 .bxr_loop:
         rrc     c                       ; carry = pattern bit, C rotated for
@@ -416,10 +415,11 @@ __gpx_bresenham_line::
         ld      (hl),a
 .bxr_loop_np:
         exx
-        or      a
-        sbc     hl,bc                   ; err -= dy
+        ld      a,l
+        sub     c                       ; 8-bit err -= dy; carry means negative
+        ld      l,a
         exx                             ; flags survive exx
-        jp      p,.bxr_loop_xadv        ; err >= 0: no y step
+        jp      nc,.bxr_loop_xadv
         exx
         add     hl,de                   ; err += dx
         exx
@@ -453,10 +453,11 @@ __gpx_bresenham_line::
         ld      (hl),a
 .bxl_loop_np:
         exx
-        or      a
-        sbc     hl,bc                   ; err -= dy
+        ld      a,l
+        sub     c                       ; 8-bit err -= dy; carry means negative
+        ld      l,a
         exx                             ; flags survive exx
-        jp      p,.bxl_loop_xadv        ; err >= 0: no y step
+        jp      nc,.bxl_loop_xadv
         exx
         add     hl,de                   ; err += dx
         exx
@@ -511,14 +512,13 @@ __gpx_bresenham_line::
         ld      (hl),a
 .by_np:
         exx
-        or      a
-        adc     hl,de                   ; err += dx (adc sets S/Z)
+        ld      a,l
+        sub     e                       ; deficit -= dx; equality does not step
+        ld      l,a
         exx
-        jp      m,.by_yadv              ; err <= 0: no x step
-        jr      z,.by_yadv
+        jp      nc,.by_yadv
         exx
-        or      a
-        sbc     hl,bc                   ; err -= dy
+        add     hl,bc                   ; deficit += dy, only the low byte is live
         exx
         ex      af,af'
         bit     0,a

@@ -54,52 +54,21 @@ _gpx_hide_sprite::
         or      e
         ret     z                       ; sprite == NULL
 
-        push    hl
-        exx
-        pop     hl                      ; HL' = gpx
-        exx
-
-        ex      de,hl                   ; HL = sprite
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                  ; DE = x
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)                  ; BC = y
-        inc     hl
-        ld      a,(hl)                  ; bitmap lo
-        inc     hl
-        push    hl                      ; park walk ptr (sprite+5)
-        ld      h,(hl)
-        ld      l,a                     ; HL = bitmap
-        or      h
-        jr      nz,.ss_bmp_ok
-        pop     hl                      ; balance the park
-        ret                             ; bitmap == NULL
-.ss_bmp_ok:
+        push    ix
         push    de
-        exx
-        pop     de                      ; DE' = x (alt now holds gpx + x)
-        exx
-        ex      (sp),hl                 ; HL = walk ptr, TOS = bitmap
-        inc     hl
-        inc     hl
-        inc     hl                      ; -> sprite->clip
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                  ; DE = clip (NULL allowed)
-        pop     hl                      ; HL = bitmap
+        pop     ix                      ; sprite descriptor, HL remains gpx
 
-        push    de                      ; clip
-        push    hl                      ; bitmap
+        ld      c,8(ix)
+        ld      b,9(ix)
+        push    bc                      ; clip
+        ld      c,4(ix)
+        ld      b,5(ix)
+        push    bc                      ; bitmap (renderer checks NULL)
+        ld      c,2(ix)
+        ld      b,3(ix)
         push    bc                      ; y
-
-        exx
-        push    hl                      ; gpx
-        push    de                      ; x
-        exx
-        pop     de                      ; DE = x
-        pop     hl                      ; HL = gpx
-        call    _gpx_draw_bmp_xor       ; XOR strokes; callee cleans args
+        ld      e,0(ix)
+        ld      d,1(ix)                 ; x
+        call    _gpx_draw_bmp_xor       ; callee cleans the three words
+        pop     ix
         ret

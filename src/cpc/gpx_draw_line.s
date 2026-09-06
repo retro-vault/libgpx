@@ -15,7 +15,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_line
-        .globl  _gpx_draw_pixel
+        .globl  __gpx_plot_raw
 
         .globl  __gpx_hline
         .globl  __gpx_bresenham_line
@@ -87,25 +87,22 @@ _gpx_draw_line::
         and     #0x01
         jr      z,.gl_single_done
 
-        ;; call gpx_draw_pixel(gpx, x0, y0, c, m, clip); DE = x0 stays live
+        ;; The point already lives in registers. Feed the raw pixel entry
+        ;; directly, keeping y while BC is loaded with the clip pointer.
+        push    bc
         inc     hl                      ; HL -> clip
-        ld      a,(hl)
+        ld      c,(hl)
         inc     hl
-        ld      h,(hl)
-        ld      l,a
-        push    hl                      ; clip
-
-        ld      hl,#10                  ; c,m moved down by the push
+        ld      b,(hl)
+        ld      hl,#10                  ; c,m after the saved y word
         add     hl,sp
-        ld      a,(hl)
+        ld      a,(hl)                  ; color bit into carry
+        rrca
         inc     hl
-        ld      h,(hl)
-        ld      l,a
-        push    hl                      ; c,m
-
-        push    bc                      ; y0
-
-        call    _gpx_draw_pixel         ; pops its 6 arg bytes
+        ld      a,(hl)                  ; mode bit becomes bit 1
+        rla
+        pop     hl                      ; y; DE still holds x
+        call    __gpx_plot_raw
 
 .gl_single_done:
         ;; degenerate line: return lpatt unrotated

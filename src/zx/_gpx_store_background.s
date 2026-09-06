@@ -11,7 +11,7 @@
         ;;
         ;; Saves the visible screen area into HL as a valid standard 1bpp
         ;; bmp_t with stride=2. Bytes/rows clipped off-screen remain zero
-        ;; because the payload is cleared first.
+        ;; by clearing only the trailing rows after capture.
         ;;
         ;; GPL2 License (see: LICENSE)
         ;; Copyright (C) 2026 Tomaz Stih
@@ -24,102 +24,109 @@
         .globl  __gpx_store_background
         .globl  __vid_rowaddr
         .globl  __vid_nextrow
+        .globl  __gpx_ffshr
 
         .equ    BG_HEADER_SIZE,          5
         .equ    BG_PAYLOAD_SIZE,         32
 
-        .equ    B_BG_LO,                 -2
-        .equ    B_BG_HI,                 -1
-        .equ    B_VISW,                  -3
-        .equ    B_ROWCNT,                -4
-        ;; Destination row pointer, derived once and then stepped. The low
-        ;; slot was the per-row y counter that only existed to rebuild the
-        ;; interleaved row address every row.
-        .equ    B_DSTROW_LO,             -5
-        .equ    B_SHIFT,                 -6
-        .equ    B_XBYTE,                 -7
-        .equ    B_DSTROW_HI,             -8
-
-        .macro  LD16HL off
-        ld      l,off(ix)
-        ld      h,off+1(ix)
-        .endm
-
-        .macro  ST16HL off
-        ld      off(ix),l
-        ld      off+1(ix),h
-        .endm
+        .equ    B_VISW,                  -1
+        .equ    B_Y,                     -2
+        .equ    B_SHIFT,                 -3
+        .equ    B_XBYTE,                 -4
+        .equ    B_SRCSPAN,               -5
 
         .area   _CODE
 
+        ;; Clobbers:
+        ;;   AF, BC, DE, BC', DE', HL'. Preserves HL, IX and IY.
 __gpx_store_background:
-        push    iy                      ; preserve caller IY (used as dest ptr)
         push    hl
         push    ix
         ld      ix,#0
         add     ix,sp
 
-        ld      hl,#-8
+        ld      hl,#-5
         add     hl,sp
         ld      sp,hl
 
         ld      B_VISW(ix),d
-        ld      B_ROWCNT(ix),e
-        ld      B_DSTROW_LO(ix),b       ; parks y until xbyte is known
+        ld      a,e
+        exx
+        ld      b,a                     ; visible rows
+        ld      a,#16
+        sub     b
+        ld      c,a                     ; trailing rows to clear
+        exx
+        ld      B_Y(ix),b               ; parks y until xbyte is known
 
         ld      a,c
         and     #0x07
         ld      B_SHIFT(ix),a
 
         ld      a,c
-        srl     a
-        srl     a
-        srl     a
+        rrca
+        rrca
+        rrca
+        and     #0x1f
         ld      B_XBYTE(ix),a
 
         ld      l,2(ix)
         ld      h,3(ix)
         ld      de,#BG_HEADER_SIZE
         add     hl,de
+        ;; Alternate HL is the payload pointer, DE the masks and BC the
+        ;; visible/trailing row counts. Only A crosses banks
+        ;; when storing pixels; the video helpers leave this bank alone.
         push    hl
-        ld      d,h
-        ld      e,l
-        inc     de
-        ld      bc,#BG_PAYLOAD_SIZE-1
-        ld      (hl),#0x00
-        ldir
+        exx
         pop     hl
-        ;; Pin the payload write pointer in IY for the whole row loop
-        ;; (linear, +2/row). Survives __vid_rowaddr/__vid_nextrow, so no
-        ;; per-row IX round-trip of the dest pointer.
-        push    hl
-        pop     iy
+        exx
+
+        ;; Width, source byte count and right coverage never change between
+        ;; rows. Derive both output masks once, including clipped widths.
+        ld      a,B_VISW(ix)
+        add     a,B_SHIFT(ix)
+        ld      B_SRCSPAN(ix),a         ; 1..23 source bits to gather
+        ld      a,B_VISW(ix)
+        and     #7
+        ld      a,#0xff
+        jr      z,.gsb_mask_ready
+        ld      a,B_VISW(ix)
+        and     #7
+        call    __gpx_ffshr
+        cpl
+.gsb_mask_ready:
+        ld      d,a                     ; partial final byte, or FF at 8/16
+        ld      e,#0
+        ld      a,B_VISW(ix)
+        cp      #9
+        jr      c,.gsb_masks_store
+        ld      e,d
+        ld      d,#0xff
+.gsb_masks_store:
+        push    de
+        exx
+        pop     de                      ; fixed output masks
+        exx
 
         ;; First row address, derived once; later rows are one __vid_nextrow
         ;; away. The row base low byte is a multiple of 0x20 and xbyte is
         ;; 0..31, so the add cannot carry.
-        ld      b,B_DSTROW_LO(ix)       ; y, parked at entry
+        ld      b,B_Y(ix)               ; y, parked at entry
         call    __vid_rowaddr
         ld      a,B_XBYTE(ix)
         add     a,l
-        ld      B_DSTROW_LO(ix),a
-        ld      B_DSTROW_HI(ix),h
+        ld      l,a
 
 .gsb_row_loop:
-        ld      a,B_ROWCNT(ix)
-        or      a
-        jp      z,.gsb_done
-
-        ld      l,B_DSTROW_LO(ix)
-        ld      h,B_DSTROW_HI(ix)
+        push    hl                      ; keep row base while gathering bytes
         ld      d,(hl)
         xor     a
         ld      e,a
         ld      c,a
 
         ld      b,B_SHIFT(ix)
-        ld      a,B_VISW(ix)
-        add     a,b
+        ld      a,B_SRCSPAN(ix)
         cp      #9
         jr      c,.gsb_src_ready
         inc     hl
@@ -133,75 +140,50 @@ __gpx_store_background:
         ;; B still holds B_SHIFT (set above, untouched through src gather).
         ld      a,b
         or      a
+        ld      a,d
         jr      z,.gsb_shift_done
 .gsb_shift_loop:
         sla     c                       ; shifts a zero in and sets carry
         rl      e
-        rl      d
+        rla
         djnz    .gsb_shift_loop
 .gsb_shift_done:
 
-        ld      a,B_VISW(ix)
-        cp      #8
-        jr      nc,.gsb_first_full
-
-        ld      b,a
-        ld      a,#8
-        sub     b
-        ld      b,a
-        ld      a,#0xFF
-.gsb_mask0_loop:
-        add     a,a
-        djnz    .gsb_mask0_loop
+        exx
         and     d
-        ld      d,a
-        xor     a
-        ld      e,a
-        jr      .gsb_store_row
-
-.gsb_first_full:
-        ld      a,B_VISW(ix)
-        cp      #9
-        jr      nc,.gsb_second_partial
-        xor     a
-        ld      e,a
-        jr      .gsb_store_row
-
-.gsb_second_partial:
-        sub     #8
-        cp      #8
-        jr      z,.gsb_store_row
-        ld      b,a
-        ld      a,#8
-        sub     b
-        ld      b,a
-        ld      a,#0xFF
-.gsb_mask1_loop:
-        add     a,a
-        djnz    .gsb_mask1_loop
+        ld      (hl),a
+        inc     hl
+        exx
+        ld      a,e
+        exx
         and     e
-        ld      e,a
+        ld      (hl),a
+        inc     hl
+        dec     b
+        exx
 
-.gsb_store_row:
-        ld      0(iy),d
-        ld      1(iy),e
-        inc     iy
-        inc     iy
-
-        ld      l,B_DSTROW_LO(ix)
-        ld      h,B_DSTROW_HI(ix)
+        pop     hl
+        jr      z,.gsb_clear_tail
         call    __vid_nextrow
-        ld      B_DSTROW_LO(ix),l
-        ld      B_DSTROW_HI(ix),h
+        jr      .gsb_row_loop
 
-        ld      a,B_ROWCNT(ix)
-        dec     a
-        ld      B_ROWCNT(ix),a
-        jp      .gsb_row_loop
-
+        ;; Captured rows already contain zero padding. Clear only the
+        ;; unused rows, avoiding a full 32-byte clear before every capture.
+.gsb_clear_tail:
+        exx
+        ld      b,c
+        ld      a,b
+        or      a
+        jr      z,.gsb_done
+        xor     a
+.gsb_clear_loop:
+        ld      (hl),a
+        inc     hl
+        ld      (hl),a
+        inc     hl
+        djnz    .gsb_clear_loop
 .gsb_done:
         ld      sp,ix
         pop     ix
         pop     hl
-        pop     iy                      ; restore caller IY
         ret

@@ -60,7 +60,7 @@ __gpx_hline::
         ;; -1..-2  x0
         ;; -3..-4  x1
         ;; -5      x0 original low
-        ;; -6      patt_start
+        ;; -6      unused
         ;; -7      patt_byte
         ;; -8      byte_lo
         ;; -13..-9 span descriptor, laid out for __gpx_span_row:
@@ -127,13 +127,10 @@ __gpx_hline::
         ld      d,h                     ; DE = y
         call    __clip_seg
         jp      c,.ghl_reject
-        ld      c,13(ix)                ; reload clip (__clip_seg uses BC)
-        ld      b,14(ix)
-
-        ;; primary X-axis clip via shared __clip_seg (BC = clip ptr).
-        ;; IY = &clip->x0; clip->x1 is at IY+4.
-        ld      iy,#0
-        add     iy,bc
+        ;; __clip_seg preserves IY at &clip->y0. Move back to x0
+        ;; without reloading the clip pointer and rebuilding IY.
+        dec     iy
+        dec     iy
         ld      l,-2(ix)
         ld      h,-1(ix)                ; HL = x0
         ld      e,-4(ix)
@@ -146,47 +143,27 @@ __gpx_hline::
         ld      -3(ix),d                ; x1 = clamped hi
 
 .ghl_draw_core:
-        ;; patt_start = ror(lpatt, (x0 - x0_orig) & 7)
-        ld      a,-2(ix)
-        sub     -5(ix)
-        and     #0x07                   ; Z set when shift==0, A=shift
-        ld      b,a                     ; B = rotate count
-        ld      a,12(ix)                ; A = lpatt
-        jr      z,.ghl_pstart_store
-.ghl_pstart_rot:
-        rrca
-        djnz    .ghl_pstart_rot
-.ghl_pstart_store:
-        ld      -6(ix),a
-
-        ;; n = x0 & 7
-        ld      a,-2(ix)
-        and     #0x07
-        ld      c,a
-
-        ;; patt_byte = rotl(reverse_bits(patt_start), (8 - n) & 7)
-        ld      a,-6(ix)
-        ld      d,#0
+        ;; Clipping changes neither the pattern's original byte-grid phase
+        ;; nor its origin. Reverse the original LSB-first line pattern,
+        ;; then rotate right by original x0, independent of the clipped x0.
+        ld      a,12(ix)
+        cp      #0xFF
+        jr      z,.ghl_pbyte_store      ; solid rows need no phase conversion
         ld      b,#8
 .ghl_rev_loop:
         rrca
         rl      d
         djnz    .ghl_rev_loop
 
-        ld      a,c
-        or      a
+        ld      a,-5(ix)
+        and     #7
+        ld      b,a
+        ld      a,d
         jr      z,.ghl_pbyte_store
-        ld      a,#8
-        sub     c
-        ld      c,a
-        ld      a,d
 .ghl_pbyte_rot:
-        rlca
-        dec     c
-        jr      nz,.ghl_pbyte_rot
-        ld      d,a
+        rrca
+        djnz    .ghl_pbyte_rot
 .ghl_pbyte_store:
-        ld      a,d
         ld      -7(ix),a
 
         ;; Span descriptor for __gpx_span_row: IY = &descriptor (ix - 13).
@@ -208,19 +185,16 @@ __gpx_hline::
         ld      a,-8(ix)
         add     a,l
         ld      l,a
-        jr      nc,.ghl_row_ptr_ok
-        inc     h
-.ghl_row_ptr_ok:
         ld      a,-7(ix)                ; byte-grid aligned pattern
         call    __gpx_span_row
 
 .ghl_ret_pattern:
-        ;; return patt = ror(patt_start, (x1-x0) & 7)
+        ;; Return phase includes both clipped-away and visible pixels.
         ld      a,-4(ix)
-        sub     -2(ix)
+        sub     -5(ix)
         and     #0x07                   ; Z set when shift==0, A=shift
         ld      b,a                     ; B = rotate count
-        ld      a,-6(ix)                ; A = patt_start
+        ld      a,12(ix)                ; original pattern
         jr      z,.ghl_return
 .ghl_pret_rot:
         rrca
@@ -273,10 +247,8 @@ __gpx_span_setup::
 
         ;; mask_last = 0xFF << (7 - (x1 & 7))
         ld      a,c
+        cpl
         and     #0x07
-        ld      l,a
-        ld      a,#7
-        sub     l
         ld      l,a
         ld      a,#0xff
         jr      z,.ss_last_done
@@ -375,14 +347,14 @@ __gpx_span_row::
         ld      a,c
         and     4(iy)
         ld      e,a
-        or      a
-        jr      nz,.sr_mid_loop
         ld      a,d
         inc     a
         jr      nz,.sr_mid_loop
-.sr_mid_store:                          ; solid set: a plain store per byte
+        ld      a,e
+        cpl                             ; solid set/clear: output is FF ^ E
+.sr_mid_store:
         inc     hl
-        ld      (hl),#0xff
+        ld      (hl),a
         djnz    .sr_mid_store
         jr      .sr_last
 .sr_mid_loop:

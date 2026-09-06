@@ -46,121 +46,94 @@ _gpx_draw_polygon::
         ld      ix,#0
         add     ix,sp
 
-        ;; locals (10 bytes)
-        ;; -1..-2   gpx
-        ;; -3..-4   pts
-        ;; -5..-6   &pts[i]
-        ;; -7..-8   &pts[j], j = (i + 1) % n
-        ;; -9       i
-        ;; -10      the pattern, rotated on by every edge drawn
-        ld      b,h
-        ld      c,l                     ; gpx, out of the way of the frame
-        ld      hl,#-10
+        ;; locals (8 bytes)
+        ;; -1..-2   pts
+        ;; -3..-4   &pts[i]
+        ;; -5..-6   &pts[j], j = (i + 1) % n
+        ;; -7       edges left to draw
+        ;; -8       the pattern, rotated on by every edge drawn
+        ld      hl,#-8
         add     hl,sp
         ld      sp,hl
-        ld      -1(ix),c
-        ld      -2(ix),b
-        ld      -3(ix),e
-        ld      -4(ix),d
+        ld      -1(ix),e
+        ld      -2(ix),d
 
         ;; a closed path needs two points
         ld      a,4(ix)
         cp      #2
         jp      c,.dp_done
 
-        ;; i = 0, &pts[0], &pts[1]
-        xor     a
-        ld      -9(ix),a
-        ld      -5(ix),e
-        ld      -6(ix),d
+        ;; edges left = n, &pts[0], &pts[1]
+        ld      -7(ix),a
+        ld      -3(ix),e
+        ld      -4(ix),d
         ld      hl,#4
         add     hl,de
-        ld      -7(ix),l
-        ld      -8(ix),h
+        ld      -5(ix),l
+        ld      -6(ix),h
 
         ld      a,7(ix)
-        ld      -10(ix),a               ; starting pattern
+        ld      -8(ix),a                ; starting pattern
 
 .dp_edge:
         ;; gpx_draw_line(gpx, pts[i].x, pts[i].y, pts[j].x, pts[j].y,
-        ;;               c, m, patt, clip). The callee does not keep IX and
-        ;; cleans its own arguments, so IX is saved underneath them.
-        push    ix
+        ;;               c, m, patt, clip). Backend line entries preserve
+        ;; IX, ignore the context argument and clean their own arguments.
         ld      l,8(ix)
         ld      h,9(ix)
         push    hl                      ; clip
-        ld      a,-10(ix)
+        ld      a,-8(ix)
         push    af
         inc     sp                      ; lpatt
         ld      l,5(ix)
         ld      h,6(ix)
         push    hl                      ; c, m
 
-        ld      l,-7(ix)
-        ld      h,-8(ix)                ; &pts[j]
-        inc     hl
-        inc     hl
+        ld      l,-5(ix)
+        ld      h,-6(ix)                ; &pts[j]
         ld      e,(hl)
         inc     hl
         ld      d,(hl)
-        push    de                      ; y1
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        ld      e,(hl)
         inc     hl
-        ld      d,(hl)
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)
+        push    bc                      ; y1
         push    de                      ; x1
 
-        ld      l,-5(ix)
-        ld      h,-6(ix)                ; &pts[i]
-        inc     hl
-        inc     hl
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    de                      ; y0
-
-        ld      l,-5(ix)
-        ld      h,-6(ix)
+        ld      l,-3(ix)
+        ld      h,-4(ix)                ; &pts[i]
         ld      e,(hl)
         inc     hl
         ld      d,(hl)                  ; DE = x0
-        ld      l,-1(ix)
-        ld      h,-2(ix)                ; HL = gpx
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)
+        push    bc                      ; y0
         call    _gpx_draw_line
-        pop     ix                      ; saved below the argument block
-        ld      -10(ix),a               ; carry the phase into the next edge
+        ld      -8(ix),a                ; carry the phase into the next edge
 
-        ;; i++, and step both cursors, wrapping j back to pts[0]
-        ld      hl,#4
-        ld      e,-5(ix)
-        ld      d,-6(ix)
+        ;; The next edge starts at the endpoint just consumed. Only the
+        ;; final endpoint wraps; the point count also handles n == 255.
+        dec     -7(ix)
+        jr      z,.dp_done
+        ld      l,-5(ix)
+        ld      h,-6(ix)
+        ld      -3(ix),l
+        ld      -4(ix),h
+        ld      a,-7(ix)
+        dec     a
+        jr      nz,.dp_next_j
+        ld      l,-1(ix)
+        ld      h,-2(ix)
+        jr      .dp_store_j
+.dp_next_j:
+        ld      de,#4
         add     hl,de
+.dp_store_j:
         ld      -5(ix),l
         ld      -6(ix),h
-
-        ld      a,-9(ix)
-        inc     a
-        ld      -9(ix),a
-        cp      4(ix)
-        jr      nc,.dp_done             ; every edge drawn
-
-        inc     a
-        cp      4(ix)
-        jr      c,.dp_next_j            ; j = i + 1 is still inside pts
-        ;; j wrapped back to pts[0]
-        ld      a,-3(ix)
-        ld      -7(ix),a
-        ld      a,-4(ix)
-        ld      -8(ix),a
-        jp      .dp_edge
-.dp_next_j:
-        ld      hl,#4
-        ld      e,-7(ix)
-        ld      d,-8(ix)
-        add     hl,de
-        ld      -7(ix),l
-        ld      -8(ix),h
         jp      .dp_edge
 
 .dp_done:
@@ -168,9 +141,8 @@ _gpx_draw_polygon::
         pop     ix
 
         ;; callee cleanup: n(1), c(1), m(1), lpatt(1), clip(2) = 6
-        pop     de
-        ld      hl,#6
-        add     hl,sp
-        ld      sp,hl
-        push    de
-        ret
+        pop     hl
+        pop     bc
+        pop     bc
+        pop     bc
+        jp      (hl)

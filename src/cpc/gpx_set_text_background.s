@@ -28,11 +28,11 @@
         ;; Clobbers:
         ;;   AF, B, DE, HL, IX
 _gpx_set_text_background::
-        push    ix
-        ld      ix,#0
-        add     ix,sp
-
-        ld      b,4(ix)                 ; preserve setting during NULL check
+        pop     de                      ; return address
+        dec     sp
+        pop     af                      ; A = the single-byte setting
+        push    de                      ; argument consumed, return restored
+        ld      b,a                     ; preserve setting during NULL check
         ld      a,h
         or      l
         jr      z,.gstb_done
@@ -47,10 +47,4 @@ _gpx_set_text_background::
         ld      (hl),a
 
 .gstb_done:
-        pop     ix
-
-        ;; callee cleanup: background(1)
-        pop     de
-        inc     sp
-        push    de
         ret

@@ -26,8 +26,8 @@
         ;; splits the screen into eight banks 0x800 apart, each holding
         ;; every eighth scanline at 80 bytes per line.
         ;;
-        ;; The text row's offset is n * 80 = (n * 5) * 16, which is four
-        ;; doublings, an add and four more -- cheaper in bytes than the
+        ;; The text row's offset is n * 80 = (n * 5) * 16: two byte
+        ;; doublings, an add and four word doublings -- cheaper in bytes than the
         ;; fifty-byte table it replaces, and it needs no register beyond A
         ;; and HL, which callers depend on. n is at most 24, so 5n still
         ;; fits a byte and the high half stays clear until the last shifts.
@@ -49,11 +49,11 @@ __vid_rowaddr::
         rrca
         and     #0x1F                   ; y >> 3, the text row (0..24)
         ld      l,a
-        ld      h,#0x00
-        add     hl,hl
-        add     hl,hl                   ; 4n
+        add     a,a
+        add     a,a                     ; 4n, still under 128
         add     a,l                     ; 5n, still under 256
         ld      l,a
+        ld      h,#0x00
         add     hl,hl
         add     hl,hl
         add     hl,hl
@@ -150,15 +150,11 @@ __vid_prevrow::
         ;; Clobbers:
         ;;   AF
 __vid_prevrow_carry::
-        ld      a,h
-        add     a,#(CPC_BANK_STEP >> 8) ; undo, H = base | offset high
-        ld      h,a
         ld      a,l
         sub     #CPC_ROW_BYTES
         ld      l,a
         ld      a,h
-        sbc     a,#0x00
-        or      #0x38                   ; back into the last bank
+        sbc     a,#0xC0                 ; add 0x40 minus borrow: bank 0 -> 7
         ld      h,a
         ret
 

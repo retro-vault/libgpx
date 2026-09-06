@@ -28,6 +28,7 @@
         .globl  _gpx_show_sprite
         .globl  _gpx_hide_sprite
         .globl  __gpx_store_background
+        .globl  _gpx_draw_bmp
         .globl  _gpx_draw_bmp_clip
         .globl  __cpc_width
 
@@ -37,7 +38,6 @@
         .equ    BMP_SIG_1BPP_STRIDE2,    0x01
         .equ    CO_FORE,                 0x01
         .equ    BM_CPY,                  0x00
-        .equ    BMP_TRANSPARENT,         0x80
 
         .equ    SPR_X,                   0
         .equ    SPR_Y,                   2
@@ -175,9 +175,7 @@ _gpx_show_sprite::
         push    hl                      ; y
         ld      e,SPR_X(ix)
         ld      d,SPR_X+1(ix)           ; DE = x
-        ld      b,#BMP_TRANSPARENT      ; public gpx_draw_bmp semantics
-        ld      c,#CO_FORE
-        call    _gpx_draw_bmp_clip
+        call    _gpx_draw_bmp
 
 .gs_done:
         pop     ix

@@ -122,32 +122,30 @@ _gpx_measure_text::
         ;; as the old inline code. Clobbers AF, BC, DE, HL. Preserves IX, IY.
         ;; ------------------------------------------------------------
 __gpx_glyph_lookup:
-        push    ix
-        push    de
-        pop     ix                      ; IX = font
-
-        ;; range: first <= ch <= last ?
-        cp      1(ix)                   ; ch < first ?
+        ;; Walk the header with HL; BC retains the font base for the table
+        ;; and glyph additions. Neither index register needs a frame.
+        ld      h,d
+        ld      l,e
+        ld      c,a                     ; character
+        inc     hl                      ; first
+        sub     (hl)
         jr      c,.gl_empty
-        ld      b,a                     ; B = ch
-        ld      a,2(ix)                 ; last
-        cp      b                       ; last < ch ?
+        ld      b,a                     ; index = character - first
+        inc     hl                      ; last
+        ld      a,(hl)
+        cp      c
         jr      c,.gl_empty
 
-        ;; HL = &offset[ch-first] = font + 8 + (ch-first)*2
-        ld      a,b
-        sub     1(ix)
-        ld      l,a
-        ld      h,#0x00
+        ld      l,b
+        ld      h,#0
+        ld      b,d
+        ld      c,e                     ; BC = font
         add     hl,hl
-        ld      de,#0x0008
         add     hl,de
-        push    ix
-        pop     de
-        add     hl,de                   ; HL = &offset[idx]
+        ld      de,#8
+        add     hl,de                   ; HL = &offset[index]
 
-        ;; read glyph offset (LE/BE per flag)
-        ld      a,0(ix)
+        ld      a,(bc)                  ; font flags
         and     #FONT_FLAG_OFFSETS_BE
         jr      nz,.gl_be
         ld      e,(hl)
@@ -161,32 +159,19 @@ __gpx_glyph_lookup:
 .gl_have_off:
         ld      a,d
         or      e
-        jr      z,.gl_empty             ; offset 0 => missing
+        ret     z                       ; offset zero means missing
 
-        ;; HL = glyph base = font + offset
-        push    ix
-        pop     hl
-        add     hl,de
-
-        ;; validate encoding (1bpp or masked 1bpp)
+        ld      h,b
+        ld      l,c
+        add     hl,de                   ; HL = glyph base
         ld      a,(hl)
-        and     #BMP_ENC_MASK
-        cp      #BMP_SIG_1BPP
-        jr      z,.gl_width
-        cp      #BMP_SIG_1BPP_MASK
-        jr      z,.gl_width
-        jr      .gl_empty
-
-.gl_width:
+        and     #0xe0                   ; encodings 0x00 and 0x10 are valid
+        jr      nz,.gl_empty
         inc     hl
-        ld      a,(hl)                  ; width byte
-        dec     hl                      ; HL = glyph base
-        or      a
-        jr      z,.gl_empty
-        pop     ix                      ; A = width (!=0), HL = glyph base
+        ld      a,(hl)                  ; zero width also means empty
+        dec     hl
         ret
 
 .gl_empty:
-        xor     a                       ; A = 0 => use empty_width
-        pop     ix
+        xor     a
         ret

@@ -176,15 +176,12 @@ __gpx_plot_raw:
         ;; HL = row base for y (B); __vid_rowaddr preserves DE (x)
         call    __vid_rowaddr
         ld      a,e
-        srl     a
-        srl     a
-        srl     a
+        rrca
+        rrca
+        rrca
+        and     #0x1f
         add     a,l
         ld      l,a
-        jr      nc,.pr_ptr_ok
-        inc     h
-.pr_ptr_ok:
-        ld      e,c                     ; E = mask
         pop     af                      ; A = packed color/mode
 
         bit     1,a
@@ -193,20 +190,20 @@ __gpx_plot_raw:
         jr      nz,.pr_set
 
         ;; clear pixel
-        ld      a,e
+        ld      a,c
         cpl
         and     (hl)
         ld      (hl),a
         ret
 
 .pr_set:
-        ld      a,e
+        ld      a,c
         or      (hl)
         ld      (hl),a
         ret
 
 .pr_xor:
-        ld      a,e
+        ld      a,c
         xor     (hl)
         ld      (hl),a
         ret

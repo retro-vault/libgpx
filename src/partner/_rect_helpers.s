@@ -24,36 +24,22 @@
         ;;   DE = b
         ;;
         ;; Return:
-        ;;   A = 1 when (a < b), else 0
+        ;;   A = 1 when (a < b), else 0; Z reflects A, carry is clear
         ;;
         ;; Clobbers:
         ;;   AF
 __rect_cmp16s_lt:
-        ld      a,h
-        xor     d
-        jp      p,.rc_same_sign
-
-        ;; different signs: negative is smaller
-        bit     7,h
-        jr      z,.rc_false
-        ld      a,#1
-        ret
-
-.rc_same_sign:
-        ld      a,h
-        cp      d
-        jr      c,.rc_true
-        jr      nz,.rc_false
+        ;; Signed subtraction: overflow flips the interpretation of bit 7.
+        ;; Bytewise arithmetic leaves both operands available to the caller.
         ld      a,l
-        cp      e
-        jr      c,.rc_true
-
-.rc_false:
-        xor     a
-        ret
-
-.rc_true:
-        ld      a,#1
+        sub     e
+        ld      a,h
+        sbc     a,d
+        jp      po,.rc_sign
+        xor     #0x80
+.rc_sign:
+        rlca
+        and     #1
         ret
 
         ;; ------------------------------------------------------------
@@ -114,21 +100,12 @@ __rect_unpack_norm:
         ld      e,-1(ix)
         ld      d,-2(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.ru_x_ok
 
-        ld      a,-1(ix)
-        ld      c,a
-        ld      a,-2(ix)
-        ld      b,a
-        ld      a,-3(ix)
-        ld      -1(ix),a
-        ld      a,-4(ix)
-        ld      -2(ix),a
-        ld      a,c
-        ld      -3(ix),a
-        ld      a,b
-        ld      -4(ix),a
+        ld      -1(ix),l                ; HL = x1, DE = x0, still intact
+        ld      -2(ix),h
+        ld      -3(ix),e
+        ld      -4(ix),d
 
 .ru_x_ok:
         ;; if (y1 < y0) swap
@@ -137,21 +114,12 @@ __rect_unpack_norm:
         ld      e,-5(ix)
         ld      d,-6(ix)
         call    __rect_cmp16s_lt
-        or      a
         jr      z,.ru_done
 
-        ld      a,-5(ix)
-        ld      c,a
-        ld      a,-6(ix)
-        ld      b,a
-        ld      a,-7(ix)
-        ld      -5(ix),a
-        ld      a,-8(ix)
-        ld      -6(ix),a
-        ld      a,c
-        ld      -7(ix),a
-        ld      a,b
-        ld      -8(ix),a
+        ld      -5(ix),l                ; HL = y1, DE = y0, still intact
+        ld      -6(ix),h
+        ld      -7(ix),e
+        ld      -8(ix),d
 
 .ru_done:
         pop     ix

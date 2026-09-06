@@ -161,7 +161,8 @@ def main():
 
     names = args.names or sorted(
         f[:-4] for f in os.listdir(IMAGE_DIR)
-        if f.startswith("test_") and f.endswith(".ihx"))
+        if f.startswith("test_") and f.endswith(".ihx")
+        and f != "test_gdp_patterns.ihx")  # independent oracle, separate target
     if not names:
         print("no scenarios built; run `make -C tests/partner gdp`",
               file=sys.stderr)

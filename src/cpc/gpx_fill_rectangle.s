@@ -99,8 +99,6 @@ _gpx_fill_rectangle::
         ld      -16(ix),a
 
         ;; unpack + normalize rect into locals
-        push    ix
-        pop     hl
         call    __rect_unpack_norm
 
         ;; preserve original y0 for pattern-phase alignment
@@ -211,8 +209,7 @@ _gpx_fill_rectangle::
         jr      nc,.fr_rowptr_ok
         inc     h
 .fr_rowptr_ok:
-        ld      -9(ix),l
-        ld      -10(ix),h
+        push    hl                      ; keep the first row across phase math
 
 .fr_idx_setup:
         ;; idx = (y0_clipped - y0_original) % fpatt_len
@@ -222,23 +219,30 @@ _gpx_fill_rectangle::
         ld      d,-12(ix)
         xor     a
         sbc     hl,de
-.fr_idx_mod:
+        ;; A fixed 16-bit remainder bounds the work even when the original
+        ;; y is -32768. The frequent already-in-range case still returns
+        ;; immediately, before entering the bit loop.
+        ld      c,-16(ix)
         ld      a,h
         or      a
-        jr      nz,.fr_idx_sub
+        jr      nz,.fr_idx_div
         ld      a,l
-        cp      -16(ix)
+        cp      c
         jr      c,.fr_idx_done
+.fr_idx_div:
+        ld      b,#16
+        xor     a
+.fr_idx_mod:
+        add     hl,hl
+        rla                             ; shift the next dividend bit into A
+        jr      c,.fr_idx_sub           ; ninth remainder bit: subtract always
+        cp      c
+        jr      c,.fr_idx_next
 .fr_idx_sub:
-        ld      a,l
-        sub     -16(ix)
-        ld      l,a
-        ld      a,h
-        sbc     a,#0x00
-        ld      h,a
-        jr      .fr_idx_mod
+        sub     c
+.fr_idx_next:
+        djnz    .fr_idx_mod
 .fr_idx_done:
-        ld      a,l
         ld      -13(ix),a
 
         ;; row count = y1 - y0 + 1 (both already clamped to the screen)
@@ -246,8 +250,10 @@ _gpx_fill_rectangle::
         sub     -5(ix)
         inc     a
         ld      -11(ix),a
+        pop     hl                      ; first row, then carried between rows
 
 .fr_row_loop:
+        push    hl
         ;; pattern for this row, rotated onto the byte grid
         ld      l,-14(ix)
         ld      h,-15(ix)
@@ -263,12 +269,11 @@ _gpx_fill_rectangle::
         rrca
         djnz    .fr_patt_rot
 .fr_patt_ready:
-        ld      l,-9(ix)
-        ld      h,-10(ix)
+        pop     hl
         call    __gpx_span_row          ; preserves HL
+        dec     -11(ix)
+        jr      z,.fr_done
         call    __vid_nextrow
-        ld      -9(ix),l
-        ld      -10(ix),h
 
         ;; idx = (idx + 1) % fpatt_len
         ld      a,-13(ix)
@@ -279,8 +284,7 @@ _gpx_fill_rectangle::
 .fr_store_idx:
         ld      -13(ix),a
 
-        dec     -11(ix)
-        jr      nz,.fr_row_loop
+        jr      .fr_row_loop
 
 .fr_done:
         ld      sp,ix
