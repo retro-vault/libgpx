@@ -33,7 +33,11 @@ BIN_PARTNER_TEST_IHX := $(BIN_DIR)/partner/test_draw.ihx
 	cpc cpc-lib cpc-lib-objs clean
 .PRECIOUS: $(BUILD_DIR)/%/ $(BIN_DIR)/%/ $(BIN_DIR)/ $(BUILD_TMP)/
 
-build: lib partner cpc
+build: lib partner cpc rasta
+
+.PHONY: rasta rasta-lib
+rasta rasta-lib:
+	$(MAKE) -C $(ROOT_DIR)/src/rasta build
 
 lib: $(BIN_LIBGPX_LIB)
 

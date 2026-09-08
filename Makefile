@@ -39,13 +39,32 @@ partner-lib:
 cpc-lib:
 	$(MAKE) -C src cpc-lib
 
+.PHONY: rasta rasta-lib rasta-demo rasta-run rasta-tests rasta-screenshots package-rasta
+rasta rasta-lib:
+	$(MAKE) -C src/rasta build
+
+rasta-demo:
+	$(MAKE) -C src/rasta demo
+
+rasta-run: rasta-demo
+	bash $(ROOT_DIR)/scripts/run/run-rasta.sh
+
+rasta-tests:
+	$(MAKE) -C src/rasta tests
+
+rasta-screenshots:
+	$(PYTHON) $(ROOT_DIR)/scripts/docs/capture-rasta-shots.py
+
+package-rasta:
+	$(MAKE) -C src/rasta package
+
 package-zx: $(ZX_RELEASE_ARCHIVE)
 
 package-partner: $(PARTNER_RELEASE_ARCHIVE)
 
 package-cpc: $(CPC_RELEASE_ARCHIVE)
 
-release-packages: package-zx package-partner package-cpc
+release-packages: package-zx package-partner package-cpc package-rasta
 
 tests:
 	$(MAKE) -C tests tests
@@ -180,4 +199,9 @@ $(CPC_RELEASE_ARCHIVE): $(BIN_DIR)/cpc/libgpx.lib $(ROOT_DIR)/include/libgpx.h $
 clean:
 	$(MAKE) -C src clean
 	$(MAKE) -C tests clean
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
+	@if [ -d "$(BUILD_DIR)" ]; then find "$(BUILD_DIR)" -mindepth 1 -maxdepth 1 ! -name rasta ! -name .rasta-download.lock -exec rm -rf {} +; fi
+	rm -rf $(BIN_DIR)
+
+.PHONY: distclean
+distclean: clean
+	rm -rf $(BUILD_DIR)

@@ -2,6 +2,9 @@
 build/
 bin/
 
+# Downloaded Rasta emulator (normally cached under build/rasta/)
+/rasta/
+
 # Toolchain intermediates
 *.rel
 *.lst

@@ -1,7 +1,7 @@
 # libgpx
 
-A 1-bit-per-pixel graphics library for Z80 machines, written entirely in
-hand-optimised assembly.
+A 1-bit-per-pixel graphics library for Z80 machines and the Rasta Linux
+framebuffer emulator. Z80 targets use hand-optimised assembly; Rasta uses C11.
 
 libgpx gives you pixels, lines, rectangles, pattern fills, circles,
 polygons, text and sprites behind one API that behaves the same on every
@@ -18,6 +18,7 @@ screenshots from both machines.
 | ZX Spectrum 48K | 256 x 192 | `src/zx` |
 | Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` |
 | Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` |
+| Rasta (Linux) | 1920 x 1080 | `src/rasta` |
 
 The machines have almost nothing in common. The Spectrum has a packed
 framebuffer the CPU reads and writes directly; the Partner has an EF9367
@@ -25,17 +26,21 @@ drawing coprocessor and display memory the CPU cannot read at all; the CPC
 interleaves its framebuffer into eight banks and changes how many pixels
 fit in a byte depending on the display mode. libgpx hides the difference.
 
-The same program, unchanged, on three machines and four screen geometries:
+The panels example on several display layouts:
 
 | | |
 |---|---|
 | ZX Spectrum, 256 x 192 | ![panels on the ZX Spectrum](docs/images/screenshots/panels-zx.png) |
 | Amstrad CPC, 640 x 200 | ![panels on the Amstrad CPC in mode 2](docs/images/screenshots/panels-cpc-640x200.png) |
 | Amstrad CPC, 320 x 200 | ![panels on the Amstrad CPC in mode 1](docs/images/screenshots/panels-cpc-320x200.png) |
+| Rasta, 1920 x 1080 | ![panels on Rasta at Full HD](docs/images/screenshots/panels-rasta.png) |
+
+The [Rasta guide](docs/manuals/RASTA.md#screenshots) also shows the full API
+showcase, circles and polygons at 1920 × 1080.
 
 ## Building
 
-Everything builds inside pinned Docker images carrying the X Tools Z80
+The Z80 targets build inside Docker images carrying the X Tools Z80
 toolchain (`xcc`, `xas`, `xld`, `xar`, `xprog`) and an emulator, so
 Docker and Python 3 are the only requirements — no host toolchain.
 
@@ -44,18 +49,31 @@ Docker and Python 3 are the only requirements — no host toolchain.
 | ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
 | Iskra Delta Partner | `wischner/xcc-z80-idp` |
 | Amstrad CPC | `wischner/xcc-z80-cpc` |
+| Rasta | `libgpx-rasta:local` (built automatically from `scripts/docker/rasta.Dockerfile`) |
 
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
 make partner-lib   # bin/partner/libgpx.lib  (Partner)
 make cpc-lib       # bin/cpc/libgpx.lib      (CPC, both display modes)
+make rasta-lib     # bin/rasta/libgpx.a + libgpx.so + Rasta viewer
+make rasta-run     # build and open the Full HD demo on X11/XWayland
+make rasta-tests   # sanitizer regressions and an X11 viewer smoke test
 make build         # all of them, plus the test binaries
 make clean
 ```
 
+Rasta implements the full API, including bitmap fonts, all five stock
+cursors, save-under sprites, circles and polygons. Its pinned emulator
+checkout is downloaded once into `build/rasta/` and reused on later builds,
+including after `make clean`. `make distclean` also removes that cache.
+The first Rasta build needs internet access to fetch the Ubuntu packages
+and emulator. Drawing applications need only libc; SDL2 belongs to the
+viewer. See [the Rasta guide](docs/manuals/RASTA.md) for linking, framebuffer
+configuration, X11 use and packaging.
+
 The core primitives are per machine, hand-written against that machine's
 hardware. The advanced ones -- circles and polygons -- live once in
-`src/common`, written against the core API rather than against any
+`src/common` for Z80, with equivalent C in `src/rasta/advanced.c`, written against the core API rather than against any
 framebuffer, so every backend gets the same picture by construction. `make ADVANCED=0` (`no` and `false` also work) builds only
 the core set; the default builds both. Since the library is an archive,
 a program that draws no circles pays nothing for them either way.

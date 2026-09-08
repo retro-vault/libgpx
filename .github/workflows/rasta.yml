@@ -1,0 +1,17 @@
+name: Rasta
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full library and X11 integration
+        run: make rasta-tests
+      - name: Core-only library and X11 integration
+        run: make rasta-tests ADVANCED=0
+      - name: Restore full library and package
+        run: make package-rasta

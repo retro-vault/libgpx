@@ -1,6 +1,6 @@
 # Tests
 
-Three backends live in this repository, and each is tested on a real emulator
+The three Z80 backends are each tested on a real emulator
 driven over MCP (JSON-RPC on stdio). Every emulator ships inside that
 backend's toolchain Docker image, so there is nothing extra to install.
 
@@ -187,3 +187,9 @@ those hid real bugs until a scenario drew over solid ink.
 
 Helpers in the test headers never call into libgpx, so a broken primitive
 cannot hide a failure by corrupting the scaffolding.
+## Rasta native tests
+
+Run `make rasta-tests` from the repository root for full API regressions
+under ASan/UBSan and an X11 smoke test of the real Rasta viewer. Both C and
+C++ builds are checked. `make rasta-tests ADVANCED=0` checks the core-only
+configuration. See [the Rasta guide](../docs/manuals/RASTA.md).

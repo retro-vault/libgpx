@@ -4,8 +4,8 @@
  * Low-level 1-bit-per-pixel (1bpp) graphics primitives.  Defines
  * the platform-independent drawing API: pixels, lines, rectangles,
  * text, bitmaps and sprites.  Every function declared here is
- * implemented by each backend under src/ in hand-written Z80
- * assembly -- against a packed framebuffer on the ZX Spectrum, and
+ * implemented by each backend under src/, using native C for Rasta or
+ * hand-written Z80 assembly -- against a packed framebuffer on the ZX Spectrum, and
  * against the EF9367 drawing processor on the Iskra Delta Partner,
  * whose display memory the CPU cannot read at all.
  *
@@ -43,6 +43,10 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Screen coordinate (signed 16-bit). */
 typedef int16_t coord;
@@ -105,6 +109,9 @@ typedef struct rect_s
 #define S_BMP BMP_SIG(BMP_ENC_1BPP)
 
 /* Packed 1bpp bitmap (single on-wire header format). */
+#if defined(__GNUC__)
+#pragma pack(push, 1)
+#endif
 typedef struct bmp_s
 {
     uint8_t signature; /* Signature byte: encoding in high nibble. */
@@ -113,6 +120,9 @@ typedef struct bmp_s
     uint16_t size;     /* Total bitmap data size in bytes. */
     uint8_t bitmap[];  /* Payload per encoding (MSB-first bits). */
 } bmp_t;
+#if defined(__GNUC__)
+#pragma pack(pop)
+#endif
 
 /* Optional trailer convention:
  * For masked bitmaps (BMP_ENC_1BPP_MASK), two trailing bytes may follow payload:
@@ -226,9 +236,13 @@ struct gpx_s
  * Backends with a single layout accept these and ignore them. */
 #define GPXM_CPC_640X200 0
 #define GPXM_CPC_320X200 1
+/* Rasta's fixed 1920x1080, 1bpp, single-page layout. */
+#define GPXM_RASTA_1920X1080 0
 typedef uint8_t gmode;
 
-/* Initialise the platform graphics subsystem and return a gpx_t. */
+/* Initialise the platform graphics subsystem and return a gpx_t.
+ * Rasta maps GPX_RASTA_FRAMEBUFFER (default /tmp/rasta.framebuffer).
+ * It returns NULL with errno set on failure or if already initialised. */
 extern gpx_t *gpx_create(gmode mode);
 
 /* Select whether text clears its cell background or leaves it transparent. */
@@ -377,5 +391,9 @@ extern void gpx_fill_polygon(
     gpx_t *gpx, point_t *pts, uint8_t n,
     color c, bmode m,
     uint8_t *fpatt, uint8_t fpatt_len, const rect_t *clip);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __LIBGPX_H__ */
