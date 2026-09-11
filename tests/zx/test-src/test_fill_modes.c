@@ -1,7 +1,7 @@
 #include "zxtest.h"
 
-/* CO_BACK and BM_XOR fills over content. A pattern 0-bit is untouched in
- * every mode, so the wash underneath must show through the gaps. */
+/* COPY, OR and XOR fills over content. COPY writes both pattern values;
+ * OR/XOR touch only pattern-one pixels, so the wash survives their gaps. */
 void main(void)
 {
     gpx_t *gpx = gpx_create(GPXM_DEFAULT);
@@ -18,6 +18,11 @@ void main(void)
         (const rect_t *)0);
     r.x0 = 130; r.x1 = 250;
     gpx_fill_rectangle(gpx, &r, CO_BACK, BM_CPY, dash, 2,
+        (const rect_t *)0);
+
+    /* Same source rows under OR: zeroes retain the seeded wash. */
+    r.x0 = 4; r.y0 = 32; r.x1 = 250; r.y1 = 38;
+    gpx_fill_rectangle(gpx, &r, CO_BACK, BM_OR, dash, 2,
         (const rect_t *)0);
 
     /* XOR with both colours: the colour must not matter. */

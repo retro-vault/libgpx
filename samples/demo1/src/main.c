@@ -39,21 +39,25 @@ static uint8_t std_bg[GPX_SPRITE_BG_SIZE];
 static uint8_t hourglass_bg[GPX_SPRITE_BG_SIZE];
 static uint8_t caret_bg[GPX_SPRITE_BG_SIZE];
 static uint8_t hand_bg[GPX_SPRITE_BG_SIZE];
+static uint8_t resize_bg[GPX_SPRITE_BG_SIZE];
 static uint8_t classic_bg2[GPX_SPRITE_BG_SIZE];
 static uint8_t std_bg2[GPX_SPRITE_BG_SIZE];
 static uint8_t hourglass_bg2[GPX_SPRITE_BG_SIZE];
 static uint8_t caret_bg2[GPX_SPRITE_BG_SIZE];
 static uint8_t hand_bg2[GPX_SPRITE_BG_SIZE];
-static sprite_t classic_sprite = {72, 72, 0, (bmp_t *)classic_bg};
-static sprite_t std_sprite = {104, 72, 0, (bmp_t *)std_bg};
-static sprite_t hourglass_sprite = {136, 72, 0, (bmp_t *)hourglass_bg};
-static sprite_t caret_sprite = {168, 72, 0, (bmp_t *)caret_bg};
-static sprite_t hand_sprite = {200, 72, 0, (bmp_t *)hand_bg};
-static sprite_t classic_sprite2 = {72, 96, 0, (bmp_t *)classic_bg2};
-static sprite_t std_sprite2 = {104, 96, 0, (bmp_t *)std_bg2};
-static sprite_t hourglass_sprite2 = {136, 96, 0, (bmp_t *)hourglass_bg2};
-static sprite_t caret_sprite2 = {168, 96, 0, (bmp_t *)caret_bg2};
-static sprite_t hand_sprite2 = {200, 96, 0, (bmp_t *)hand_bg2};
+static uint8_t resize_bg2[GPX_SPRITE_BG_SIZE];
+static sprite_t classic_sprite = {52, 72, 0, (bmp_t *)classic_bg};
+static sprite_t std_sprite = {84, 72, 0, (bmp_t *)std_bg};
+static sprite_t hourglass_sprite = {116, 72, 0, (bmp_t *)hourglass_bg};
+static sprite_t caret_sprite = {148, 72, 0, (bmp_t *)caret_bg};
+static sprite_t hand_sprite = {180, 72, 0, (bmp_t *)hand_bg};
+static sprite_t resize_sprite = {212, 72, 0, (bmp_t *)resize_bg};
+static sprite_t classic_sprite2 = {52, 96, 0, (bmp_t *)classic_bg2};
+static sprite_t std_sprite2 = {84, 96, 0, (bmp_t *)std_bg2};
+static sprite_t hourglass_sprite2 = {116, 96, 0, (bmp_t *)hourglass_bg2};
+static sprite_t caret_sprite2 = {148, 96, 0, (bmp_t *)caret_bg2};
+static sprite_t hand_sprite2 = {180, 96, 0, (bmp_t *)hand_bg2};
+static sprite_t resize_sprite2 = {212, 96, 0, (bmp_t *)resize_bg2};
 
 int main(void)
 {
@@ -78,11 +82,13 @@ int main(void)
     hourglass_sprite.bitmap = gpx_get_stock_bmp(GPXSB_CURSOR_HOURGLASS);
     caret_sprite.bitmap = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
     hand_sprite.bitmap = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
+    resize_sprite.bitmap = gpx_get_stock_bmp(GPXSB_CURSOR_RESIZE);
     classic_sprite2.bitmap = classic_sprite.bitmap;
     std_sprite2.bitmap = std_sprite.bitmap;
     hourglass_sprite2.bitmap = hourglass_sprite.bitmap;
     caret_sprite2.bitmap = caret_sprite.bitmap;
     hand_sprite2.bitmap = hand_sprite.bitmap;
+    resize_sprite2.bitmap = resize_sprite.bitmap;
 
     if (classic_sprite.bitmap != NULL)
         gpx_show_sprite(gpx, &classic_sprite);
@@ -94,6 +100,8 @@ int main(void)
         gpx_show_sprite(gpx, &caret_sprite);
     if (hand_sprite.bitmap != NULL)
         gpx_show_sprite(gpx, &hand_sprite);
+    if (resize_sprite.bitmap != NULL)
+        gpx_show_sprite(gpx, &resize_sprite);
 
     if (classic_sprite2.bitmap != NULL)
         gpx_show_sprite(gpx, &classic_sprite2);
@@ -105,6 +113,8 @@ int main(void)
         gpx_show_sprite(gpx, &caret_sprite2);
     if (hand_sprite2.bitmap != NULL)
         gpx_show_sprite(gpx, &hand_sprite2);
+    if (resize_sprite2.bitmap != NULL)
+        gpx_show_sprite(gpx, &resize_sprite2);
 
     if (classic_sprite2.bitmap != NULL)
         gpx_hide_sprite(gpx, &classic_sprite2);
@@ -116,6 +126,8 @@ int main(void)
         gpx_hide_sprite(gpx, &caret_sprite2);
     if (hand_sprite2.bitmap != NULL)
         gpx_hide_sprite(gpx, &hand_sprite2);
+    if (resize_sprite2.bitmap != NULL)
+        gpx_hide_sprite(gpx, &resize_sprite2);
 
     __asm__("halt");
 

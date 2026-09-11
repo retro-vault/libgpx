@@ -72,11 +72,12 @@ modes.
 the CPC in each mode. Every image is run on its own emulator, the top-left
 256x192 of each raster is extracted, and everything is diffed against the ZX.
 
-The Partner has exactly three documented exceptions, recorded with their pixel
-budgets in `ACCEPTED` at the top of `tests/mcp/conformance.py`: slanted solid
-lines, and the two text phases (it ships a different font). The CPC has **no**
-exceptions in either mode -- it shares the ZX's font, stock cursors and
-software rasteriser, so anything but an exact match is a bug.
+The Partner's documented exceptions are recorded per scenario and phase, with
+pixel budgets, in `ACCEPTED` at the top of `tests/mcp/conformance.py`. They are
+limited to EF9367 slanted-solid rasterization and backend-native font/cursor
+artwork. The CPC has **no** exceptions in either mode -- it shares the ZX's
+font, stock cursors and software rasteriser, so anything but an exact match is
+a bug.
 
 ## Commands
 
@@ -124,6 +125,13 @@ cases, checking arbitrary AND/OR planes, every alignment, deep clipping,
 complete save-under buffers, screen attributes, memory guards and IX/IY/stack
 preservation. The Python models compute expected pixels directly.
 
+`tests/zx/span_regressions.py` adds 408 fill, box and public-entry checks:
+COPY/OR/XOR on seeded pixels, reversed and extreme rectangles, inverted clips,
+all edge masks, clipping-independent box pattern continuation, screen attributes,
+memory guards and IX/IY/stack preservation. It runs under `make zx-tests` too.
+The [11 September ZX report](../docs/research/OPTIMIZATION-ZX-2026-09-11.md)
+records the 420-byte reduction and timings against the pre-pass working tree.
+
 `make cpc-tests` also runs `tests/cpc/optimization_regressions.py`: 908
 independent checks of comparison flags and raw framebuffer contents across both
 modes, including untouched color-plane bits and X clipping above 255.
@@ -138,8 +146,9 @@ records their unchanged before/after counts and the separate baseline-raster
 comparison.
 
 `make -C tests/partner pattern-tests` checks every horizontal pattern byte
-against an independent pixel oracle: 8,192 calls over mixed backgrounds,
-including copy/XOR, both directions, clipped origins and 255/256 boundaries.
+against an independent pixel oracle: 12,288 calls and 12,582,912 pixel checks
+over mixed backgrounds, including copy/OR/XOR, both colours, both directions,
+clipped origins and 255/256 boundaries.
 It also runs 60 full-raster fill cases across both Partner heights, with
 extreme signed origins and pattern lengths up to 255. These checks run before
 the recorded-golden gate. The pattern fixture uses its scalar oracle instead

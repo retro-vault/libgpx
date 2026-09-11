@@ -25,7 +25,7 @@ static void sweep(gpx_t *gpx, uint16_t seed)
     rnd_seed(seed);
     for (i = 0; i < 40; ++i) {
         color c = (color)(rnd() & 1);
-        bmode m = (bmode)(rnd() & 1);
+        bmode m = (bmode)(rnd() % 3);
         uint8_t p = (uint8_t)rnd();
 
         r.x0 = rnd_between(-140, ZX_W + 140);

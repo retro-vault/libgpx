@@ -3,15 +3,15 @@
 A 1-bit-per-pixel graphics library for Z80 machines and the Rasta Linux
 framebuffer emulator. Z80 targets use hand-optimised assembly; Rasta uses C11.
 
-libgpx gives you pixels, lines, rectangles, pattern fills, circles,
-polygons, text and sprites behind one API that behaves the same on every
-supported machine, so a program written against it draws the same picture
-wherever it runs.
+libgpx gives you pixels, lines, selected-edge boxes, opaque and stencil pattern
+fills, circles, polygons, text and sprites behind one API that behaves the same
+on every supported machine, so a program written against it draws the same
+picture wherever it runs.
 
 **The full programming manual is
 [docs/manuals/PROGRAMMING-LIBGPX.md](docs/manuals/PROGRAMMING-LIBGPX.md)** —
 every function, its parameters, worked examples, complete programs and
-screenshots from both machines.
+screenshots from every supported backend.
 
 | Machine | Screen | Backend |
 |---|---|---|
@@ -35,7 +35,7 @@ The panels example on several display layouts:
 | Amstrad CPC, 320 x 200 | ![panels on the Amstrad CPC in mode 1](docs/images/screenshots/panels-cpc-320x200.png) |
 | Rasta, 1920 x 1080 | ![panels on Rasta at Full HD](docs/images/screenshots/panels-rasta.png) |
 
-The [Rasta guide](docs/manuals/RASTA.md#screenshots) also shows the full API
+The [Rasta guide](docs/manuals/RASTA.md#screenshots) also shows the API
 showcase, circles and polygons at 1920 × 1080.
 
 ## Building
@@ -62,7 +62,7 @@ make build         # all of them, plus the test binaries
 make clean
 ```
 
-Rasta implements the full API, including bitmap fonts, all five stock
+Rasta implements the full API, including bitmap fonts, all six stock
 cursors, save-under sprites, circles and polygons. Its pinned emulator
 checkout is downloaded once into `build/rasta/` and reused on later builds,
 including after `make clean`. `make distclean` also removes that cache.
@@ -71,12 +71,16 @@ and emulator. Drawing applications need only libc; SDL2 belongs to the
 viewer. See [the Rasta guide](docs/manuals/RASTA.md) for linking, framebuffer
 configuration, X11 use and packaging.
 
-The core primitives are per machine, hand-written against that machine's
-hardware. The advanced ones -- circles and polygons -- live once in
-`src/common` for Z80, with equivalent C in `src/rasta/advanced.c`, written against the core API rather than against any
-framebuffer, so every backend gets the same picture by construction. `make ADVANCED=0` (`no` and `false` also work) builds only
-the core set; the default builds both. Since the library is an archive,
-a program that draws no circles pays nothing for them either way.
+Every Z80 implementation remains hand-written assembly. Hardware-facing
+engines, including selected-edge boxes, live under `src/zx`, `src/partner`,
+and `src/cpc`.
+Line drawing stays in each backend: ZX and CPC replace
+COPY pixels directly in one raster pass, while Partner alone performs the
+extra strokes required by the EF9367. The advanced circle and polygon assembly
+is under `src/common` too. Rasta provides the equivalent native C
+implementations under `src/rasta`. `make ADVANCED=0` (`no` and `false` also
+work) builds only the core set; the default builds both. Since the library is
+an archive, a program that draws no circles pays nothing for them either way.
 
 One CPC library serves both display modes. Pass `GPXM_CPC_640X200` (the
 default) or `GPXM_CPC_320X200` to `gpx_create()`; it programs the CRTC and
@@ -109,6 +113,9 @@ void main(void)
 Text is opaque by default, including the advance between adjacent characters.
 Call `gpx_set_text_background(gpx, GPX_TEXT_BG_TRANSPARENT)` before drawing an
 overlay that should preserve both the glyph background and character spacing.
+For patterned lines and fills, `BM_CPY` is likewise opaque: pattern one bits
+paint the requested colour and zero bits paint its inverse. Use `BM_OR` when
+pattern zeroes should leave the framebuffer untouched.
 
 Compile and link for the ZX Spectrum:
 
@@ -142,14 +149,15 @@ docker run --rm -u $(id -u):$(id -g) -v "$PWD":/work -w /work \
 
 ## Demos
 
-Every demo builds for both machines. Its page explains the source, build and
-run workflow, and places MCP-emulator screenshots side by side so backend and
-screen-geometry differences are visible.
+Every demo builds for the Spectrum and Partner, and the documentation capture
+also builds it directly for both CPC modes and Rasta where applicable. Each
+page explains the source and places emulator screenshots side by side so
+backend and screen-geometry differences are visible.
 
 | Demo | What it demonstrates |
 |---|---|
 | [Demo 1 — dimensions and cursors](samples/demo1/README.md) | fixed 256x192 fill, reported screen size, stock cursors, sprite show/hide |
-| [Demo 2 — full-API smoke test](samples/demo2/README.md) | fixed 1024x256 diagnostic scene and physical-screen clipping |
+| [Demo 2 — drawing-API smoke test](samples/demo2/README.md) | fixed 1024x256 diagnostic scene and physical-screen clipping |
 | [Demo 3 — portable examples](samples/demo3/README.md) | resolution-adaptive panels and sprite restoration programs |
 | [Demo 4 — circles](samples/demo4/README.md) | circle outlines, pattern fills, XOR overlap and clipping |
 | [Demo 5 — polygons](samples/demo5/README.md) | polygon outlines, concave and self-intersecting fills, even-odd |
@@ -174,16 +182,17 @@ connects these programs to the API concepts they exercise.
 | Display | 256 x 192 | 1024 x 256 | 640 x 200 / 320 x 200 |
 | Z80 clock | 3.5 MHz | 4 MHz | 4 MHz |
 | Drawing | software | EF9367 coprocessor | software |
-| Library size | 9,015 B | 9,007 B | 9,815 B |
-| ...core only (`ADVANCED=0`) | 6,857 B | 6,849 B | 7,657 B |
+| Library code and assets | 8,986 B | 9,509 B | 10,299 B |
+| ...core only (`ADVANCED=0`) | 6,816 B | 7,339 B | 8,129 B |
 
 The CPC is the largest because one library serves both display modes, and
 mode 1 packs four pixels to a byte where mode 2 packs eight -- so the span,
-blit and line paths each carry a second form. The Partner is the smallest
-because the chip does the rasterising.
+blit and line paths each carry a second form. These are uncompressed `_CODE`
+bytes summed across library members, including fonts and cursors but excluding
+startup code and writable data; an application links only the members it uses.
 
-The advanced half costs the same 2,158 bytes on every backend: 1,274 B
-for `gpx_fill_polygon`, 375 for `gpx_fill_circle`, 327 for
+The advanced half costs the same 2,170 bytes on every backend: 1,280 B
+for `gpx_fill_polygon`, 381 for `gpx_fill_circle`, 327 for
 `gpx_draw_circle`, 159 for `gpx_draw_polygon`, and 23 in shared arithmetic
 helpers. A program pays only for the archive members it calls. Each helper
 has its own member, so selecting one shape does not pull another shape's
@@ -193,6 +202,11 @@ The [September 2026 optimization report](docs/research/OPTIMIZATION-2026-09.md)
 records before/after sizes, raw timings, validation and known test limitations.
 Font data and formats are unchanged.
 
+The [11 September ZX follow-up](docs/research/OPTIMIZATION-ZX-2026-09-11.md)
+saves another 420 bytes against the working-tree version with opaque patterns
+and selected-edge boxes (9,406 → 8,986 B). All nine ZX microbenchmarks are
+unchanged or faster; bitmap/font formats and byte-based drawing are retained.
+
 ### Speed
 
 `make crossbench` draws the *same picture* on every machine -- fixed
@@ -200,6 +214,9 @@ coordinates inside a 256x192 box that fits every display -- and times it, so
 the numbers can be compared directly. The per-backend suites
 (`make zx-bench`, `make cpc-bench`) size their work from `gpx_width()` and
 so cannot be.
+
+These figures are the v1.1.0 baseline; they predate the opaque-pattern and UI
+composition additions in this working tree.
 
 Milliseconds, because the Spectrum's Z80 runs at 3.5 MHz and the other two at
 4 MHz. Lower is better; the best in each row is in bold.
@@ -223,7 +240,9 @@ What the table shows:
 * **Partner hardware vectors remain fastest for solid lines.** Selected
   horizontal patterns now use one to three hardware passes. This mixed
   patterned-fill workload still takes 4.6 times the Spectrum's time because
-  it also needs scalar plotting, including alternating patterns in copy mode.
+  it also needs scalar plotting for arbitrary pattern rows. Alternating
+  `BM_CPY` lines now compose a solid inverse-colour base with shifted native
+  XOR strokes.
 * **Direct pixel calls bring Partner circle outlines close to Spectrum.**
   Filled circles and polygons put Partner first because their scanlines use
   hardware horizontal runs. Its star outline takes 79 ms versus 258 on CPC.

@@ -11,7 +11,7 @@ ADVANCED_ON := $(if $(filter $(ADVANCED),$(ADVANCED_FALSE)),0,1)
 RASTA_REVISION := 3dd2426f5c4bddf7d0eb4961d73c2e8c68e3510a
 OBJ_DIR := $(BUILD_DIR)/rasta-lib
 OUT_DIR := $(BIN_DIR)/rasta
-SOURCES := context primitives bitmap text assets
+SOURCES := context primitives bitmap text assets box
 ifeq ($(ADVANCED_ON),1)
 SOURCES += advanced
 endif

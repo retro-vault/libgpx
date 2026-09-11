@@ -148,8 +148,12 @@ def main():
                 x0, x1 = rng.randrange(width), rng.randrange(width)
                 y0, y1 = rng.randrange(200), rng.randrange(200)
                 pattern = rng.randrange(256)
+                draw_mode = trial % 3
+                color = (trial // 3) & 1
                 result = invoke(machine, image, "_gpx_draw_line",
-                                word(y0) + word(x1) + word(y1) + b"\x01\x01" + bytes((pattern,)) + word(0),
+                                word(y0) + word(x1) + word(y1)
+                                + bytes((color, draw_mode, pattern))
+                                + word(0),
                                 hl=0, de=x0)
                 dx, dy = abs(x1 - x0), abs(y1 - y0)
                 sx, sy = 1 if x1 >= x0 else -1, 1 if y1 >= y0 else -1
@@ -157,7 +161,15 @@ def main():
                 error = dx // 2 if dx >= dy else -(dy // 2)
                 for step in range(max(dx, dy) + 1):
                     if pattern & (1 << (step % 8)):
-                        pixel(expected, per_byte, x, y, lambda old: not old)
+                        if draw_mode == 1:
+                            pixel(expected, per_byte, x, y,
+                                  lambda old: not old)
+                        else:
+                            pixel(expected, per_byte, x, y,
+                                  lambda old, color=color: bool(color))
+                    elif draw_mode == 0:
+                        pixel(expected, per_byte, x, y,
+                              lambda old, color=color: not bool(color))
                     if dx >= dy:
                         error -= dy
                         if error < 0:
@@ -205,9 +217,11 @@ def main():
 
             # Large original y coordinates used to require up to 32,768
             # repeated subtractions before a single visible row was drawn.
+            # Start with every pixel set so this also proves that BM_CPY is
+            # opaque: zero bits in the fill pattern must clear old pixels.
             for origin in (-32768, -32767, -257, -1, 0):
                 for count in (1, 3, 5, 127, 128, 255):
-                    expected = bytearray(16384)
+                    expected = bytearray(b"\xff" * 16384)
                     write(machine, 0xC000, expected)
                     pattern = bytes((i * 73 + 0x96) & 255 for i in range(count))
                     write(machine, 0x2000, pattern)
@@ -217,8 +231,10 @@ def main():
                            hl=0, de=0x2100)
                     for y in range(5):
                         for x in range(13, 26):
-                            if pattern[(y - origin) % count] & (0x80 >> ((x - 13) % 8)):
-                                pixel(expected, per_byte, x, y, lambda old: True)
+                            value = bool(pattern[(y - origin) % count]
+                                         & (0x80 >> ((x - 13) % 8)))
+                            pixel(expected, per_byte, x, y,
+                                  lambda old, value=value: value)
                     check(machine, expected, (tag, "fill phase", origin, count))
             print(f"{tag}: 225 compare, 112 bitmap, 87 line and 30 fill cases passed")
 

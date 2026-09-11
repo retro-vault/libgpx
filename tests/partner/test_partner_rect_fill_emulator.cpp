@@ -23,6 +23,30 @@ void check(bool condition, const std::string &message, int &failures)
     }
 }
 
+/* Box patterns advance clockwise over each unique outline pixel: top,
+   right, bottom in reverse, then left in reverse. */
+void check_box(const std::vector<uint8_t> &screen,
+               int x0, int y0, int x1, int y1, uint8_t pattern,
+               int width, int height, int &failures, const char *label)
+{
+    int phase = 0;
+    auto check_pixel = [&](int x, int y) {
+        bool expected = ((pattern >> (phase & 7)) & 1) != 0;
+        check(pixel_on(screen, x, y, width, height) == expected,
+              label, failures);
+        ++phase;
+    };
+
+    for (int x = x0; x <= x1; ++x)
+        check_pixel(x, y0);
+    for (int y = y0 + 1; y <= y1; ++y)
+        check_pixel(x1, y);
+    for (int x = x1 - 1; x >= x0; --x)
+        check_pixel(x, y1);
+    for (int y = y1 - 1; y > y0; --y)
+        check_pixel(x0, y);
+}
+
 /* A fill takes its pattern MSB-first from the rectangle's own left edge, and
    its row from the rectangle's own top edge -- both measured on the
    unclipped rectangle, so clipping never shifts the pattern. Same rule as
@@ -32,7 +56,8 @@ void check_fill(const std::vector<uint8_t> &screen,
                 int rx0, int ry0, int rx1, int ry1,
                 const int *clip,
                 const uint8_t *fpatt, int len,
-                int width, int height, int &failures, const char *label)
+                int width, int height, int &failures, const char *label,
+                bool invert = false)
 {
     int vx0 = rx0, vy0 = ry0, vx1 = rx1, vy1 = ry1;
     if (clip) {
@@ -45,6 +70,7 @@ void check_fill(const std::vector<uint8_t> &screen,
         uint8_t p = fpatt[(y - ry0) % len];
         for (int x = vx0; x <= vx1; ++x) {
             bool expected = ((p >> (7 - ((x - rx0) & 7))) & 1) != 0;
+            expected = expected != invert;
             check(pixel_on(screen, x, y, width, height) == expected,
                   label, failures);
         }
@@ -70,28 +96,8 @@ int main()
     std::vector<uint8_t> screen = partner_screen_snapshot(mmu, width, height);
     int failures = 0;
 
-    // Dotted rectangle top/bottom (2 on, 2 off) and solid sides.
-    check(pixel_on(screen, 8, 6, width, height), "rect0 top x8 missing", failures);
-    check(pixel_on(screen, 9, 6, width, height), "rect0 top x9 missing", failures);
-    check(!pixel_on(screen, 10, 6, width, height), "rect0 top x10 should be off", failures);
-    check(!pixel_on(screen, 11, 6, width, height), "rect0 top x11 should be off", failures);
-    check(pixel_on(screen, 12, 6, width, height), "rect0 top x12 missing", failures);
-    check(pixel_on(screen, 13, 6, width, height), "rect0 top x13 missing", failures);
-    check(!pixel_on(screen, 14, 6, width, height), "rect0 top x14 should be off", failures);
-    check(!pixel_on(screen, 15, 6, width, height), "rect0 top x15 should be off", failures);
-
-    check(pixel_on(screen, 8, 12, width, height), "rect0 bottom x8 missing", failures);
-    check(pixel_on(screen, 9, 12, width, height), "rect0 bottom x9 missing", failures);
-    check(!pixel_on(screen, 10, 12, width, height), "rect0 bottom x10 should be off", failures);
-    check(!pixel_on(screen, 11, 12, width, height), "rect0 bottom x11 should be off", failures);
-    check(pixel_on(screen, 12, 12, width, height), "rect0 bottom x12 missing", failures);
-    check(pixel_on(screen, 13, 12, width, height), "rect0 bottom x13 missing", failures);
-    check(!pixel_on(screen, 14, 12, width, height), "rect0 bottom x14 should be off", failures);
-    check(!pixel_on(screen, 15, 12, width, height), "rect0 bottom x15 should be off", failures);
-    for (int y = 7; y <= 11; ++y) {
-        check(pixel_on(screen, 8, y, width, height), "rect0 left side missing", failures);
-        check(pixel_on(screen, 15, y, width, height), "rect0 right side missing", failures);
-    }
+    check_box(screen, 8, 6, 15, 12, 0x33,
+              width, height, failures, "rect0 continuous pattern mismatch");
 
     // Clipped solid rectangle: only clipped top edge and clipped right side survive.
     for (int x = 20; x <= 30; ++x)
@@ -116,6 +122,17 @@ int main()
                width, height, failures, "fill2 mismatch");
     check_fill(screen, 300, 100, 900, 240, fr3_clip, fp3, 3,
                width, height, failures, "fill3 mismatch");
+
+    static const uint8_t checker[2] = {0x55, 0xAA};
+    check_fill(screen, 20, 60, 83, 75, nullptr, checker, 2,
+               width, height, failures, "opaque COPY fill mismatch");
+    static const uint8_t alternating[1] = {0xAA};
+    check_fill(screen, 20, 78, 83, 93, nullptr, alternating, 1,
+               width, height, failures,
+               "CO_BACK alternating COPY fill mismatch", true);
+    static const uint8_t or_result[1] = {0x44};
+    check_fill(screen, 20, 96, 83, 111, nullptr, or_result, 1,
+               width, height, failures, "BM_OR fill mismatch");
 
     /* Nothing may escape a clip window or a rectangle's own bounds. */
     check(!pixel_on(screen, 52, 32, width, height), "fill1 leaked left of clip", failures);

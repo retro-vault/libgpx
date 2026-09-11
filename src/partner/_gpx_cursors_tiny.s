@@ -35,6 +35,7 @@
         .globl  _gpx_cur_hourglass_tiny
         .globl  _gpx_cur_caret_tiny
         .globl  _gpx_cur_hand_tiny
+        .globl  _gpx_cur_resize_tiny
 
         .area   _CODE
 
@@ -387,4 +388,66 @@ _gpx_cur_hand_tiny::
         ;;   08: .fmmmmf.
         ;;   09: ..ffff..
         ;; moves: 49
+        ;; color pass order: 2 then 1
+
+_gpx_cur_resize_tiny::
+        .db     0x20                    ; signature: tiny type=10, stride nibble=0
+        .db     0x08                    ; width
+        .db     0x08                    ; height
+        .dw     0x002B                  ; payload size (moves only)
+        .db     0x28                    ; move 000: color=move dx=+1 dy=+1
+        .db     0x41                    ; move 001: color=mask dx=+2 dy=+0
+        .db     0x4A                    ; move 002: color=move dx=-2 dy=+1
+        .db     0x21                    ; move 003: color=mask dx=+1 dy=+0
+        .db     0x2A                    ; move 004: color=move dx=-1 dy=+1
+        .db     0x01                    ; move 005: color=mask dx=+0 dy=+0
+        .db     0x40                    ; move 006: color=move dx=+2 dy=+0
+        .db     0x01                    ; move 007: color=mask dx=+0 dy=+0
+        .db     0x28                    ; move 008: color=move dx=+1 dy=+1
+        .db     0x01                    ; move 009: color=mask dx=+0 dy=+0
+        .db     0x40                    ; move 010: color=move dx=+2 dy=+0
+        .db     0x11                    ; move 011: color=mask dx=+0 dy=+2
+        .db     0x2E                    ; move 012: color=move dx=-1 dy=-1
+        .db     0x09                    ; move 013: color=mask dx=+0 dy=+1
+        .db     0x22                    ; move 014: color=move dx=-1 dy=+0
+        .db     0x01                    ; move 015: color=mask dx=+0 dy=+0
+        .db     0x7E                    ; move 016: color=move dx=-3 dy=-3
+        .db     0x3E                    ; move 017: color=move dx=-1 dy=-3
+        .db     0xE0                    ; move 018: color=fore dx=+3 dy=+0
+        .db     0x20                    ; move 019: color=move dx=+1 dy=+0
+        .db     0x98                    ; move 020: color=fore dx=+0 dy=+3
+        .db     0x76                    ; move 021: color=move dx=-3 dy=-2
+        .db     0x22                    ; move 022: color=move dx=-1 dy=+0
+        .db     0x98                    ; move 023: color=fore dx=+0 dy=+3
+        .db     0x74                    ; move 024: color=move dx=+3 dy=-2
+        .db     0x80                    ; move 025: color=fore dx=+0 dy=+0
+        .db     0x2A                    ; move 026: color=move dx=-1 dy=+1
+        .db     0x88                    ; move 027: color=fore dx=+0 dy=+1
+        .db     0x6C                    ; move 028: color=move dx=+3 dy=-1
+        .db     0xC0                    ; move 029: color=fore dx=+2 dy=+0
+        .db     0x6A                    ; move 030: color=move dx=-3 dy=+1
+        .db     0x62                    ; move 031: color=move dx=-3 dy=+0
+        .db     0x80                    ; move 032: color=fore dx=+0 dy=+0
+        .db     0x40                    ; move 033: color=move dx=+2 dy=+0
+        .db     0x98                    ; move 034: color=fore dx=+0 dy=+3
+        .db     0x5C                    ; move 035: color=move dx=+2 dy=-3
+        .db     0x80                    ; move 036: color=fore dx=+0 dy=+0
+        .db     0x40                    ; move 037: color=move dx=+2 dy=+0
+        .db     0x98                    ; move 038: color=fore dx=+0 dy=+3
+        .db     0x76                    ; move 039: color=move dx=-3 dy=-2
+        .db     0x80                    ; move 040: color=fore dx=+0 dy=+0
+        .db     0x10                    ; move 041: color=move dx=+0 dy=+2
+        .db     0xC0                    ; move 042: color=fore dx=+2 dy=+0
+        .db     0x00                    ; hotspot_x
+        .db     0x00                    ; hotspot_y
+        ;; 3-state rows: . = bg, m = mask, f = fore
+        ;;   00: fffff...
+        ;;   01: fmmmf...
+        ;;   02: fmmff...
+        ;;   03: fmfmffff
+        ;;   04: ffffmfmf
+        ;;   05: ...ffmmf
+        ;;   06: ...fmmmf
+        ;;   07: ...fffff
+        ;; moves: 43
         ;; color pass order: 2 then 1

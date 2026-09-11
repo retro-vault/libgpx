@@ -19,12 +19,15 @@
         .globl  s__INITIALIZED
         .globl  s__INITIALIZER
         .globl  l__INITIALIZER
+        .globl  s__CODE
 
         .area   _CODE
         ;; ------------------------------------------------------------
         ;; init
-        ;; Program entry. Sets up a private stack below the screen, copies
-        ;; the C initializers, calls main(), and halts.
+        ;; Program entry. Sets up a private stack below the linked program,
+        ;; copies the C initializers, calls main(), and halts. Keeping the
+        ;; downward-growing stack below s__CODE prevents a large BSS from
+        ;; moving its top into the framebuffer at 0xC000.
         ;;
         ;; Arguments:
         ;;   none
@@ -37,7 +40,7 @@
         ;;   .gsinit
 init::
         di
-        ld      sp,#__stack
+        ld      sp,#s__CODE
         call    .gsinit
         call    _main
         halt
@@ -63,8 +66,3 @@ init::
 .gs_none:
         .area   _GSFINAL
         ret
-
-        .area   _DATA
-        .area   _BSS
-        .ds     512
-__stack::

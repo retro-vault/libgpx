@@ -1,0 +1,283 @@
+{
+  "after_modules": {
+    "_gpx_bresenham_line": {
+      "_CODE": 1173
+    },
+    "_gpx_circle_cmp": {
+      "_CODE": 16
+    },
+    "_gpx_cursors": {
+      "_CODE": 152
+    },
+    "_gpx_ffshr": {
+      "_CODE": 20
+    },
+    "_gpx_font_envy": {
+      "_CODE": 1440
+    },
+    "_gpx_get_stock_bmp": {
+      "_CODE": 46
+    },
+    "_gpx_get_system_font": {
+      "_CODE": 4
+    },
+    "_gpx_get_tiny_font": {
+      "_CODE": 4
+    },
+    "_gpx_hline": {
+      "_CODE": 455
+    },
+    "_gpx_neg_hl": {
+      "_CODE": 7
+    },
+    "_gpx_sprite_blit_raw": {
+      "_CODE": 397
+    },
+    "_gpx_store_background": {
+      "_CODE": 186
+    },
+    "_rect_helpers": {
+      "_CODE": 126
+    },
+    "_video": {
+      "_CODE": 53
+    },
+    "gpx_bmp": {
+      "_CODE": 842
+    },
+    "gpx_clrscr": {
+      "_CODE": 46
+    },
+    "gpx_create": {
+      "_CODE": 15,
+      "_DATA": 8
+    },
+    "gpx_destroy": {
+      "_CODE": 1
+    },
+    "gpx_draw_box": {
+      "_CODE": 393
+    },
+    "gpx_draw_circle": {
+      "_CODE": 327
+    },
+    "gpx_draw_line": {
+      "_CODE": 94
+    },
+    "gpx_draw_pixel": {
+      "_CODE": 144
+    },
+    "gpx_draw_polygon": {
+      "_CODE": 159
+    },
+    "gpx_draw_rectangle": {
+      "_CODE": 9
+    },
+    "gpx_draw_text": {
+      "_CODE": 487
+    },
+    "gpx_fill_circle": {
+      "_CODE": 381
+    },
+    "gpx_fill_polygon": {
+      "_CODE": 1280
+    },
+    "gpx_fill_rectangle": {
+      "_CODE": 341
+    },
+    "gpx_height": {
+      "_CODE": 9
+    },
+    "gpx_hide_sprite": {
+      "_CODE": 34
+    },
+    "gpx_measure_text": {
+      "_CODE": 126
+    },
+    "gpx_set_page": {
+      "_CODE": 1
+    },
+    "gpx_set_text_background": {
+      "_CODE": 18
+    },
+    "gpx_show_sprite": {
+      "_CODE": 193
+    },
+    "gpx_width": {
+      "_CODE": 7
+    }
+  },
+  "backend": "zx",
+  "baseline": "Pre-pass working tree, including opaque patterns and selected-edge boxes; not the older committed baseline.",
+  "before_modules": {
+    "_gpx_bresenham_line": {
+      "_CODE": 1173
+    },
+    "_gpx_circle_cmp": {
+      "_CODE": 16
+    },
+    "_gpx_cursors": {
+      "_CODE": 152
+    },
+    "_gpx_ffshr": {
+      "_CODE": 20
+    },
+    "_gpx_font_envy": {
+      "_CODE": 1440
+    },
+    "_gpx_get_stock_bmp": {
+      "_CODE": 46
+    },
+    "_gpx_get_system_font": {
+      "_CODE": 4
+    },
+    "_gpx_get_tiny_font": {
+      "_CODE": 4
+    },
+    "_gpx_hline": {
+      "_CODE": 472
+    },
+    "_gpx_neg_hl": {
+      "_CODE": 7
+    },
+    "_gpx_sprite_blit_raw": {
+      "_CODE": 424
+    },
+    "_gpx_store_background": {
+      "_CODE": 186
+    },
+    "_rect_helpers": {
+      "_CODE": 161
+    },
+    "_video": {
+      "_CODE": 53
+    },
+    "gpx_bmp": {
+      "_CODE": 923
+    },
+    "gpx_clrscr": {
+      "_CODE": 46
+    },
+    "gpx_create": {
+      "_CODE": 15,
+      "_DATA": 8
+    },
+    "gpx_destroy": {
+      "_CODE": 1
+    },
+    "gpx_draw_box": {
+      "_CODE": 449
+    },
+    "gpx_draw_circle": {
+      "_CODE": 327
+    },
+    "gpx_draw_line": {
+      "_CODE": 94
+    },
+    "gpx_draw_pixel": {
+      "_CODE": 159
+    },
+    "gpx_draw_polygon": {
+      "_CODE": 159
+    },
+    "gpx_draw_rectangle": {
+      "_CODE": 57
+    },
+    "gpx_draw_text": {
+      "_CODE": 501
+    },
+    "gpx_fill_circle": {
+      "_CODE": 381
+    },
+    "gpx_fill_polygon": {
+      "_CODE": 1280
+    },
+    "gpx_fill_rectangle": {
+      "_CODE": 397
+    },
+    "gpx_height": {
+      "_CODE": 9
+    },
+    "gpx_hide_sprite": {
+      "_CODE": 34
+    },
+    "gpx_measure_text": {
+      "_CODE": 126
+    },
+    "gpx_set_page": {
+      "_CODE": 1
+    },
+    "gpx_set_text_background": {
+      "_CODE": 18
+    },
+    "gpx_show_sprite": {
+      "_CODE": 264
+    },
+    "gpx_width": {
+      "_CODE": 7
+    }
+  },
+  "benchmarks_tstates": {
+    "bench_bmp": {
+      "after": 19418980,
+      "before": 19574709
+    },
+    "bench_circle": {
+      "after": 23712582,
+      "before": 27429930
+    },
+    "bench_clrscr": {
+      "after": 1993306,
+      "before": 1993306
+    },
+    "bench_fill": {
+      "after": 6162660,
+      "before": 13632352
+    },
+    "bench_line": {
+      "after": 15557027,
+      "before": 16677941
+    },
+    "bench_pixel": {
+      "after": 5981875,
+      "before": 6226827
+    },
+    "bench_rect": {
+      "after": 9980618,
+      "before": 10458270
+    },
+    "bench_sprite": {
+      "after": 7700593,
+      "before": 7793466
+    },
+    "bench_text": {
+      "after": 21267754,
+      "before": 21707567
+    }
+  },
+  "code_after": 8986,
+  "code_before": 9406,
+  "data_after": 8,
+  "data_before": 8,
+  "date": "2026-09-11",
+  "local_snapshot": "build/zx-size-pass-J0078z",
+  "size_metric": "Uncompressed assembler _CODE bytes summed across library members, including fonts/cursors.",
+  "unchanged_asset_source_sha256": {
+    "_gpx_cursors.s": "e336cdd8f9178c8488a35aa0bcf8add012a7919759fe8973d3e299a792de939a",
+    "_gpx_font_envy.s": "6c7a34a4ce3df0ffaff6f552178aec20c5e909ceceda6072742496665ee61095"
+  },
+  "validation": {
+    "zx_oracle_scenarios": 54,
+    "independent_bitmap_cases": 362,
+    "independent_sprite_cases": 1037,
+    "independent_span_box_abi_cases": 408,
+    "conformance_scenarios": 6,
+    "conformance_note": "Pass with existing Partner exceptions; CPC modes match exactly.",
+    "regenerated_zx_screenshots": 6,
+    "screenshots_byte_identical_to_baseline": true,
+    "assembly_style_files": 101,
+    "assembly_style_violations": 0,
+    "final_archive_objects_identical_to_tested_build": true,
+    "status": "passed"
+  }
+}

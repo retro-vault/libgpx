@@ -80,7 +80,7 @@ void main(void)
 
     /* --- every stock cursor, unclipped, as the fast-path control --- */
     gpx_clrscr();
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i <= GPXSB_CURSOR_RESIZE; i++) {
         sprite_t s;
         s.bitmap = gpx_get_stock_bmp((uint8_t)i);
         s.background = (bmp_t *)under;

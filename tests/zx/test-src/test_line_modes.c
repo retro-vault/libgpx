@@ -1,6 +1,6 @@
 #include "zxtest.h"
 
-/* CO_BACK and BM_XOR on every raster path, over seeded content. */
+/* COPY, OR and XOR on every raster path, over seeded content. */
 void main(void)
 {
     gpx_t *gpx = gpx_create(GPXM_DEFAULT);
@@ -18,10 +18,15 @@ void main(void)
             (coord)(60 + i * 4), CO_BACK, BM_CPY, 0xFF, (const rect_t *)0);
     }
 
-    /* Erase with a dash: only the pattern-1 pixels clear. */
+    /* Opaque erase with a dash: one bits clear and zero bits set. */
     for (i = 0; i < 8; ++i)
         gpx_draw_line(gpx, 0, (coord)(70 + i), 255, (coord)(70 + i),
             CO_BACK, BM_CPY, patt_bytes[i], (const rect_t *)0);
+
+    /* OR preserves pattern-zero pixels instead of painting their inverse. */
+    for (i = 0; i < 8; ++i)
+        gpx_draw_line(gpx, 0, (coord)(80 + i), 255, (coord)(80 + i),
+            CO_BACK, BM_OR, patt_bytes[i], (const rect_t *)0);
 
     /* XOR inverts; XOR twice restores. Both colours must behave the same. */
     for (i = 0; i < 8; ++i) {

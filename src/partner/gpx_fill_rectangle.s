@@ -338,9 +338,13 @@ _gpx_fill_rectangle::
         ld      e,ROW_IDX(ix)
         ld      d,#0x00
         add     hl,de
-        ld      a,(hl)
+        ld      a,5(ix)                 ; only BM_CPY paints pattern zeroes
         or      a
-        jr      z,.fr_row_done          ; zero pattern cannot draw any pixel
+        ld      a,(hl)                  ; LD preserves the mode zero flag
+        jr      z,.fr_row_convert
+        or      a
+        jr      z,.fr_row_done          ; OR/XOR zero pattern changes nothing
+.fr_row_convert:
         cp      #0xFF
         jr      z,.fr_row_draw          ; FF stays FF under reversal/rotation
 
@@ -368,8 +372,39 @@ _gpx_fill_rectangle::
 .fr_rot_test:
         djnz    .fr_rot_loop
 .fr_row_draw:
+        ld      b,5(ix)
+        inc     b
+        dec     b                       ; test mode without disturbing pattern
+        jr      nz,.fr_row_stipple
+
+        ;; Opaque copy on the write-only GDP: paint the inverse colour as a
+        ;; solid base, then XOR the requested pattern. Alternating patterns
+        ;; reach __gpx_horizontal_prepared's shifted native 1100 strokes.
+        push    af                      ; converted row pattern
+        xor     a                       ; BM_CPY
+        call    __ef9367_set_blit_mode
+        ld      a,4(ix)
+        xor     #0x01                   ; pattern zero colour
+        call    __ef9367_set_color
+        ld      a,#0xFF
+        call    .fr_draw_row
+        ld      a,#0x01                 ; BM_XOR
+        call    __ef9367_set_blit_mode
+        ld      a,#0x01                 ; XOR uses the drawing pen
+        call    __ef9367_set_color
+        pop     af
+        or      a
+        jr      z,.fr_row_done
+        call    .fr_draw_row
+        jr      .fr_row_done
+
+.fr_row_stipple:
         ;; The rectangle already clipped this row and programmed its mode.
         ;; Pass coordinates directly to the frame-free patterned renderer.
+        call    .fr_draw_row
+        jr      .fr_row_done
+
+.fr_draw_row:
         ld      l,V_X0_LO(ix)
         ld      h,V_X0_HI(ix)
         ld      e,V_X1_LO(ix)
@@ -377,6 +412,7 @@ _gpx_fill_rectangle::
         ld      c,Y_CUR_LO(ix)
         ld      b,Y_CUR_HI(ix)
         call    __gpx_horizontal_prepared
+        ret
 
 .fr_row_done:
         ;; if (ycur == vis.y1) done

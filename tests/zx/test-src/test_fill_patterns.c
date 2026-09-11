@@ -1,8 +1,8 @@
 #include "zxtest.h"
 
-/* Fill patterns: every length 1..8, applied over seeded content so that
- * the pattern 0-bits are visibly left alone, and at several x offsets so
- * the horizontal phase of the pattern is exercised. */
+/* Fill patterns: every length 1..8, applied over seeded content so COPY's
+ * pattern-zero clearing is visible, and at several x offsets so the
+ * horizontal phase of the pattern is exercised. */
 void main(void)
 {
     gpx_t *gpx = gpx_create(GPXM_DEFAULT);
@@ -50,7 +50,7 @@ void main(void)
     r.y0 = 72; r.y1 = 73;
     gpx_fill_rectangle(gpx, &r, CO_FORE, BM_CPY, p5, 5, (const rect_t *)0);
 
-    /* An all-zero pattern must leave every pixel alone. */
+    /* In foreground COPY, an all-zero pattern clears the whole rectangle. */
     {
         static uint8_t pz[2] = {0x00, 0x00};
         r.x0 = 0; r.y0 = 120; r.x1 = 255; r.y1 = 140;

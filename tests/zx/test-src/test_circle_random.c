@@ -24,7 +24,7 @@ void main(void)
         const uint8_t *screen = zx_vram();
 
         gpx_fill_circle(gpx, x, y, r, (color)(shape & 1),
-            (bmode)((shape >> 1) & 1), pattern, (uint8_t)(1 + shape % 5),
+            (bmode)((shape >> 1) % 3), pattern, (uint8_t)(1 + shape % 5),
             &clip);
         gpx_draw_circle(gpx, x, y, r, CO_FORE, BM_XOR, &clip);
         for (i = 0; i < 0x1800; ++i) {

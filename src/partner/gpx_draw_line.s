@@ -17,6 +17,7 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_line
+        .globl  _gpx_draw_line_raw
         .globl  __gpx_hline
         .globl  __ret_clean11
         .globl  __gpx_cohen_sutherland
@@ -36,6 +37,20 @@
         .include "_ef9367-defs.inc"
 
         .equ    LPATT_SOLID,         0xFF
+        .equ    BM_CPY,              0x00
+        .equ    BM_XOR,              0x01
+        .equ    BM_OR,               0x02
+
+        ;; Public wrapper arguments after PUSH IX.
+        .equ    W_Y0,                4
+        .equ    W_X1,                6
+        .equ    W_Y1,                8
+        .equ    W_C,                 10
+        .equ    W_M,                 11
+        .equ    W_LP,                12
+        .equ    W_CLIP,              13
+        .equ    W_GPX,               -2
+        .equ    W_X0,                -4
 
         ;; locals (15 bytes)
         ;; -12..-11 x0
@@ -75,6 +90,132 @@
         .area   _CODE
 
         ;; ------------------------------------------------------------
+        ;; Partner alone needs composition around its hardware/stencil line
+        ;; engine. BM_OR is the historical stencil operation. Patterned
+        ;; BM_CPY draws an inverse base and then the requested pattern.
+        ;; Clobbers: AF, BC, DE, HL, IX, IY and the alternate set.
+_gpx_draw_line::
+        push    hl
+        ld      hl,#11
+        add     hl,sp
+        ld      a,(hl)
+        pop     hl
+        cp      #BM_OR
+        jr      z,.gw_or
+        or      a
+        jp      nz,_gpx_draw_line_raw
+
+        push    hl
+        ld      hl,#12
+        add     hl,sp
+        ld      a,(hl)
+        pop     hl
+        inc     a
+        jp      z,_gpx_draw_line_raw    ; solid COPY needs no composition
+
+        push    ix
+        ld      ix,#0
+        add     ix,sp
+        push    hl
+        push    de
+        pop     hl
+        ld      W_X0(ix),l
+        ld      W_X0+1(ix),h
+        pop     hl
+        ld      W_GPX(ix),l
+        ld      W_GPX+1(ix),h
+        ld      hl,#-4
+        add     hl,sp
+        ld      sp,hl
+
+        ;; Axis-aligned lines use the EF9367-friendly solid inverse base and
+        ;; patterned XOR stroke. Slanted lines use complementary stencil
+        ;; passes so both traverse identical software Bresenham pixels.
+        ld      l,W_X1(ix)
+        ld      h,W_X1+1(ix)
+        ld      e,W_X0(ix)
+        ld      d,W_X0+1(ix)
+        or      a
+        sbc     hl,de
+        jr      z,.gw_axis
+        ld      l,W_Y1(ix)
+        ld      h,W_Y1+1(ix)
+        ld      e,W_Y0(ix)
+        ld      d,W_Y0+1(ix)
+        or      a
+        sbc     hl,de
+        jr      z,.gw_axis
+
+        ld      a,W_LP(ix)
+        cpl
+        ld      b,a
+        ld      c,#BM_CPY
+        call    .gw_inverse_pass
+        ld      b,W_LP(ix)
+        ld      c,#BM_CPY
+        call    .gw_color_pass
+        jr      .gw_done
+
+.gw_axis:
+        ld      b,#0xff
+        ld      c,#BM_CPY
+        call    .gw_inverse_pass
+        ld      b,W_LP(ix)
+        ld      c,#BM_XOR
+        call    .gw_color_pass
+
+.gw_done:
+        ld      sp,ix
+        pop     ix
+        jp      .gw_clean11
+
+.gw_or:
+        push    hl
+        ld      hl,#11
+        add     hl,sp
+        ld      (hl),#BM_CPY
+        pop     hl
+        jp      _gpx_draw_line_raw
+
+.gw_inverse_pass:
+        ld      a,W_C(ix)
+        xor     #1
+        and     #1
+        jr      .gw_pass
+.gw_color_pass:
+        ld      a,W_C(ix)
+.gw_pass:
+        ld      e,W_CLIP(ix)
+        ld      d,W_CLIP+1(ix)
+        push    de
+        push    bc
+        push    af
+        inc     sp
+        ld      l,W_Y1(ix)
+        ld      h,W_Y1+1(ix)
+        push    hl
+        ld      l,W_X1(ix)
+        ld      h,W_X1+1(ix)
+        push    hl
+        ld      l,W_Y0(ix)
+        ld      h,W_Y0+1(ix)
+        push    hl
+        ld      e,W_X0(ix)
+        ld      d,W_X0+1(ix)
+        ld      l,W_GPX(ix)
+        ld      h,W_GPX+1(ix)
+        call    _gpx_draw_line_raw
+        ret
+
+.gw_clean11:
+        pop     de
+        ld      hl,#11
+        add     hl,sp
+        ld      sp,hl
+        push    de
+        ret
+
+        ;; ------------------------------------------------------------
         ;; uint8_t gpx_draw_line(gpx_t *gpx,
         ;;                       coord x0, coord y0, coord x1, coord y1,
         ;;                       color c, bmode m, uint8_t lpatt,
@@ -90,7 +231,7 @@
         ;;
         ;; Clobbers:
         ;;   AF, BC, DE, HL, IX, IY
-_gpx_draw_line::
+_gpx_draw_line_raw::
 __gpx_hline::
         push    ix
         ld      ix,#0

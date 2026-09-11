@@ -4,18 +4,19 @@
  * Low-level 1-bit-per-pixel (1bpp) graphics primitives.  Defines
  * the platform-independent drawing API: pixels, lines, rectangles,
  * text, bitmaps and sprites.  Every function declared here is
- * implemented by each backend under src/, using native C for Rasta or
- * hand-written Z80 assembly -- against a packed framebuffer on the ZX Spectrum, and
- * against the EF9367 drawing processor on the Iskra Delta Partner,
- * whose display memory the CPU cannot read at all.
+ * implemented under src/, using native C for Rasta or hand-written Z80
+ * assembly -- against packed framebuffers on the ZX Spectrum and CPC, and
+ * against the EF9367 drawing processor on the Iskra Delta Partner, whose
+ * display memory the CPU cannot read at all.
  *
  * NOTES: All drawing functions accept an optional clip rectangle.
  * Pass NULL to disable clipping.  Colors are 1bpp values: CO_FORE
- * sets a pixel, CO_BACK clears it.  BM_XOR inverts the existing pixel
+ * sets a pixel, CO_BACK clears it. BM_CPY replaces both values of a pattern,
+ * BM_OR preserves pattern-zero pixels, and BM_XOR inverts pattern-one pixels
  * regardless of the color argument.
  *
  * The backends are held to identical behaviour, so a program built on
- * this API draws the same picture on either machine.  Two differences
+ * this API draws the same picture on every backend. Two differences
  * are unavoidable and expected.  Bitmap and font payloads are per
  * platform -- the ZX takes rasters, the Partner takes vector move
  * streams -- so glyphs and sprite artwork differ by design.  And the
@@ -56,10 +57,18 @@ typedef int16_t coord;
 #define CO_BACK 0x00 /* clear pixel bit */
 typedef uint8_t color;
 
-/* Blit mode: copy or XOR. */
-#define BM_CPY 0x00 /* set bit to whatever is in the mask */
-#define BM_XOR 0x01 /* xor with existing framebuffer content */
+/* Blit mode. Patterned operations treat zeroes as source pixels in COPY,
+ * and as transparent pixels in OR and XOR. */
+#define BM_CPY 0x00 /* replace with both source-pattern values */
+#define BM_XOR 0x01 /* xor pattern-one pixels with the destination */
+#define BM_OR  0x02 /* paint c at pattern-one pixels; preserve zeroes */
 typedef uint8_t bmode;
+
+/* Standard eight-pixel line patterns. Patterns are consumed LSB-first. */
+#define GPX_LP_SOLID        0xff
+#define GPX_LP_DOTTED       0xaa
+#define GPX_LP_DASHED       0xf0
+#define GPX_LP_DASHED_SHORT 0xcc
 
 /* Text cell background policy. Opaque text paints glyph boxes and spacing
  * in the inverse text color; transparent text draws glyph ink only. */
@@ -123,12 +132,6 @@ typedef struct bmp_s
 #if defined(__GNUC__)
 #pragma pack(pop)
 #endif
-
-/* Optional trailer convention:
- * For masked bitmaps (BMP_ENC_1BPP_MASK), two trailing bytes may follow payload:
- *   bitmap[size + 0] = hotspot x
- *   bitmap[size + 1] = hotspot y
- * This is used by cursor assets; generic blitters may ignore it. */
 
 /* Forward declaration for APIs that take gpx_t* before full struct definition. */
 typedef struct gpx_s gpx_t;
@@ -200,9 +203,13 @@ extern const font_t *gpx_get_tiny_font(void);
 #define GPXSB_CURSOR_HOURGLASS 2
 #define GPXSB_CURSOR_CARET     3
 #define GPXSB_CURSOR_HAND      4
+#define GPXSB_CURSOR_RESIZE    5
 
 /* Return a pointer to a platform stock bitmap/glyph by id.
- * Returns NULL if the id is not supported on the active platform. */
+ * Returns NULL if the id is not supported on the active platform.
+ * Cursor assets carry their hotspot immediately after bitmap->size payload
+ * bytes. Raster encodings use one packed yyyyxxxx byte; Tiny encodings use
+ * separate hotspot_x, hotspot_y bytes. */
 extern bmp_t *gpx_get_stock_bmp(const uint8_t which);
 
 /* Measure text width in pixels for a serialized font. */
@@ -276,7 +283,8 @@ extern void gpx_draw_pixel(
 
 /* Draw a line from (x0,y0) to (x1,y1) using Bresenham's algorithm.
  * lpatt is an 8-bit dash pattern (0xFF = solid), applied one bit per
- * pixel LSB-first from (x0,y0).
+ * pixel LSB-first from (x0,y0). BM_CPY paints one bits with c and zero
+ * bits with its inverse. BM_OR paints only one bits; BM_XOR toggles them.
  * Returns the rotated pattern byte at the point where the line stopped,
  * so callers can chain patterns seamlessly across multiple segments.
  * Clipped to clip if non-NULL. */
@@ -300,7 +308,24 @@ extern void gpx_show_sprite(gpx_t *gpx, sprite_t *sprite);
  * sprite->x, sprite->y. */
 extern void gpx_hide_sprite(gpx_t *gpx, sprite_t *sprite);
 
-/* Draw the outline of rectangle r with line pattern lpatt. */
+/* Selectable rectangle edges. */
+#define GPX_EDGE_LEFT   0x01
+#define GPX_EDGE_TOP    0x02
+#define GPX_EDGE_RIGHT  0x04
+#define GPX_EDGE_BOTTOM 0x08
+#define GPX_EDGE_ALL    0x0f
+
+/* Draw selected edges clockwise (top, right, bottom, left), carrying lpatt
+ * continuously. Each geometric pixel is combined at most once: earlier
+ * edges in that order own shared corners, and coincident edges of a
+ * degenerate rectangle collapse to one run. The return value is the phase
+ * following the final logical outline pixel, independent of clipping.
+ * Unknown edge bits are ignored; edges == 0 and r == NULL draw nothing. */
+extern uint8_t gpx_draw_box(
+    gpx_t *gpx, const rect_t *r, uint8_t edges,
+    color c, bmode m, uint8_t lpatt, const rect_t *clip);
+
+/* Draw all four edges using gpx_draw_box's XOR-safe corner contract. */
 extern void gpx_draw_rectangle(
     gpx_t *gpx, rect_t *r,
     color c, bmode m, uint8_t lpatt, const rect_t *clip);
@@ -308,7 +333,9 @@ extern void gpx_draw_rectangle(
 /* Fill rectangle r using repeating fill pattern fpatt[fpatt_len].
  * One byte per row from r's top edge, applied MSB-first from r's left
  * edge; both are measured on the unclipped rectangle, so clipping never
- * shifts the pattern. fpatt_len must be >= 1. */
+ * shifts the pattern. In BM_CPY, one bits paint c and zero bits paint its
+ * inverse. BM_OR paints c only at one bits; BM_XOR toggles only one bits.
+ * fpatt_len must be >= 1. */
 extern void gpx_fill_rectangle(
     gpx_t *gpx, rect_t *r,
     color c, bmode m,
@@ -336,8 +363,9 @@ extern void gpx_draw_circle(
     color c, bmode m, const rect_t *clip);
 
 /* Fill the disc centred on (x, y) with radius r using repeating fill
- * pattern fpatt[fpatt_len]. The pattern is anchored to the circle's
- * bounding box exactly as gpx_fill_rectangle anchors to its rectangle:
+ * pattern fpatt[fpatt_len]. BM_CPY paints both pattern values; BM_OR paints
+ * and BM_XOR toggles only pattern-one pixels. The pattern is anchored to
+ * the circle's bounding box exactly as gpx_fill_rectangle anchors to it:
  * one byte per row from the top of the box, applied MSB-first from the
  * box's left edge, both measured before clipping. Filling a circle and
  * filling its bounding box therefore lay the same bits over the pixels
@@ -379,11 +407,12 @@ extern void gpx_draw_polygon(
  * points, so a filled polygon can be given a contrasting outline. Every
  * pixel is painted at most once, so BM_XOR behaves.
  *
- * The pattern is anchored to the polygon's bounding box exactly as
- * gpx_fill_rectangle anchors to its rectangle: one byte per row from the
- * top of the box, applied MSB-first from the box's left edge, both measured
- * before clipping. Filling a rectangle's four corners as a polygon lays
- * down the same bits gpx_fill_rectangle would.
+ * BM_CPY paints both pattern values; BM_OR paints and BM_XOR toggles only
+ * pattern-one pixels. The pattern is anchored to the polygon's bounding box
+ * exactly as gpx_fill_rectangle anchors to its rectangle: one byte per row
+ * from the top of the box, applied MSB-first from the box's left edge, both
+ * measured before clipping. Filling a rectangle's four corners as a polygon
+ * lays down the same bits gpx_fill_rectangle would.
  *
  * Fewer than three points, more than GPX_MAX_POLY_PTS, or fpatt_len == 0
  * draws nothing. Clipped to clip if non-NULL. */

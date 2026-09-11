@@ -143,7 +143,7 @@ int main()
 
     require_on(screen, 260, 20, "normalized rectangle top-left missing", failures);
     require_off(screen, 262, 20, "normalized rectangle pattern expected off", failures);
-    require_on(screen, 260, 21, "normalized rectangle left side missing", failures);
+    require_off(screen, 260, 21, "normalized rectangle left-side phase mismatch", failures);
     require_on(screen, 300, 49, "normalized rectangle right side missing", failures);
 
     for (int y = 80; y <= 110; ++y) {

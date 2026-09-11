@@ -29,5 +29,32 @@ void main(void)
     rect_t fr3_clip = {350, 120, 760, 210};
     gpx_fill_rectangle(gpx, &fr3, CO_FORE, BM_CPY, fp3, 3, &fr3_clip);
 
+    /* COPY must replace pattern zeroes over an already-solid destination. */
+    {
+        uint8_t white[1] = {0xFF};
+        uint8_t checker[2] = {0x55, 0xAA};
+        uint8_t alternating[1] = {0xAA};
+        uint8_t background[1] = {0xCC};
+        rect_t opaque = {20, 60, 83, 75};
+        rect_t opaque_back = {20, 78, 83, 93};
+        rect_t or_fill = {20, 96, 83, 111};
+        gpx_fill_rectangle(gpx, &opaque,
+            CO_FORE, BM_CPY, white, 1, (const rect_t *)0);
+        gpx_fill_rectangle(gpx, &opaque,
+            CO_FORE, BM_CPY, checker, 2, (const rect_t *)0);
+
+        /* The write-only Partner path must realize this as a white base
+         * followed by its shifted native alternating XOR strokes. */
+        gpx_fill_rectangle(gpx, &opaque_back,
+            CO_FORE, BM_CPY, white, 1, (const rect_t *)0);
+        gpx_fill_rectangle(gpx, &opaque_back,
+            CO_BACK, BM_CPY, alternating, 1, (const rect_t *)0);
+
+        gpx_fill_rectangle(gpx, &or_fill,
+            CO_FORE, BM_CPY, background, 1, (const rect_t *)0);
+        gpx_fill_rectangle(gpx, &or_fill,
+            CO_BACK, BM_OR, alternating, 1, (const rect_t *)0);
+    }
+
     __asm__("halt");
 }

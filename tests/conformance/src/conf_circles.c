@@ -104,5 +104,17 @@ void main(void)
         gpx_draw_circle(gpx, 180, 140, 40, CO_FORE, BM_XOR, 0);
         gpx_draw_circle(gpx, 180, 140, 40, CO_FORE, BM_XOR, 0);
     }
+    phase();
+
+    /* OR clears pattern-one pixels and preserves the existing one-bit gaps. */
+    gpx_clrscr();
+    {
+        static rect_t band = {0, 0, 255, 191};
+        static uint8_t solid[1] = {0xFF};
+        static uint8_t check[2] = {0xAA, 0x55};
+        gpx_fill_rectangle(gpx, &band, CO_FORE, BM_CPY, solid, 1, 0);
+        gpx_fill_circle(gpx, 128, 96, 78,
+            CO_BACK, BM_OR, check, 2, 0);
+    }
     done();
 }

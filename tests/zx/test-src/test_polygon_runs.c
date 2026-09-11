@@ -42,7 +42,7 @@ void main(void)
             pts[1] = swap;
         }
         gpx_fill_polygon(gpx, pts, 3, (color)(shape & 1),
-            (bmode)((shape >> 1) & 1), pattern,
+            (bmode)((shape >> 1) % 3), pattern,
             (uint8_t)(1 + shape % 3), (shape & 1) ? &clip : 0);
         record_screen();
     }

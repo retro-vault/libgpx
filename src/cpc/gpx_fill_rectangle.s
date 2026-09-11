@@ -20,6 +20,7 @@
 
         .globl  _gpx_fill_rectangle
         .globl  __gpx_span_row
+        .globl  __gpx_span_row_copy
         .globl  __gpx_span_setup
         .globl  __rect_unpack_norm
         .globl  __clip_seg
@@ -270,7 +271,23 @@ _gpx_fill_rectangle::
         djnz    .fr_patt_rot
 .fr_patt_ready:
         pop     hl
+        ld      b,5(ix)
+        inc     b
+        dec     b                       ; test mode without disturbing pattern
+        jr      nz,.fr_row_stipple
+
+        ;; Readable framebuffer: fold CO_BACK by complementing the desired
+        ;; pattern, then replace the covered bits in one byte-span pass.
+        ld      b,4(ix)
+        bit     0,b
+        jr      nz,.fr_copy_ready
+        cpl
+.fr_copy_ready:
+        call    __gpx_span_row_copy
+        jr      .fr_row_done
+.fr_row_stipple:
         call    __gpx_span_row          ; preserves HL
+.fr_row_done:
         dec     -11(ix)
         jr      z,.fr_done
         call    __vid_nextrow

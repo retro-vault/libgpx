@@ -119,6 +119,15 @@ int main()
     check_hline_pattern(screen, 10, 110, 16, 0x72, width, height, failures, "pattern 0x72 mismatch");
     check_hline_pattern(screen, 10, 111, 16, 0xA5, width, height, failures, "pattern 0xA5 mismatch");
 
+    for (int i = 0; i < 64; ++i) {
+        bool line = fallback_on(0xAA, i);
+        bool background = ((0xCC >> (7 - (i & 7))) & 1) != 0;
+        check(pixel_on(screen, 10 + i, 120, width, height) == line,
+              "opaque COPY line mismatch", failures);
+        check(pixel_on(screen, 10 + i, 121, width, height) ==
+              (background && !line), "BM_OR line mismatch", failures);
+    }
+
     if (failures == 0) {
         std::cout << "Partner line emulator test passed.\n";
         return 0;

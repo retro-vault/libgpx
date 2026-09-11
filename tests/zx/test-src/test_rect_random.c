@@ -18,7 +18,7 @@ void main(void)
 
     for (i = 0; i < 48; ++i) {
         color c = (color)(rnd() & 1);
-        bmode m = (bmode)(rnd() & 1);
+        bmode m = (bmode)(rnd() % 3);
         uint8_t p = (uint8_t)rnd();
 
         r.x0 = rnd_between(-40, ZX_W + 40);

@@ -134,7 +134,13 @@ void rasta_pattern_span(gpx_t *gpx, int32_t x0, int32_t x1, int32_t y,
     }
     if (x0 < 0) x0 = 0;
     if (x1 >= RASTA_WIDTH) x1 = RASTA_WIDTH - 1;
-    for (; x0 <= x1; ++x0)
-        if (pattern & (0x80u >> ((uint32_t)(x0 - origin_x) & 7)))
+    for (; x0 <= x1; ++x0) {
+        uint8_t bit = (uint8_t)(
+            pattern & (0x80u >> ((uint32_t)(x0 - origin_x) & 7)));
+        if (m == BM_CPY)
+            rasta_pixel(gpx, x0, y,
+                bit ? c : (color)((c ^ 1u) & 1u), BM_CPY, NULL);
+        else if (bit)
             rasta_pixel(gpx, x0, y, c, m, NULL);
+    }
 }

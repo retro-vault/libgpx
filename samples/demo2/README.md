@@ -1,4 +1,4 @@
-# Demo 2 — full-API smoke test
+# Demo 2 — drawing-API smoke test
 
 Demo 2 puts most of libgpx's public drawing API into one diagnostic picture.
 It was laid out as a 1024x256 Iskra Delta Partner hardware test, but the same C
@@ -48,16 +48,27 @@ hidden over the right square, so any damage there would expose a broken sprite
 restore path. The small box near the lower-left of the Partner scene should
 contain only the portion of the hand cursor that intersects its clip rectangle.
 
+The patterned lines deliberately use `BM_CPY`: their one bits draw foreground
+and their zero bits draw background. Use `BM_OR` instead when a dashed overlay
+must preserve artwork in its gaps.
+
 ## Main program
 
 ```c
 #include "libgpx.h"
 
+/* The Amstrad CPC has two display modes behind one library, so the manual's
+ * screenshots are taken twice from this one source. Machines with a single
+ * layout accept the argument and ignore it. */
+#ifndef DEMO_MODE
+#define DEMO_MODE GPXM_DEFAULT
+#endif
+
 /*
  * demo2 -- fixed-size hardware smoke test for libgpx.
  *
- * Exercises the whole public API in one 1024x256 picture, laid out so the
- * Partner screen can be verified against this checklist on real hardware.
+ * Exercises most of the public drawing API in one 1024x256 picture, laid out
+ * so the Partner screen can be verified against this checklist on hardware.
  * The same source also runs on the 256x192 ZX Spectrum, where physical-screen
  * clipping leaves only the top-left of the picture visible. The two pattern
  * squares double as a built-in self-check: a cursor sprite was shown AND
@@ -86,7 +97,7 @@ static uint8_t bg_clip[GPX_SPRITE_BG_SIZE];
 
 void main(void)
 {
-    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    gpx_t *gpx = gpx_create(DEMO_MODE);
     const font_t *font = gpx_get_system_font();
     rect_t win = {620, 60, 940, 180};
     rect_t spr_win = {150, 196, 185, 220};

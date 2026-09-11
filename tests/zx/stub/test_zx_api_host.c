@@ -138,7 +138,7 @@ static void test_line(void)
 
     uint8_t r = gpx_draw_line(g, 0, 0, 3, 0, CO_FORE, BM_CPY, 0x05, (const rect_t *)0);
     CHECK(pixel_on(0, 0) && pixel_on(2, 0), "draw_line patterned horizontal");
-    CHECK(!pixel_on(1, 0) && !pixel_on(3, 0), "draw_line skips zero pattern bits");
+    CHECK(!pixel_on(1, 0) && !pixel_on(3, 0), "draw_line COPY paints inverse at zero bits");
     CHECK(r == rotr_n(0x05, 3), "draw_line should return rotated pattern");
 
     r = gpx_draw_line(g, 2, 2, 2, 2, CO_FORE, BM_CPY, 0x80, (const rect_t *)0);

@@ -11,10 +11,10 @@ These are unscaled 1920 × 1080 captures of the actual Rasta X11 display.
 The capture script waits until the displayed pixels match the completed
 framebuffer before saving each PNG. Click an image to inspect it at full size.
 
-Full API showcase: lines, clipping, patterns, XOR, circles, polygons,
+API showcase: lines, clipping, patterns, XOR, circles, polygons,
 cursor bitmaps and text.
 
-![Full libgpx API showcase in Rasta at 1920 by 1080](../images/screenshots/showcase-rasta.png)
+![libgpx API showcase in Rasta at 1920 by 1080](../images/screenshots/showcase-rasta.png)
 
 The portable panels example:
 
@@ -129,22 +129,26 @@ viewer while an application has the framebuffer mapped.
 
 ## API behavior
 
-All 23 public functions are implemented. The display has one page:
+All 24 public functions are implemented. The display has one page:
 `gpx_set_page()` is a no-op and `gpx->pages` is 1. Pixels are packed left
 to right, MSB first, with a 240-byte stride. `CO_BACK` is black and
-`CO_FORE` white in Rasta. Copy, XOR, inclusive clipping and pattern phases
-follow the raster targets. Reversed clip rectangles draw nothing.
+`CO_FORE` white in Rasta. `BM_CPY` replaces both pattern values, `BM_OR`
+paints only pattern-one pixels, and `BM_XOR` toggles only pattern-one pixels.
+Inclusive clipping and pattern phases follow the Z80 targets. Reversed clip
+rectangles draw nothing.
 
 The system and tiny fonts both use the Spectrum's Envy raster font, and
-the five stock cursor IDs use its masked cursor assets. Standard and
-masked 1bpp bitmap encodings are supported; Partner tiny vector streams
-are platform-specific and are ignored. Serialized bitmap headers remain
-five bytes on native compilers. Sprites use the documented 37-byte
+the six stock cursor IDs use its masked cursor assets. Their packed hotspot
+trailers follow the bitmap payload returned by `gpx_get_stock_bmp()`. Standard
+and masked 1bpp bitmap encodings are supported; Partner tiny vector streams
+are platform-specific and are ignored. Serialized bitmap headers remain five
+bytes on native compilers. Sprites use the documented 37-byte
 save-under buffer, support up to 16 × 16 pixels, and restore their full
 captured box. Their origin must be onscreen. Draw/hide on the same page
 and at the same position, restoring overlapping sprites in reverse order.
 
-`ADVANCED=0` (also `no`, `false` or `off`) excludes the four circle/polygon
+`ADVANCED=0` (also `no`, `false` or `off`) exposes 20 functions by excluding
+the four circle/polygon
 functions, as on the Z80 targets. The default includes everything. The
 build tracks this setting, including when switching back to the full
 library. Context and drawing state are single-threaded. Input remains

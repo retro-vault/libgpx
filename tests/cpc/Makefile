@@ -14,7 +14,7 @@ CPC_TEST_SRCS := $(filter-out %/cpctest.c, \
 CPC_TEST_NAMES := $(patsubst $(ROOT_DIR)/tests/cpc/src/%.c,%,$(CPC_TEST_SRCS))
 CPC_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/cpc/*.s) \
 	$(wildcard $(ROOT_DIR)/src/cpc/*.inc) \
-	$(ADVANCED_SRCS)
+	$(CORE_ASM_SRCS) $(ADVANCED_SRCS)
 CPC_IMG_DIR := $(BUILD_DIR)/cpc-tests
 CPC_STAMP := $(CPC_IMG_DIR)/.built.stamp
 CODE_LOC ?= 0x8000
@@ -36,7 +36,8 @@ run: build
 $(CPC_IMG_DIR)/:
 	mkdir -p $@
 
-$(CPC_STAMP): $(CPC_TEST_SRCS) $(ROOT_DIR)/tests/cpc/src/cpctest.h \
+$(CPC_STAMP): $(ROOT_DIR)/tests/cpc/Makefile $(CPC_TEST_SRCS) \
+		$(ROOT_DIR)/tests/cpc/src/cpctest.h \
 		$(ROOT_DIR)/tests/cpc/src/cpctest.c $(CPC_LIB_SRCS) | $(CPC_IMG_DIR)/
 	$(MAKE) -C $(ROOT_DIR)/src cpc-lib-objs
 	$(CPCRUN) 'set -e; \
@@ -68,7 +69,7 @@ bench: bench-build
 $(CPC_BENCH_DIR)/:
 	mkdir -p $@
 
-$(CPC_BENCH_STAMP): $(CPC_BENCH_SRCS) \
+$(CPC_BENCH_STAMP): $(ROOT_DIR)/tests/cpc/Makefile $(CPC_BENCH_SRCS) \
 		$(ROOT_DIR)/tests/cpc/bench-src/bench.h $(CPC_LIB_SRCS) \
 		| $(CPC_BENCH_DIR)/
 	$(MAKE) -C $(ROOT_DIR)/src cpc-lib-objs

@@ -10,8 +10,8 @@
 /*
  * demo2 -- fixed-size hardware smoke test for libgpx.
  *
- * Exercises the whole public API in one 1024x256 picture, laid out so the
- * Partner screen can be verified against this checklist on real hardware.
+ * Exercises most of the public drawing API in one 1024x256 picture, laid out
+ * so the Partner screen can be verified against this checklist on hardware.
  * The same source also runs on the 256x192 ZX Spectrum, where physical-screen
  * clipping leaves only the top-left of the picture visible. The two pattern
  * squares double as a built-in self-check: a cursor sprite was shown AND

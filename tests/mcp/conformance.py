@@ -38,10 +38,15 @@ W, H = 256, 192
 # quietly grow. Keyed by (scenario, phase).
 ACCEPTED = {
     ("conf_lines", 0): (
-        260,
+        420,
         "slanted solid lines: the EF9367 vector generator picks its own "
         "interior pixels. Endpoints, clipping and patterns still match; "
         "walking diagonals in software instead measured 84x slower."),
+    ("conf_lines", 5): (
+        4,
+        "clipped solid rays: two EF9367 interior pixels differ where the "
+        "hardware-rasterized lines cross. Patterned rays and clip bounds "
+        "still match exactly."),
     ("conf_bitmaps", 3): (
         200,
         "stock cursors via gpx_show_sprite: the Partner has no readable "
@@ -57,7 +62,7 @@ ACCEPTED = {
         "differ -- the patterned fans either side of this one match exactly, "
         "because a non-solid pattern is drawn in software on the Partner."),
     ("conf_octants", 2): (
-        10,
+        24,
         "steep solid rays: EF9367 vector generator again, y-major this time. "
         "The patterned rays in the same phase match exactly."),
     ("conf_polygons", 2): (

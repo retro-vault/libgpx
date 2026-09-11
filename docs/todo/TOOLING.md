@@ -37,12 +37,16 @@ Until then, anything that depends on hardware line styles has to be developed
 with `IDP_MCP` pointed at a local build, and cannot be committed without
 making the default setup fail.
 
-### What this is holding up
+### What this used to hold up
 
-`gpx_draw_line` walks every non-solid pattern in software on the Partner,
-which measures about 48x slower than a hardware vector (`make crossbench`:
-1,716 ms against 36 ms for the same rays). Two patterns fit an 8-bit `lpatt`
-and could go to the vector generator instead:
+The optimized dispatch is now implemented. `gpx_draw_line` sends supported
+axis-aligned dotted and dashed patterns to finite EF9367 compositions and
+retains the software path for patterned diagonals and unsupported bytes.
+Patterned `BM_CPY` uses an inverse-colour base plus XOR pattern where that is
+cheaper, so its zeroes are replaced rather than treated as transparent.
+
+The design basis was that two patterns fit an 8-bit `lpatt` and can go to the
+vector generator:
 
 | CTRL2 style | shape | period | `lpatt`, LSB-first |
 |---|---|---|---|
@@ -50,11 +54,11 @@ and could go to the vector generator instead:
 | dashed | 4 on, 4 off | 8 | `0x0F` `0x1E` `0x3C` `0x78` `0xF0` `0xE1` `0xC3` `0x87` |
 | dash-dot | 10 on, 2 off, 2 on, 2 off | 16 | none — the period exceeds a byte |
 
-A rotated pattern can still use the hardware: plot the first
+The implementation handles a rotated pattern by plotting the first
 `(period - k) mod period` pixels by hand, then start the vector after them so
 the chip's own phase lines up. The rotation `gpx_draw_line` returns is a pure
 function of the pattern and the pixel count, so it needs no read-back from the
-chip — which was the original reason this was abandoned.
+chip.
 
 The remaining constraint is real and independent of packaging: the EF9367's
 Bresenham picks different interior pixels from libgpx's, so this is only safe

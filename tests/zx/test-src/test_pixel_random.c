@@ -20,7 +20,7 @@ void main(void)
         x = rnd_between(-20, ZX_W + 20);
         y = rnd_between(-20, ZX_H + 20);
         c = (color)(rnd() & 1);
-        m = (bmode)(rnd() & 1);
+        m = (bmode)(rnd() % 3);
 
         switch (rnd() & 3) {
         case 0:

@@ -20,7 +20,7 @@ void main(void)
         coord x1 = rnd_between(-60, ZX_W + 60);
         coord y1 = rnd_between(-60, ZX_H + 60);
         color c = (color)(rnd() & 1);
-        bmode m = (bmode)(rnd() & 1);
+        bmode m = (bmode)(rnd() % 3);
         uint8_t p = (uint8_t)rnd();
 
         if (rnd() & 1) {

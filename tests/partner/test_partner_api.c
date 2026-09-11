@@ -18,6 +18,7 @@ void main(void)
     bmp_t *hourglass;
     bmp_t *caret;
     bmp_t *hand;
+    bmp_t *resize;
     bmp_t *invalid;
 
     gpx = gpx_create((gmode)0);
@@ -117,14 +118,16 @@ void main(void)
     hourglass = gpx_get_stock_bmp(GPXSB_CURSOR_HOURGLASS);
     caret = gpx_get_stock_bmp(GPXSB_CURSOR_CARET);
     hand = gpx_get_stock_bmp(GPXSB_CURSOR_HAND);
+    resize = gpx_get_stock_bmp(GPXSB_CURSOR_RESIZE);
     invalid = gpx_get_stock_bmp(0xFF);
 
-    if (classic && std && hourglass && caret && hand && !invalid &&
+    if (classic && std && hourglass && caret && hand && resize && !invalid &&
         has_hotspot(classic) &&
         has_hotspot(std) &&
         has_hotspot(hourglass) &&
         has_hotspot(caret) &&
-        has_hotspot(hand)) {
+        has_hotspot(hand) &&
+        has_hotspot(resize)) {
         mark(gpx, 6, 0);
     } else {
         ok = 0;

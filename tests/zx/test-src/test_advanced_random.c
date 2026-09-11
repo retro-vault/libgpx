@@ -46,7 +46,7 @@ void main(void)
             pts[2].y = pts[0].y;
         }
         gpx_fill_polygon(gpx, pts, n, (color)(shape & 1),
-            (bmode)((shape >> 1) & 1), pattern, (uint8_t)(1 + shape % 5),
+            (bmode)((shape >> 1) % 3), pattern, (uint8_t)(1 + shape % 5),
             (shape & 1) ? &clip : (const rect_t *)0);
         record_screen();
     }

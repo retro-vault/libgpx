@@ -34,6 +34,10 @@ cursors use each backend's native artwork. Slanted solid lines can choose
 slightly different interior pixels because the Partner uses the EF9367 vector
 generator while the Spectrum uses a software rasterizer.
 
+The fills and line styles use opaque `BM_CPY`: both one and zero pattern bits
+replace the destination. A UI overlay such as a dotted focus box should use
+`BM_OR` when its zero bits must leave existing pixels untouched.
+
 ### Main program
 
 ```c
@@ -44,14 +48,22 @@ generator while the Spectrum uses a software rasterizer.
  * drawing API -- frames, pattern fills, line styles, both stock fonts,
  * XOR text over ink, clipping, and a stock cursor sprite.
  *
- * The same source builds for the ZX Spectrum (256x192) and the Iskra
- * Delta Partner (1024x256), so every coordinate is derived from
- * gpx_width() and gpx_height() rather than hard-coded.
+ * The same source builds for the ZX Spectrum (256x192), the Iskra Delta
+ * Partner (1024x256) and the Amstrad CPC (640x200 or 320x200), so every
+ * coordinate is derived from gpx_width() and gpx_height() rather than
+ * hard-coded.
  *
  * GPL2 License (see: LICENSE)
  * Copyright (C) 2026 Tomaz Stih
  */
 #include "libgpx.h"
+
+/* The Amstrad CPC has two display modes and one library, so the manual's
+ * screenshots are taken twice from this one source. Everything below is
+ * derived from gpx_width()/gpx_height(), so only this line changes. */
+#ifndef DEMO_MODE
+#define DEMO_MODE GPXM_DEFAULT
+#endif
 
 static uint8_t patt_solid[1] = {0xFF};
 static uint8_t patt_half[2]  = {0xAA, 0x55};
@@ -75,7 +87,7 @@ static void panel(gpx_t *gpx, coord x0, coord y0, coord x1, coord y1,
 
 void main(void)
 {
-    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    gpx_t *gpx = gpx_create(DEMO_MODE);
     const font_t *font = gpx_get_system_font();
     dim w = gpx_width();
     dim h = gpx_height();
@@ -233,6 +245,13 @@ cannot read display memory, so its backend XOR-draws the sprite a second time.
  */
 #include "libgpx.h"
 
+/* The Amstrad CPC has two display modes and one library, so the manual's
+ * screenshots are taken twice from this one source. Everything below is
+ * derived from gpx_width()/gpx_height(), so only this line changes. */
+#ifndef DEMO_MODE
+#define DEMO_MODE GPXM_DEFAULT
+#endif
+
 static uint8_t patt_half[2]  = {0xAA, 0x55};
 static uint8_t patt_solid[1] = {0xFF};
 
@@ -268,7 +287,7 @@ static void scene(gpx_t *gpx, dim w, dim h)
 
 void main(void)
 {
-    gpx_t *gpx = gpx_create(GPXM_DEFAULT);
+    gpx_t *gpx = gpx_create(DEMO_MODE);
     dim w = gpx_width();
     dim h = gpx_height();
     sprite_t sp;

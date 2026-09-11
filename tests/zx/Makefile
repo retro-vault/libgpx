@@ -11,7 +11,8 @@ CODE_LOC ?= 0x8000
 
 ZX_TEST_SRCS := $(wildcard $(ROOT_DIR)/tests/zx/test-src/test_*.c)
 ZX_TEST_NAMES := $(patsubst $(ROOT_DIR)/tests/zx/test-src/%.c,%,$(ZX_TEST_SRCS))
-ZX_TEST_HDRS := $(wildcard $(ROOT_DIR)/tests/zx/test-src/*.h)
+ZX_TEST_HDRS := $(wildcard $(ROOT_DIR)/tests/zx/test-src/*.h) \
+	$(ROOT_DIR)/src/rasta/box.c
 ZX_BENCH_SRCS := $(wildcard $(ROOT_DIR)/tests/zx/bench-src/bench_*.c)
 ZX_BENCH_NAMES := $(patsubst $(ROOT_DIR)/tests/zx/bench-src/%.c,%,$(ZX_BENCH_SRCS))
 ZX_BENCH_HDRS := $(wildcard $(ROOT_DIR)/tests/zx/bench-src/*.h)
@@ -23,7 +24,7 @@ ZX_ORACLE_TESTS_STAMP := $(BUILD_DIR)/zx-oracle/.tests-built.stamp
 # Relink scenarios whenever the backend they link against changes.
 ZX_LIB_STAMP := $(BUILD_DIR)/zx/.lib-objs.stamp
 ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c) \
-	$(ADVANCED_SRCS)
+	$(CORE_ASM_SRCS) $(ADVANCED_SRCS)
 
 BIN_ZX_TEST_IHXS := $(addprefix $(BIN_DIR)/zx/,$(addsuffix .ihx,$(ZX_TEST_NAMES)))
 BIN_ZX_ORACLE_TEST_IHXS := $(addprefix $(BIN_DIR)/zx-oracle/,$(addsuffix .ihx,$(ZX_TEST_NAMES)))

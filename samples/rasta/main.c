@@ -58,7 +58,7 @@ int main(void)
 #endif
     gpx_draw_text(gpx, 1480, 580, "Stock cursor bitmaps and save-under sprites",
         font, CO_FORE, BM_CPY, NULL);
-    for (i = 0; i < 5; ++i) {
+    for (i = 0; i < 6; ++i) {
         sprite_t sprite = {(coord)(1500 + i * 60), 620,
             gpx_get_stock_bmp((uint8_t)i), (bmp_t *)background, NULL};
         gpx_show_sprite(gpx, &sprite);

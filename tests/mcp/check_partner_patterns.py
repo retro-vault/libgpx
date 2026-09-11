@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check every horizontal pattern byte against a scalar oracle on idp-mcp.
 
-The 32-phase scenario covers both colors, both modes, both directions,
+The 48-phase scenario covers both colors, all three modes, both directions,
 short spans, 255/256 chunk boundaries, long spans, and clipping phase.
 Optionally --baseline ROOT also compares all rasters and returned pattern
 bytes to a separately built tree, including its hardware solid behavior.
@@ -22,7 +22,11 @@ def rotate(p, n):
 
 
 def expected(phase):
-    span_range, setting = divmod(phase, 8)
+    span_range, setting = divmod(phase, 12)
+    reverse = setting >= 6
+    operation = setting % 6
+    color = operation & 1
+    mode = operation >> 1
     rows = []
     returns = []
     for p in range(256):
@@ -32,15 +36,18 @@ def expected(phase):
         x1 = x0 + span
         if span_range == 3:
             x0, x1 = -p, 1031 + p
-        start, end = (x1, x0) if setting & 4 else (x0, x1)
+        start, end = (x1, x0) if reverse else (x0, x1)
         first = min(1023, max(0, start))
         last = min(1023, max(0, end))
         step = 1 if first <= last else -1
         skip = abs(first - start)
         row = bytearray((0xA5 >> (x & 7)) & 1 for x in range(1024))
         for n, x in enumerate(range(first, last + step, step)):
-            if (p >> ((skip + n) & 7)) & 1:
-                row[x] = row[x] ^ 1 if setting & 2 else setting & 1
+            source = (p >> ((skip + n) & 7)) & 1
+            if source:
+                row[x] = row[x] ^ 1 if mode == 1 else color
+            elif mode == 0:
+                row[x] = color ^ 1
         rows.append(bytes(row))
         returns.append(rotate(p, skip + abs(last - first)))
     return rows, bytes(returns)
@@ -61,7 +68,7 @@ def capture(root, validate_solid=True):
     with Partner(rom=False, workdir=str(root)) as gdp:
         gdp.load_binary(str(image), base)
         gdp.registers(pc=entry, sp=0xFF00, iff1=False, iff2=False)
-        for phase in range(32):
+        for phase in range(48):
             while True:
                 state = gdp.run(tstates=60_000_000, stop_on_halt=True)
                 if state.get('run', {}).get('reason') == 'halted':
@@ -90,7 +97,7 @@ def capture(root, validate_solid=True):
             if gdp.read_memory(sentinel, 1) == b'\xa5':
                 break
             gdp.registers(pc=state['cpu']['pc'] + 1)
-        assert len(result) == 32
+        assert len(result) == 48
     return result
 
 
@@ -103,10 +110,10 @@ def main():
         baseline = capture(args.baseline.resolve(), validate_solid=False)
         assert all(a[0][:255] == b[0][:255] and a[1] == b[1]
                    for a, b in zip(actual, baseline)), 'pattern regression'
-        print('All 32 patterned rasters and 8192 returned bytes equal baseline; '
+        print('All 48 patterned rasters and 12288 returned bytes equal baseline; '
               'solid XOR endpoints additionally pass the scalar oracle.')
     digest = hashlib.sha256(b''.join(raster_packed(r) + p for r, p in actual)).hexdigest()
-    print(f'8,192 calls; 8,388,608 independent pixel checks; digest {digest}')
+    print(f'12,288 calls; 12,582,912 independent pixel checks; digest {digest}')
 
 
 if __name__ == '__main__':

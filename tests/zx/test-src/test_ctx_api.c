@@ -48,7 +48,7 @@ void main(void)
     record(sys->flags);
 
     /* Every stock id, plus one past the end. */
-    for (i = 0; i <= GPXSB_CURSOR_HAND + 1; ++i) {
+    for (i = 0; i <= GPXSB_CURSOR_RESIZE + 1; ++i) {
         b = gpx_get_stock_bmp(i);
         record(b != (bmp_t *)0);
         if (b != (bmp_t *)0) {

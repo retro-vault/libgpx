@@ -29,10 +29,12 @@ CURSORS = {
                   ".fmf....", ".fmf....", "ffmff...", "fmfmf...", "ff.ff..."],
     "hand":      ["..f.....", ".fmf....", ".fmfff..", ".fmfmff.", "ffmfmfmf",
                   "fmmfmfmf", "fmmmmmmf", "fmmmmmmf", ".fmmmmf.", "..ffff.."],
+    "resize":    ["fffff...", "fmmmf...", "fmmff...", "fmfmffff",
+                  "ffffmfmf", "...ffmmf", "...fmmmf", "...fffff"],
 }
 HOTSPOT = {"classic": (1, 1), "std": (1, 1), "hourglass": (3, 4),
-           "caret": (1, 7), "hand": (2, 0)}
-ORDER = ("classic", "std", "hourglass", "caret", "hand")
+           "caret": (1, 7), "hand": (2, 0), "resize": (0, 0)}
+ORDER = ("classic", "std", "hourglass", "caret", "hand", "resize")
 
 MAXD = 3                      # each delta field is two bits
 COMMENT_COL = 41              # docs/standards/ASSEMBLY_STYLE_GUIDE.md

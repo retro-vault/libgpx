@@ -65,6 +65,7 @@ zx-tests:
 	$(PYTHON) $(ZX_RUNNER)
 	$(PYTHON) $(ROOT_DIR)/tests/zx/bitmap_regressions.py
 	$(PYTHON) $(ROOT_DIR)/tests/mcp/sprite_regressions.py
+	$(PYTHON) $(ROOT_DIR)/tests/zx/span_regressions.py
 
 zx-bench:
 	$(MAKE) -C zx bench

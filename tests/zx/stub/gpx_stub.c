@@ -121,7 +121,7 @@ static const uint8_t zx_stock_classic[] = {
     0b00000011, 0b01011000,
     0b00100011, 0b00001000,
     0b11110111, 0b00000000,
-    0x01, 0x01
+    0x11
 };
 static const uint8_t zx_stock_std[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
@@ -135,7 +135,7 @@ static const uint8_t zx_stock_std[] = {
     0b00000011, 0b10100100,
     0b10000011, 0b01100100,
     0b11100111, 0b00011000,
-    0x01, 0x01
+    0x11
 };
 static const uint8_t zx_stock_hourglass[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
@@ -149,7 +149,7 @@ static const uint8_t zx_stock_hourglass[] = {
     0b10000011, 0b01010100,
     0b00000001, 0b11111110,
     0b11111111, 0b00000000,
-    0x03, 0x04
+    0x43
 };
 static const uint8_t zx_stock_caret[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
@@ -163,7 +163,7 @@ static const uint8_t zx_stock_caret[] = {
     0b00000111, 0b11011000,
     0b00000111, 0b10101000,
     0b00100111, 0b11011000,
-    0x01, 0x07
+    0x71
 };
 static const uint8_t zx_stock_hand[] = {
     BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 10, 20, 0,
@@ -177,7 +177,13 @@ static const uint8_t zx_stock_hand[] = {
     0b00000000, 0b10000001,
     0b10000001, 0b01000010,
     0b11000011, 0b00111100,
-    0x02, 0x00
+    0x02
+};
+static const uint8_t zx_stock_resize[] = {
+    BMP_SIG_STRIDE(BMP_ENC_1BPP_MASK, 1), 8, 8, 16, 0,
+    0x07, 0xf8, 0x07, 0x88, 0x07, 0x98, 0x00, 0xaf,
+    0x00, 0xf5, 0xe0, 0x19, 0xe0, 0x11, 0xe0, 0x1f,
+    0x00
 };
 
 static uint16_t zx_screen_offset(coord x, coord y)
@@ -478,6 +484,9 @@ uint8_t gpx_draw_hline(
         for (coord x = xlo; x <= xhi; ++x) {
             if (lpatt & 0x01)
                 gpx_draw_pixel(gpx, x, y, c, m, clip);
+            else if (m == BM_CPY)
+                gpx_draw_pixel(gpx, x, y,
+                    (color)((c ^ 1u) & 1u), BM_CPY, clip);
             lpatt = zx_rotate_pattern(lpatt);
         }
     }
@@ -514,6 +523,9 @@ uint8_t gpx_draw_line(
     if (x0 == x1 && y0 == y1) {
         if (lpatt & 0x01)
             gpx_draw_pixel(gpx, x0, y0, c, m, clip);
+        else if (m == BM_CPY)
+            gpx_draw_pixel(gpx, x0, y0,
+                (color)((c ^ 1u) & 1u), BM_CPY, clip);
         return original_lpatt;
     }
 
@@ -556,6 +568,8 @@ uint8_t gpx_draw_line(
     while (1) {
         if (lpatt & 0x01)
             zx_set_pixel(x0, y0, c, m); /* pre-clipped: no per-pixel checks */
+        else if (m == BM_CPY)
+            zx_set_pixel(x0, y0, (color)((c ^ 1u) & 1u), BM_CPY);
         if (x0 == x1 && y0 == y1)
             break;
         e2 = err;
@@ -571,46 +585,6 @@ uint8_t gpx_draw_line(
     }
 
     return lpatt;
-}
-
-void gpx_draw_rectangle(
-    gpx_t *gpx, rect_t *r,
-    color c, bmode m, uint8_t lpatt, const rect_t *clip)
-{
-    rect_t rect = *r;
-    if (rect.x0 > rect.x1) {
-        coord temp = rect.x0;
-        rect.x0 = rect.x1;
-        rect.x1 = temp;
-    }
-    if (rect.y0 > rect.y1) {
-        coord temp = rect.y0;
-        rect.y0 = rect.y1;
-        rect.y1 = temp;
-    }
-
-    gpx_draw_hline(gpx, rect.x0, rect.x1, rect.y0, c, m, lpatt, clip);
-    if (rect.y1 != rect.y0)
-        gpx_draw_hline(gpx, rect.x0, rect.x1, rect.y1, c, m, lpatt, clip);
-
-    {
-        coord ylo;
-        coord yhi;
-        if (zx_span_bounds(rect.y0, rect.y1, ZX_HEIGHT - 1,
-                clip ? &clip->y0 : (const coord *)0,
-                clip ? &clip->y1 : (const coord *)0, &ylo, &yhi)) {
-            /* The two horizontal edges are already drawn. */
-            if (ylo == rect.y0)
-                ++ylo;
-            if (yhi == rect.y1)
-                --yhi;
-            for (coord y = ylo; y <= yhi; ++y) {
-                gpx_draw_pixel(gpx, rect.x0, y, c, m, clip);
-                if (rect.x1 != rect.x0)
-                    gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
-            }
-        }
-    }
 }
 
 void gpx_fill_rectangle(
@@ -653,7 +627,11 @@ void gpx_fill_rectangle(
             for (coord x = xlo; x <= xhi; ++x) {
                 uint8_t mask = (uint8_t)(0x80 >>
                     (((uint16_t)x - (uint16_t)rect.x0) & 7));
-                if (pattern & mask)
+                if (m == BM_CPY)
+                    gpx_draw_pixel(gpx, x, y,
+                        (pattern & mask) ? c : (color)((c ^ 1u) & 1u),
+                        BM_CPY, clip);
+                else if (pattern & mask)
                     gpx_draw_pixel(gpx, x, y, c, m, clip);
             }
         }
@@ -1002,7 +980,15 @@ void gpx_fill_polygon(
             rot = (uint8_t)((uint16_t)(x0 - xmin) & 7);
             if (rot)
                 rev = (uint8_t)((rev >> rot) | (rev << (8 - rot)));
-            gpx_draw_line(gpx, x0, y, x1, y, c, m, rev, clip);
+            if (m == BM_CPY) {
+                (void)gpx_draw_line(gpx, x0, y, x1, y,
+                    (color)((c ^ 1u) & 1u), BM_CPY, GPX_LP_SOLID, clip);
+                (void)gpx_draw_line(gpx, x0, y, x1, y,
+                    c, BM_XOR, rev, clip);
+            } else {
+                (void)gpx_draw_line(gpx, x0, y, x1, y,
+                    c, m, rev, clip);
+            }
         }
 
         if (++patt_idx >= fpatt_len)
@@ -1313,6 +1299,8 @@ bmp_t *gpx_get_stock_bmp(const uint8_t which)
         return (bmp_t *)zx_stock_caret;
     case GPXSB_CURSOR_HAND:
         return (bmp_t *)zx_stock_hand;
+    case GPXSB_CURSOR_RESIZE:
+        return (bmp_t *)zx_stock_resize;
     default:
         return (bmp_t *)0;
     }
@@ -1408,3 +1396,7 @@ void gpx_draw_text(
         ++text;
     }
 }
+
+/* Keep the host/Z80 oracle on the same public box-composition contract while
+ * its pixels and lines remain independently implemented above. */
+#include "../../../src/rasta/box.c"

@@ -1,11 +1,12 @@
 # Programming with libgpx
 
-libgpx is a 1-bit-per-pixel graphics library for Z80 machines, written
-entirely in hand-optimised assembly. It gives you pixels, lines,
-rectangles, pattern fills, text and sprites behind one API that behaves
-the same on every supported machine.
+libgpx is a 1-bit-per-pixel graphics library for Z80 machines and native
+framebuffer targets. Every Z80 path is hand-optimised assembly. It gives you
+pixels, lines, rectangles, pattern fills, text and sprites behind one API that
+behaves the same on every supported machine.
 
-Three backends ship today:
+Three Z80 backends ship today; the native Rasta backend has its own
+[guide](RASTA.md):
 
 | Machine | Screen | Backend | Notes |
 |---|---|---|---|
@@ -132,12 +133,17 @@ In a 1bpp world there are two colours:
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `BM_CPY` | `0x00` | write the colour |
-| `BM_XOR` | `0x01` | invert the existing pixel |
+| `BM_CPY` | `0x00` | copy both source-pattern values |
+| `BM_XOR` | `0x01` | invert at source-pattern one bits |
+| `BM_OR` | `0x02` | paint `c` at source-pattern one bits; preserve zeroes |
 
 `BM_XOR` **ignores the colour argument** — it always inverts. This is
 what makes XOR drawing reversible: draw the same thing twice and the
 screen is back exactly as it was.
+
+For patterned lines and fills, `BM_CPY` is opaque: a one paints `c` and a
+zero paints its inverse. Use `BM_OR` for the traditional dashed/stippled
+operation in which pattern zeroes leave the framebuffer untouched.
 
 ### Clipping
 
@@ -157,14 +163,16 @@ There are two kinds, and they read in opposite directions. This is
 deliberate and worth learning once:
 
 **Line patterns** (`lpatt`, one byte) apply **one bit per pixel, LSB
-first**, from the line's start point. `0xFF` is solid. `gpx_draw_line`
+first**, from the line's start point. Use `GPX_LP_SOLID`,
+`GPX_LP_DOTTED`, `GPX_LP_DASHED`, or `GPX_LP_DASHED_SHORT` for the
+standard `0xff`, `0xaa`, `0xf0`, and `0xcc` patterns. `gpx_draw_line`
 returns the pattern rotated by however many pixels it drew, so you can
 chain segments and keep the dashes continuous:
 
 ```c
 uint8_t p = 0xF0;
-p = gpx_draw_line(gpx, 0,  0, 50,  0, CO_FORE, BM_CPY, p, 0);
-p = gpx_draw_line(gpx, 50, 0, 50, 40, CO_FORE, BM_CPY, p, 0);  /* continues */
+p = gpx_draw_line(gpx, 0,  0, 50,  0, CO_FORE, BM_OR, p, 0);
+p = gpx_draw_line(gpx, 50, 0, 50, 40, CO_FORE, BM_OR, p, 0);  /* continues */
 ```
 
 **Fill patterns** (`fpatt`, an array) apply **MSB first from the
@@ -250,7 +258,7 @@ dim gpx_height(void);
 ```
 
 Current display size in pixels. Use these instead of constants and the
-same program will lay itself out correctly on both machines.
+same program will lay itself out correctly on every backend.
 
 ---
 
@@ -314,7 +322,7 @@ Set, clear or invert one pixel.
 |---|---|
 | `x`, `y` | position; off-screen values are simply ignored |
 | `c` | `CO_FORE` or `CO_BACK` |
-| `m` | `BM_CPY` or `BM_XOR` (ignores `c`) |
+| `m` | `BM_CPY` or `BM_OR` to paint `c`; `BM_XOR` to invert (ignores `c`) |
 | `clip` | window rect, or `0` |
 
 **Notes.** This is the slowest way to fill an area — every call carries
@@ -337,7 +345,7 @@ Draw a line using Bresenham's algorithm.
 | `x0`, `y0` | start point |
 | `x1`, `y1` | end point, inclusive |
 | `c` | `CO_FORE` or `CO_BACK` |
-| `m` | `BM_CPY` or `BM_XOR` |
+| `m` | `BM_CPY`, `BM_OR`, or `BM_XOR` |
 | `lpatt` | dash pattern, one bit per pixel LSB first; `0xFF` is solid |
 | `clip` | window rect, or `0` |
 
@@ -345,18 +353,24 @@ Draw a line using Bresenham's algorithm.
 pass to the next segment so a dashed outline stays continuous around
 corners.
 
+**Pattern modes.** `BM_CPY` writes both values, using the inverse of `c`
+for zero bits. `BM_OR` paints only the one bits and leaves its gaps alone.
+`BM_XOR` toggles only the one bits.
+
 **Notes.** Horizontal and vertical lines take a fast path and are much
-cheaper than diagonals — prefer them when you have the choice. On the
-Partner a solid line is handed to the EF9367's vector generator, which
-is quick; any other pattern is walked pixel by pixel.
+cheaper than diagonals — prefer them when you have the choice. On the Partner,
+solid lines use the EF9367 vector generator. Supported horizontal dotted and
+dashed patterns use finite native strokes, including the two-pass
+inverse-colour/XOR composition required by patterned `BM_CPY`; unsupported
+patterns and patterned diagonals use the software Bresenham path.
 
 ```c
 /* a dashed box whose pattern runs continuously around all four sides */
 uint8_t p = 0xF0;
-p = gpx_draw_line(gpx, 10, 10, 90, 10, CO_FORE, BM_CPY, p, 0);
-p = gpx_draw_line(gpx, 90, 10, 90, 50, CO_FORE, BM_CPY, p, 0);
-p = gpx_draw_line(gpx, 90, 50, 10, 50, CO_FORE, BM_CPY, p, 0);
-p = gpx_draw_line(gpx, 10, 50, 10, 10, CO_FORE, BM_CPY, p, 0);
+p = gpx_draw_line(gpx, 10, 10, 90, 10, CO_FORE, BM_OR, p, 0);
+p = gpx_draw_line(gpx, 90, 10, 90, 50, CO_FORE, BM_OR, p, 0);
+p = gpx_draw_line(gpx, 90, 50, 10, 50, CO_FORE, BM_OR, p, 0);
+p = gpx_draw_line(gpx, 10, 50, 10, 10, CO_FORE, BM_OR, p, 0);
 ```
 
 ---
@@ -368,10 +382,38 @@ void gpx_draw_rectangle(gpx_t *gpx, rect_t *r,
                         color c, bmode m, uint8_t lpatt, const rect_t *clip);
 ```
 
-Draw a rectangle outline. Corners are inclusive.
+Draw a rectangle outline. Corners are inclusive and every outline pixel is
+combined exactly once, including one-row, one-column, and one-pixel boxes.
+Two identical `BM_XOR` calls therefore restore every pixel they cover.
 
 **Notes.** All four sides are horizontal or vertical, so this is cheap.
 The pattern runs continuously around the outline.
+
+---
+
+#### `gpx_draw_box`
+
+```c
+uint8_t gpx_draw_box(gpx_t *gpx, const rect_t *r, uint8_t edges,
+                     color c, bmode m, uint8_t lpatt,
+                     const rect_t *clip);
+```
+
+Draw any combination of `GPX_EDGE_LEFT`, `GPX_EDGE_TOP`,
+`GPX_EDGE_RIGHT`, and `GPX_EDGE_BOTTOM`. `GPX_EDGE_ALL` selects a complete
+outline. The traversal is clockwise; earlier selected edges own shared
+corners, coincident degenerate edges collapse to one run, and the returned
+phase follows the final logical outline pixel regardless of clipping.
+
+Each Z80 backend owns a compact `gpx_draw_box.s` which calls that backend's
+optimized line engine. Rasta uses the equivalent native implementation in
+`src/rasta/box.c`.
+
+On ZX, the box member is 393 bytes and the all-edges rectangle entry is a
+9-byte tail call. Both use the existing ZX line engine; no shared-backend
+adapter or temporary segment array is involved. See the
+[ZX size/speed report](../research/OPTIMIZATION-ZX-2026-09-11.md) for measured
+costs, including helpers, and regression coverage.
 
 ---
 
@@ -394,7 +436,10 @@ Fill a rectangle with a repeating pattern.
 **Notes.** Both the row index and the bit position are measured from the
 unclipped rectangle, so a partly-clipped fill lines up seamlessly with
 an unclipped one beside it. Pass a one-byte `{0xFF}` for a solid block.
-This is the fastest way to cover an area.
+In `BM_CPY`, pattern one bits paint `c` and zero bits paint the inverse
+colour, replacing every pixel in the shape. `BM_OR` paints only pattern-one
+pixels; `BM_XOR` inverts only pattern-one pixels. This is the fastest way to
+cover an area.
 
 ```c
 static uint8_t solid[1] = {0xFF};
@@ -430,10 +475,11 @@ library a plain `make` produces, but a library built with `ADVANCED=0`
 stops at the core set and these will not link. See [Building and running
 the examples](#5-building-and-running-the-examples).
 
-Unlike everything above they are not written per machine. One portable
-module drives each backend through `gpx_draw_pixel` and
-`gpx_fill_rectangle`, so all three machines get the same circle by
-construction rather than by three implementations agreeing.
+Unlike the hardware-facing primitives above, the Z80 targets share one
+hand-written assembly implementation under `src/common`; it drives each
+backend through `gpx_draw_pixel` and `gpx_fill_rectangle`. Rasta has the
+equivalent native C implementation. Conformance tests require the resulting
+circle pixels to agree.
 
 #### `gpx_draw_circle`
 
@@ -485,7 +531,8 @@ of repeating pattern `gpx_fill_rectangle` takes.
 so the pattern runs straight down the disc instead of stepping in and
 out with the row width — and a disc and a rectangle filled with the same
 pattern lay down the same bits where they overlap. Both are measured
-before clipping, exactly as for a rectangle.
+before clipping, exactly as for a rectangle. `BM_CPY` writes both pattern
+values; `BM_OR` paints and `BM_XOR` inverts only pattern-one pixels.
 
 The disc is bounded by the pixels `gpx_draw_circle` plots for the same
 centre and radius, so the outline lands on the disc's own edge and the
@@ -506,9 +553,9 @@ gpx_draw_circle(gpx, 180, 96, 40, CO_BACK, BM_CPY, 0);
 
 ### Polygons
 
-Also **advanced**, and also one portable module rather than three: both
-functions drive the backend through `gpx_draw_line`, so every machine gets
-the same polygon.
+Also **advanced**: the Z80 targets share one hand-written assembly
+implementation and Rasta supplies the equivalent native C implementation.
+Both drive the lower-level drawing primitives under the same pixel contract.
 
 #### `gpx_draw_polygon`
 
@@ -567,6 +614,8 @@ reversal, and so a flipped edge is walked with the opposite rounding bias.
 
 Every pixel is painted at most once, so `BM_XOR` behaves. Two spans that
 meet on a shared vertex hand the pixel to the first of them.
+In `BM_CPY`, both pattern values are written just as they are for rectangle
+and circle fills. `BM_OR` paints only the pattern-one pixels.
 
 **Cost.** The edge table lives on the stack: about 250 bytes while the
 call is running, 17 of them per point. That is the reason for
@@ -671,7 +720,7 @@ Draw a NUL-terminated string with its top-left corner at (`x`, `y`).
 | Parameter | Description |
 |---|---|
 | `c` | `CO_FORE` for normal, `CO_BACK` for reverse video |
-| `m` | `BM_CPY`, or `BM_XOR` to invert whatever is underneath |
+| `m` | `BM_CPY` or `BM_OR` to paint glyph ink; `BM_XOR` to invert it |
 
 **Notes.** Text starts in `GPX_TEXT_BG_OPAQUE` mode. With `BM_CPY`, the
 glyph box and character spacing are painted in the opposite color, so
@@ -679,6 +728,9 @@ drawing over existing artwork replaces it rather than merging with it.
 Use `gpx_set_text_background()` to select transparent overlays. `BM_XOR`
 always toggles glyph ink only; opaque mode still paints character spacing
 for compatibility, while transparent mode leaves all spacing untouched.
+For text, `BM_OR` paints the same glyph ink as `BM_CPY`; unlike patterned
+lines and fills, the treatment of glyph zeroes is selected solely by
+`text_background`.
 
 ---
 
@@ -763,9 +815,16 @@ the portable way to get a bitmap.
 | `GPXSB_CURSOR_HOURGLASS` | busy indicator |
 | `GPXSB_CURSOR_CARET` | text caret |
 | `GPXSB_CURSOR_HAND` | hand pointer |
+| `GPXSB_CURSOR_RESIZE` | diagonal resize pointer |
 
-**Returns** the bitmap, or `NULL` if the id is not supported. All five
-are available on every backend today.
+Every cursor asset already carries its hotspot immediately after its bitmap
+payload. Raster assets store one packed `yyyyxxxx` byte; Partner Tiny assets
+store separate `hotspot_x, hotspot_y` bytes. Read the trailer at
+`&bitmap->bitmap[bitmap->size]`; use `BMP_ENC(bitmap->signature)` to distinguish
+the Tiny representation from the packed raster representation. No separate
+cursor descriptor or lookup wrapper is linked. All six cursors are available
+on every backend. Save-under backends require non-negative sprite origins, so
+clamp each origin to zero after subtracting the hotspot.
 
 ---
 
@@ -781,7 +840,7 @@ Partner and CPC captures.
 | Demo | Reference | Main API focus | Layout strategy |
 |---|---|---|---|
 | 1 | [screen dimensions and stock cursors](../../samples/demo1/README.md) | dimensions, fill, text, stock bitmaps, sprite show/hide | fixed 256x192; exposes unused Partner screen area |
-| 2 | [full-API smoke test](../../samples/demo2/README.md) | measurement, lines, patterns, clipping, text, rectangles, sprites | fixed 1024x256; exposes Spectrum screen clipping |
+| 2 | [drawing-API smoke test](../../samples/demo2/README.md) | measurement, lines, patterns, clipping, text, rectangles, sprites | fixed 1024x256; exposes Spectrum screen clipping |
 | 3 | [portable example programs](../../samples/demo3/README.md) | portable layouts and the complete drawing/sprite workflow | derives coordinates from `gpx_width()` and `gpx_height()` |
 | 4 | [circles and filled circles](../../samples/demo4/README.md) | the advanced primitives: outlines, pattern fills, XOR, clipping | derives coordinates from `gpx_width()` and `gpx_height()`; needs an `ADVANCED` library |
 | 5 | [polygons](../../samples/demo5/README.md) | polygon outlines and even-odd fills, concave and self-intersecting | unit shapes scaled into cells; needs an `ADVANCED` library |
@@ -887,7 +946,7 @@ For the Partner, put the `.com` on a CP/M disk image and run it under
 `idp-emu` from the `wischner/xcc-z80-idp` image.
 
 All demo screenshots are generated, not hand-captured. To reproduce them,
-which also confirms that every program runs on every backend:
+which also confirms that every program runs on every Z80 backend:
 
 ```bash
 python3 scripts/docs/capture-manual-shots.py

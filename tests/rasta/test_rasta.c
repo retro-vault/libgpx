@@ -30,6 +30,34 @@ static int pixel(int x, int y)
     return (screen[y * 240 + x / 8] & (0x80u >> (x & 7))) != 0;
 }
 
+static uint8_t rotate_pattern(uint8_t pattern, unsigned count)
+{
+    count &= 7;
+    while (count-- != 0)
+        pattern = (uint8_t)((pattern >> 1) | (pattern << 7));
+    return pattern;
+}
+
+static int box_pixel(uint8_t edges, const rect_t *r, int x, int y)
+{
+    return ((edges & GPX_EDGE_TOP) && y == r->y0 && x >= r->x0 && x <= r->x1) ||
+        ((edges & GPX_EDGE_RIGHT) && x == r->x1 && y >= r->y0 && y <= r->y1) ||
+        ((edges & GPX_EDGE_BOTTOM) && y == r->y1 && x >= r->x0 && x <= r->x1) ||
+        ((edges & GPX_EDGE_LEFT) && x == r->x0 && y >= r->y0 && y <= r->y1);
+}
+
+static unsigned box_pixels(uint8_t edges, const rect_t *r)
+{
+    unsigned count = 0;
+    int x;
+    int y;
+
+    for (y = r->y0; y <= r->y1; ++y)
+        for (x = r->x0; x <= r->x1; ++x)
+            count += box_pixel(edges, r, x, y) != 0;
+    return count;
+}
+
 static void compare(const char *operation, unsigned iteration)
 {
     uint8_t *ref = gpx_stub_host_screen();
@@ -57,7 +85,7 @@ static void differential(void)
         coord x1 = (coord)((int)random_value(450) - 100);
         coord y1 = (coord)((int)random_value(350) - 80);
         color c = (color)random_value(2);
-        bmode m = (bmode)random_value(2);
+        bmode m = (bmode)random_value(3);
         uint8_t patt = (uint8_t)random_value(256);
         uint8_t fill[] = {0xa5, 0x33, 0xf0};
         rect_t rect = {x, y, x1, y1};
@@ -167,12 +195,24 @@ static void native_cases(void)
 #if GPX_ADVANCED
     {
         point_t box[] = {{-3, -2}, {12, -2}, {12, 10}, {-3, 10}};
+        point_t small_box[] = {{30, 30}, {46, 30}, {46, 42}, {30, 42}};
+        uint8_t sparse = 0x80;
         gpx_clrscr();
         gpx_fill_polygon(ctx, box, 4, CO_FORE, BM_CPY, pattern, 3, NULL);
         memcpy(snapshot, screen, FB_SIZE);
         gpx_clrscr();
         gpx_fill_rectangle(ctx, &negative, CO_FORE, BM_CPY, pattern, 3, NULL);
         assert(memcmp(snapshot, screen, FB_SIZE) == 0);
+
+        gpx_fill_rectangle(ctx, &full, CO_FORE, BM_CPY, &solid, 1, NULL);
+        gpx_fill_circle(ctx, 100, 100, 8,
+            CO_FORE, BM_CPY, &sparse, 1, NULL);
+        assert(pixel(92, 100) && !pixel(93, 100));
+        gpx_fill_polygon(ctx, small_box, 4,
+            CO_FORE, BM_CPY, &sparse, 1, NULL);
+        assert(pixel(30, 35) && !pixel(31, 35));
+        memcpy(snapshot, screen, FB_SIZE);
+
         gpx_draw_circle(ctx, 960, 540, 520, CO_FORE, BM_XOR, NULL);
         gpx_draw_circle(ctx, 960, 540, 520, CO_FORE, BM_XOR, NULL);
         assert(memcmp(snapshot, screen, FB_SIZE) == 0);
@@ -193,6 +233,190 @@ static void native_cases(void)
     gpx_hide_sprite(ctx, NULL);
 }
 
+static void ui_primitives(void)
+{
+    static const rect_t shapes[] = {
+        {10, 10, 18, 16}, {10, 10, 10, 16},
+        {10, 10, 18, 10}, {10, 10, 10, 10}
+    };
+    static const rect_t clips[] = {
+        {0, 0, 1919, 1079}, {12, 8, 16, 18}, {8, 12, 20, 14},
+        {10, 10, 10, 10}, {18, 16, 18, 16}
+    };
+    uint8_t snapshot[FB_SIZE];
+    uint8_t background[] = {0x96, 0x69, 0xc3};
+    uint8_t checker[] = {0x55, 0xaa};
+    rect_t whole = {0, 0, 1919, 1079};
+    unsigned s;
+    unsigned mask;
+    unsigned ci;
+    int x;
+    int y;
+
+    /* Every selected-edge mask, including all degenerate shapes. */
+    for (s = 0; s < sizeof(shapes) / sizeof(shapes[0]); ++s) {
+        for (mask = 0; mask < 16; ++mask) {
+            uint8_t start = 0xb3;
+            uint8_t end;
+            rect_t r = shapes[s];
+
+            gpx_clrscr();
+            (void)gpx_draw_box(ctx, &r, (uint8_t)mask,
+                CO_FORE, BM_CPY, GPX_LP_SOLID, NULL);
+            for (y = 8; y <= 18; ++y)
+                for (x = 8; x <= 20; ++x)
+                    assert(pixel(x, y) == box_pixel((uint8_t)mask, &r, x, y));
+            gpx_clrscr();
+            end = gpx_draw_box(ctx, &r, (uint8_t)mask,
+                CO_FORE, BM_CPY, start, NULL);
+            assert(end == rotate_pattern(start, box_pixels((uint8_t)mask, &r)));
+
+            /* XOR identity over a non-uniform framebuffer. */
+            gpx_fill_rectangle(ctx, &whole, CO_FORE, BM_CPY,
+                background, 3, NULL);
+            memcpy(snapshot, screen, FB_SIZE);
+            gpx_draw_box(ctx, &r, (uint8_t)mask,
+                CO_FORE, BM_XOR, (uint8_t)(0x81u | mask), NULL);
+            gpx_draw_box(ctx, &r, (uint8_t)mask,
+                CO_FORE, BM_XOR, (uint8_t)(0x81u | mask), NULL);
+            assert(memcmp(snapshot, screen, FB_SIZE) == 0);
+
+            /* Solid clips crossing edges and corners match their set union. */
+            for (ci = 0; ci < sizeof(clips) / sizeof(clips[0]); ++ci) {
+                gpx_clrscr();
+                gpx_draw_box(ctx, &r, (uint8_t)mask,
+                    CO_FORE, BM_CPY, GPX_LP_SOLID, &clips[ci]);
+                for (y = 8; y <= 18; ++y)
+                    for (x = 8; x <= 20; ++x) {
+                        int inside = x >= clips[ci].x0 && x <= clips[ci].x1 &&
+                            y >= clips[ci].y0 && y <= clips[ci].y1;
+                        assert(pixel(x, y) ==
+                            (inside && box_pixel((uint8_t)mask, &r, x, y)));
+                    }
+            }
+        }
+    }
+
+    /* A clipped patterned box is exactly a crop of the full rendering. */
+    {
+        rect_t r = {70, 30, 104, 63};
+        rect_t pattern_clips[] = {
+            {78, 25, 110, 50}, {60, 45, 96, 70}
+        };
+        gpx_clrscr();
+        gpx_draw_box(ctx, &r, GPX_EDGE_ALL,
+            CO_FORE, BM_CPY, 0x93, NULL);
+        memcpy(snapshot, screen, FB_SIZE);
+        for (ci = 0; ci < 2; ++ci) {
+            gpx_clrscr();
+            gpx_draw_box(ctx, &r, GPX_EDGE_ALL,
+                CO_FORE, BM_CPY, 0x93, &pattern_clips[ci]);
+            for (y = 0; y < 80; ++y)
+                for (x = 0; x < 120; ++x)
+                    assert(pixel(x, y) ==
+                        ((x >= pattern_clips[ci].x0 &&
+                          x <= pattern_clips[ci].x1 &&
+                          y >= pattern_clips[ci].y0 &&
+                          y <= pattern_clips[ci].y1) ?
+                        ((snapshot[y * 240 + x / 8] &
+                          (0x80u >> (x & 7))) != 0) : 0));
+        }
+    }
+
+    /* BM_CPY writes both pattern values, with identical tiled phase. */
+    {
+        rect_t r = {9, 71, 72, 110};
+        rect_t tiles[] = {
+            {9, 71, 40, 90}, {41, 71, 72, 90},
+            {9, 91, 40, 110}, {41, 91, 72, 110}
+        };
+        gpx_clrscr();
+        gpx_fill_rectangle(ctx, &whole, CO_FORE, BM_CPY,
+            background, 3, NULL);
+        gpx_fill_rectangle(
+            ctx, &r, CO_FORE, BM_CPY, checker, 2, NULL);
+        memcpy(snapshot, screen, FB_SIZE);
+        gpx_clrscr();
+        gpx_fill_rectangle(ctx, &whole, CO_FORE, BM_CPY,
+            background, 3, NULL);
+        for (ci = 0; ci < sizeof(tiles) / sizeof(tiles[0]); ++ci)
+            gpx_fill_rectangle(
+                ctx, &r, CO_FORE, BM_CPY, checker, 2, &tiles[ci]);
+        assert(memcmp(snapshot, screen, FB_SIZE) == 0);
+
+        /* Copy replaces zeroes; XOR leaves them alone. */
+        {
+            uint8_t solid = 0xff;
+            gpx_fill_rectangle(ctx, &whole, CO_FORE, BM_CPY,
+                &solid, 1, NULL);
+            gpx_fill_rectangle(ctx, &r, CO_FORE, BM_CPY,
+                checker, 2, NULL);
+            for (y = r.y0; y <= r.y1; ++y)
+                for (x = r.x0; x <= r.x1; ++x)
+                    assert(pixel(x, y) == ((checker[(y - r.y0) & 1] &
+                        (0x80u >> ((x - r.x0) & 7))) != 0));
+
+            gpx_fill_rectangle(ctx, &r, CO_FORE, BM_CPY,
+                &solid, 1, NULL);
+            gpx_fill_rectangle(ctx, &r, CO_FORE, BM_XOR,
+                checker, 2, NULL);
+            for (y = r.y0; y <= r.y1; ++y)
+                for (x = r.x0; x <= r.x1; ++x)
+                    assert(pixel(x, y) == ((checker[(y - r.y0) & 1] &
+                        (0x80u >> ((x - r.x0) & 7))) == 0));
+        }
+    }
+
+    /* Cursor metadata lives directly after each bitmap payload. */
+    for (s = 0; s <= GPXSB_CURSOR_RESIZE; ++s) {
+        bmp_t *bitmap = gpx_get_stock_bmp((uint8_t)s);
+        uint8_t packed;
+        assert(bitmap);
+        packed = bitmap->bitmap[bitmap->size];
+        assert((packed & 0x0f) < bitmap->w);
+        assert((packed >> 4) < bitmap->h);
+        if (s == GPXSB_CURSOR_CARET)
+            assert((packed >> 4) == 7 && (packed & 0x0f) == 1);
+    }
+
+    /* Every cursor survives centered and edge-clamped show/hide placement. */
+    {
+        static const coord positions[][2] = {
+            {960, 540}, {0, 0}, {1919, 0}, {0, 1079}, {1919, 1079}
+        };
+        uint8_t under[GPX_SPRITE_BG_SIZE];
+        sprite_t sprite;
+        gpx_fill_rectangle(ctx, &whole, CO_FORE, BM_CPY,
+            background, 3, NULL);
+        memcpy(snapshot, screen, FB_SIZE);
+        sprite.background = (bmp_t *)under;
+        sprite.clip = NULL;
+        for (s = 0; s <= GPXSB_CURSOR_RESIZE; ++s) {
+            uint8_t packed;
+            uint8_t hotspot_x;
+            uint8_t hotspot_y;
+            sprite.bitmap = gpx_get_stock_bmp((uint8_t)s);
+            assert(sprite.bitmap);
+            packed = sprite.bitmap->bitmap[sprite.bitmap->size];
+            hotspot_x = (uint8_t)(packed & 0x0f);
+            hotspot_y = (uint8_t)(packed >> 4);
+            for (ci = 0; ci < sizeof(positions) / sizeof(positions[0]); ++ci) {
+                sprite.x = positions[ci][0] >= hotspot_x ?
+                    (coord)(positions[ci][0] - hotspot_x) : 0;
+                sprite.y = positions[ci][1] >= hotspot_y ?
+                    (coord)(positions[ci][1] - hotspot_y) : 0;
+                if (ci == 0) {
+                    assert(sprite.x + hotspot_x == positions[ci][0]);
+                    assert(sprite.y + hotspot_y == positions[ci][1]);
+                }
+                gpx_show_sprite(ctx, &sprite);
+                gpx_hide_sprite(ctx, &sprite);
+                assert(memcmp(snapshot, screen, FB_SIZE) == 0);
+            }
+        }
+    }
+}
+
 int main(void)
 {
     const char *path = getenv("GPX_RASTA_FRAMEBUFFER");
@@ -210,6 +434,7 @@ int main(void)
     reference = ref_gpx_create(GPXM_DEFAULT);
     differential();
     native_cases();
+    ui_primitives();
     gpx_clrscr();
     for (size_t i = 0; i < FB_SIZE; ++i) assert(screen[i] == 0);
     gpx_destroy(ctx);

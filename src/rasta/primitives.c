@@ -124,50 +124,6 @@ static int rasta_span_bounds(
     return lo <= hi;
 }
 
-static uint8_t rasta_draw_hline(
-    gpx_t *gpx, coord x0, coord x1, coord y,
-    color c, bmode m, uint8_t lpatt, const rect_t *clip)
-{
-    uint8_t original_lpatt = lpatt;
-
-    if (x1 < x0) {
-        coord temp = x0;
-        x0 = x1;
-        x1 = temp;
-    }
-
-    if (clip) {
-        /* A swapped clip rect admits no coordinate at all, the same way
-         * gpx_draw_pixel sees it. */
-        if (clip->x0 > clip->x1 || clip->y0 > clip->y1)
-            return original_lpatt;
-        if (y < clip->y0 || y > clip->y1)
-            return original_lpatt;
-    }
-    if (y < 0 || y >= RASTA_HEIGHT)
-        return original_lpatt;
-
-    {
-        coord xlo;
-        coord xhi;
-        if (!rasta_span_bounds(x0, x1, RASTA_WIDTH - 1,
-                clip ? &clip->x0 : (const coord *)0,
-                clip ? &clip->x1 : (const coord *)0, &xlo, &xhi))
-            return original_lpatt;
-
-        lpatt = rasta_rotate_pattern_n(lpatt,
-            (uint8_t)(((uint16_t)xlo - (uint16_t)x0) & 7));
-
-        for (coord x = xlo; x <= xhi; ++x) {
-            if (lpatt & 0x01)
-                gpx_draw_pixel(gpx, x, y, c, m, clip);
-            lpatt = rasta_rotate_pattern(lpatt);
-        }
-    }
-
-    return lpatt;
-}
-
 /* Line semantics: the segment is clipped up front (Cohen-Sutherland) against
  * the effective rect = clip ∩ screen (screen alone when clip is NULL), the
  * dash pattern is pre-rotated by the skipped major-axis distance, and the
@@ -197,6 +153,9 @@ uint8_t gpx_draw_line(
     if (x0 == x1 && y0 == y1) {
         if (lpatt & 0x01)
             gpx_draw_pixel(gpx, x0, y0, c, m, clip);
+        else if (m == BM_CPY)
+            gpx_draw_pixel(gpx, x0, y0,
+                (color)((c ^ 1u) & 1u), BM_CPY, clip);
         return original_lpatt;
     }
 
@@ -239,6 +198,9 @@ uint8_t gpx_draw_line(
     while (1) {
         if (lpatt & 0x01)
             rasta_pixel(gpx, x0, y0, c, m, NULL); /* pre-clipped: no per-pixel checks */
+        else if (m == BM_CPY)
+            rasta_pixel(gpx, x0, y0,
+                (color)((c ^ 1u) & 1u), BM_CPY, NULL);
         if (x0 == x1 && y0 == y1)
             break;
         e2 = err;
@@ -254,48 +216,6 @@ uint8_t gpx_draw_line(
     }
 
     return lpatt;
-}
-
-void gpx_draw_rectangle(
-    gpx_t *gpx, rect_t *r,
-    color c, bmode m, uint8_t lpatt, const rect_t *clip)
-{
-    if (!r)
-        return;
-    rect_t rect = *r;
-    if (rect.x0 > rect.x1) {
-        coord temp = rect.x0;
-        rect.x0 = rect.x1;
-        rect.x1 = temp;
-    }
-    if (rect.y0 > rect.y1) {
-        coord temp = rect.y0;
-        rect.y0 = rect.y1;
-        rect.y1 = temp;
-    }
-
-    rasta_draw_hline(gpx, rect.x0, rect.x1, rect.y0, c, m, lpatt, clip);
-    if (rect.y1 != rect.y0)
-        rasta_draw_hline(gpx, rect.x0, rect.x1, rect.y1, c, m, lpatt, clip);
-
-    {
-        coord ylo;
-        coord yhi;
-        if (rasta_span_bounds(rect.y0, rect.y1, RASTA_HEIGHT - 1,
-                clip ? &clip->y0 : (const coord *)0,
-                clip ? &clip->y1 : (const coord *)0, &ylo, &yhi)) {
-            /* The two horizontal edges are already drawn. */
-            if (ylo == rect.y0)
-                ++ylo;
-            if (yhi == rect.y1)
-                --yhi;
-            for (coord y = ylo; y <= yhi; ++y) {
-                gpx_draw_pixel(gpx, rect.x0, y, c, m, clip);
-                if (rect.x1 != rect.x0)
-                    gpx_draw_pixel(gpx, rect.x1, y, c, m, clip);
-            }
-        }
-    }
 }
 
 void gpx_fill_rectangle(
@@ -340,10 +260,13 @@ void gpx_fill_rectangle(
             for (coord x = xlo; x <= xhi; ++x) {
                 uint8_t mask = (uint8_t)(0x80 >>
                     (((uint16_t)x - (uint16_t)rect.x0) & 7));
-                if (pattern & mask)
+                if (m == BM_CPY)
+                    gpx_draw_pixel(gpx, x, y,
+                        (pattern & mask) ? c : (color)((c ^ 1u) & 1u),
+                        BM_CPY, clip);
+                else if (pattern & mask)
                     gpx_draw_pixel(gpx, x, y, c, m, clip);
             }
         }
     }
 }
-

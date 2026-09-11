@@ -27,14 +27,14 @@ void main(void)
 
         if (rnd() & 1) {
             gpx_fill_rectangle(gpx, &r, (color)(rnd() & 1),
-                (bmode)(rnd() & 1), patt, len, (const rect_t *)0);
+                (bmode)(rnd() % 3), patt, len, (const rect_t *)0);
         } else {
             clip.x0 = rnd_between(-20, ZX_W);
             clip.y0 = rnd_between(-20, ZX_H);
             clip.x1 = (coord)(clip.x0 + rnd_between(0, 90));
             clip.y1 = (coord)(clip.y0 + rnd_between(0, 70));
             gpx_fill_rectangle(gpx, &r, (color)(rnd() & 1),
-                (bmode)(rnd() & 1), patt, len, &clip);
+                (bmode)(rnd() % 3), patt, len, &clip);
         }
     }
 

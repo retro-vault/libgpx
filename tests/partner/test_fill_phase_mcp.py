@@ -54,7 +54,7 @@ def main():
                 origin = (-32768, -32767, -257, -1, 0)[trial // 6]
                 count = (1, 3, 5, 127, 128, 255)[trial % 6]
                 left = (-32768, -511, -1, 0, 17)[trial % 5]
-                color, operation = (trial // 2) & 1, trial & 1
+                color, operation = (trial // 3) & 1, trial % 3
                 rows = bytes(patterns[(i + trial) % len(patterns)]
                              for i in range(count))
                 rectangle = (left, origin, 1023, 3)
@@ -71,8 +71,12 @@ def main():
                 for y in range(1, 3):
                     pattern = rows[(y - origin) % count]
                     for x in range(max(left, 3), 1020):
-                        if pattern & (0x80 >> ((x - left) & 7)):
-                            expected[y][x] = (expected[y][x] ^ 1) if operation else color
+                        source = pattern & (0x80 >> ((x - left) & 7))
+                        if source:
+                            expected[y][x] = (expected[y][x] ^ 1) \
+                                if operation == 1 else color
+                        elif operation == 0:
+                            expected[y][x] = color ^ 1
                 machine.screenshot(shot)
                 actual = raster_from_png(shot, 1024, height)
                 if actual != expected:

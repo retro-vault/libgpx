@@ -7,9 +7,8 @@
         ;;  - clips x to those bounds
         ;;  - draws by bytes (start/stop masks + full middle bytes)
         ;;  - preserves pattern phase (skip + drawn span)
-        ;;  - pattern 0-bits are left alone, matching gpx_draw_pixel and the
-        ;;    Bresenham raster: CO_FORE sets pattern-1 pixels, CO_BACK clears
-        ;;    them, BM_XOR toggles them and ignores the color.
+        ;;  - BM_CPY replaces both pattern values in one span pass; BM_OR and
+        ;;    BM_XOR affect only pattern-1 pixels.
         ;;
         ;; CPC x runs to 639, so x stays 16-bit only until it is split into a
         ;; byte index and a pixel index. The byte index is 0..79 in both
@@ -35,6 +34,7 @@
 
         .globl  __gpx_hline
         .globl  __gpx_span_row
+        .globl  __gpx_span_row_copy
         .globl  __gpx_span_setup
         .globl  __gpx_xbyte
         .globl  __rect_screen
@@ -242,6 +242,20 @@ __gpx_hline::
         inc     h
 .ghl_row_ptr_ok:
         ld      a,-7(ix)                ; byte-grid aligned pattern
+        ld      b,11(ix)
+        ld      c,10(ix)
+        ld      d,a
+        ld      a,b
+        or      a
+        ld      a,d
+        jr      nz,.ghl_stencil
+        bit     0,c
+        jr      nz,.ghl_copy
+        cpl                             ; COPY background swaps 1 and 0
+.ghl_copy:
+        call    __gpx_span_row_copy
+        jr      .ghl_ret_pattern
+.ghl_stencil:
         call    __gpx_span_row
 
 .ghl_ret_pattern:
@@ -768,6 +782,96 @@ __gpx_span_row::
         and     c
         xor     b
         ld      (hl),a
+        ret
+
+        ;; ------------------------------------------------------------
+        ;; __gpx_span_row_copy
+        ;;
+        ;; Opaque span variant. A is the desired logical eight-pixel
+        ;; pattern. Both values replace destination pixels inside the span.
+        ;; Mode 1 splits the pattern across alternating high nibbles.
+        ;; Clobbers: AF, BC and DE. Preserves HL, IX and IY.
+        ;; ------------------------------------------------------------
+__gpx_span_row_copy::
+        push    hl
+        ld      c,a
+        ld      a,5(iy)
+        push    af                      ; restore start parity for the next row
+        ld      a,(__cpc_mode1)
+        or      a
+        jr      z,.src_mode2
+
+        ld      a,c
+        and     #0xF0
+        ld      d,a                     ; even byte
+        ld      a,c
+        rlca
+        rlca
+        rlca
+        rlca
+        and     #0xF0
+        ld      e,a                     ; odd byte
+        ld      a,5(iy)
+        or      a
+        jr      z,.src_store_halves
+        ld      a,d
+        ld      d,e
+        ld      e,a
+.src_store_halves:
+        ld      6(iy),d
+        ld      7(iy),e
+        jr      .src_setup
+.src_mode2:
+        ld      6(iy),c
+        ld      7(iy),c
+.src_setup:
+        xor     a
+        ld      5(iy),a                 ; current byte parity
+        ld      b,2(iy)
+.src_loop:
+        ld      a,(__cpc_solid)
+        ld      c,a                     ; middle-byte coverage
+        ld      a,b
+        cp      2(iy)
+        jr      nz,.src_not_first
+        ld      c,0(iy)
+.src_not_first:
+        ld      a,b
+        dec     a
+        jr      nz,.src_have_coverage
+        ld      a,c
+        and     1(iy)
+        ld      c,a                     ; last, or first & last when single
+.src_have_coverage:
+        ;; Edge masks are shifted from the high nibble in mode 1 and may
+        ;; therefore extend into its untouched second bit plane. Limit the
+        ;; replacement mask to the active plane before clearing old bits.
+        ld      a,(__cpc_solid)
+        and     c
+        ld      c,a
+        ld      a,5(iy)
+        or      a
+        ld      a,6(iy)
+        jr      z,.src_have_pattern
+        ld      a,7(iy)
+.src_have_pattern:
+        ld      d,a
+        ld      a,c
+        cpl
+        and     (hl)
+        ld      e,a                     ; destination outside the span
+        ld      a,d
+        and     c
+        or      e
+        ld      (hl),a
+        ld      a,5(iy)
+        xor     #0x01
+        ld      5(iy),a
+        inc     hl
+        djnz    .src_loop
+        pop     af
+        ld      5(iy),a
+        pop     hl
         ret
 
         .area   _DATA

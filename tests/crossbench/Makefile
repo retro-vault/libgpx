@@ -16,14 +16,14 @@ XB_HDR := $(ROOT_DIR)/tests/crossbench/src/xbench.h
 
 # Relink when a backend changes, not just when the scenario does.
 ZX_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s) $(wildcard $(ROOT_DIR)/src/zx/*.c) \
-	$(ADVANCED_SRCS)
+	$(CORE_ASM_SRCS) $(ADVANCED_SRCS)
 PARTNER_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/partner/*.s) \
 	$(wildcard $(ROOT_DIR)/src/partner/*.c) \
 	$(wildcard $(ROOT_DIR)/src/partner/*.inc) \
-	$(ADVANCED_SRCS)
+	$(CORE_ASM_SRCS) $(ADVANCED_SRCS)
 CPC_LIB_SRCS := $(wildcard $(ROOT_DIR)/src/cpc/*.s) \
 	$(wildcard $(ROOT_DIR)/src/cpc/*.inc) \
-	$(ADVANCED_SRCS)
+	$(CORE_ASM_SRCS) $(ADVANCED_SRCS)
 
 XB_BIN := $(BIN_DIR)/xbench
 XB_OUT := $(foreach n,$(XB_NAMES),$(XB_BIN)/$(n)_zx.ihx \

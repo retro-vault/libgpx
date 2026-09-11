@@ -39,5 +39,17 @@ void main(void)
     gpx_draw_line(gpx, 10, 110, 25, 110, CO_FORE, BM_CPY, 0x72, (const rect_t *)0);
     gpx_draw_line(gpx, 10, 111, 25, 111, CO_FORE, BM_CPY, 0xA5, (const rect_t *)0);
 
+    /* COPY replaces both pattern values; OR changes only the one bits. */
+    {
+        static uint8_t background[1] = {0xCC};
+        rect_t rows = {10, 120, 73, 121};
+        gpx_fill_rectangle(gpx, &rows, CO_FORE, BM_CPY,
+            background, 1, (const rect_t *)0);
+        gpx_draw_line(gpx, 10, 120, 73, 120,
+            CO_FORE, BM_CPY, 0xAA, (const rect_t *)0);
+        gpx_draw_line(gpx, 10, 121, 73, 121,
+            CO_BACK, BM_OR, 0xAA, (const rect_t *)0);
+    }
+
     __asm__("halt");
 }

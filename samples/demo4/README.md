@@ -48,10 +48,10 @@ mode 2 does not. A program that wants a visually round circle on the CPC has
 to scale its radius to the mode itself.
 
 The four pictures are the same drawing at four geometries. Unlike the fonts
-and stock cursors in Demo 3, nothing here is per machine: both circle
-primitives are one portable module in `src/common` written against
-`gpx_draw_pixel` and `gpx_draw_line`, so the backends cannot disagree about a
-circle. `tests/conformance` checks exactly that, phase by phase.
+and stock cursors in Demo 3, nothing here is per machine: the Z80 circle
+primitives are shared hand-written assembly in `src/common`, while Rasta has
+an equivalent native C implementation. `tests/conformance` checks that the
+backends produce the same circle, phase by phase.
 
 ### What the rows show
 
@@ -59,11 +59,11 @@ circle. `tests/conformance` checks exactly that, phase by phase.
 `CO_BACK` at two thirds of the radius. Nothing special is needed to erase
 into a fill: the outline is just pixels in the background colour.
 
-**Row 2, the sixth disc.** A `0xAA, 0x55` dither leaves the disc's edge
-ragged, because a pattern bit that is 0 is skipped rather than drawn. Drawing
-the outline of the *same* radius over it closes the edge exactly — the fill
-and the outline walk the same stepper, so the rim lands on the disc's own
-boundary rather than inside or outside it.
+**Row 2, the sixth disc.** A `0xAA, 0x55` dither in `BM_CPY` writes foreground
+for one bits and background for zero bits, leaving a dithered boundary.
+Drawing the outline of the *same* radius over it closes the edge exactly —
+the fill and the outline walk the same stepper, so the rim lands on the disc's
+own boundary rather than inside or outside it.
 
 **Row 3, the XOR discs.** Three overlapping discs in `BM_XOR`, so each
 overlap cancels back out. This only works because every row of a fill is

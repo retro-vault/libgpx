@@ -1,248 +1,45 @@
-        ;; gpx_draw_rectangle.s
-        ;;
-        ;; Partner rectangle outline renderer:
-        ;;  - normalizes rectangle coordinates
-        ;;  - top/bottom use requested pattern
-        ;;  - left/right are solid and exclude corners
-        ;;
-        ;; GPL2 License (see: LICENSE)
-        ;; Copyright (C) 2026 Tomaz Stih
-        ;;
-        ;; 2026-03-30   TS
+        ;; gpx_draw_rectangle.s -- legacy all-edge entry.
+        ;; GPL2 License (see: LICENSE), Copyright (C) 2026 Tomaz Stih
 
         .module gpx_draw_rectangle
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_rectangle
-        .globl  _gpx_draw_line
-        .globl  __rect_cmp16s_lt
-        .globl  __rect_unpack_norm
+        .globl  _gpx_draw_box
 
         .area   _CODE
 
         ;; ------------------------------------------------------------
-        ;; void gpx_draw_rectangle(
-        ;;   gpx_t *gpx, rect_t *r,
-        ;;   color c, bmode m, uint8_t lpatt, const rect_t *clip)
-        ;;
-        ;; Arguments:
-        ;;   HL = gpx
-        ;;   DE = r
-        ;;   stack: c, m, lpatt, clip
-        ;;
-        ;; Clobbers:
-        ;;   AF, BC, DE, HL, IX
+        ;; void gpx_draw_rectangle(gpx_t *gpx, rect_t *r, color c,
+        ;;     bmode m, uint8_t lpatt, const rect_t *clip)
+        ;; Clobbers: AF, BC, DE, HL, IX, IY and the alternate set.
 _gpx_draw_rectangle::
         push    ix
         ld      ix,#0
         add     ix,sp
-
-        ;; preserve gpx pointer across local stack allocation
-        ld      b,h                     ; gpx hi
-        ld      c,l                     ; gpx lo
-
-        ;; locals (14 bytes)
-        ;; -1..-2   x0
-        ;; -3..-4   x1
-        ;; -5..-6   y0
-        ;; -7..-8   y1
-        ;; -9..-10  gpx
-        ;; -11..-12 ytop = y0+1
-        ;; -13..-14 ybot = y1-1
-        ld      hl,#-14
-        add     hl,sp
-        ld      sp,hl
-
-        ;; save gpx
-        ld      -9(ix),c
-        ld      -10(ix),b
-
-        ;; if (r == NULL) return
-        ld      a,d
-        or      e
-        jp      z,.dr_done
-
-        ;; unpack + normalize rect into locals
-        push    ix
-        pop     hl
-        call    __rect_unpack_norm
-
-        ;; top edge
+        push    hl
+        push    de
         ld      l,7(ix)
         ld      h,8(ix)
-        push    hl                      ; clip
-
+        push    hl
         ld      a,6(ix)
-        push    af                      ; lpatt
+        push    af
         inc     sp
-
         ld      l,4(ix)
         ld      h,5(ix)
-        push    hl                      ; c,m
-
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        push    hl                      ; y1 = y0
-
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        push    hl                      ; x1
-
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        push    hl                      ; y0
-
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
-        ld      d,-2(ix)
-        call    _gpx_draw_line
-
-        ;; A one-row rectangle has a single horizontal edge. Drawing it as
-        ;; both the top and the bottom would apply the pattern twice, which
-        ;; is invisible in BM_CPY but cancels under BM_XOR. The sides are
-        ;; empty here too (ybot = y0-1 < ytop), so this is the whole rest.
-        ld      a,-5(ix)
-        cp      -7(ix)
-        jr      nz,.dr_bottom
-        ld      a,-6(ix)
-        cp      -8(ix)
-        jp      z,.dr_done
-
-.dr_bottom:
-        ;; bottom edge
-        ld      l,7(ix)
-        ld      h,8(ix)
-        push    hl                      ; clip
-
-        ld      a,6(ix)
-        push    af                      ; lpatt
+        push    hl
+        ld      a,#0x0f
+        push    af
         inc     sp
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                      ; c,m
-
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        push    hl                      ; y1 = y0
-
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        push    hl                      ; x1
-
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        push    hl                      ; y0
-
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
-        ld      d,-2(ix)
-        call    _gpx_draw_line
-
-        ;; ytop = y0 + 1
-        ld      l,-5(ix)
-        ld      h,-6(ix)
-        inc     hl
-        ld      -11(ix),l
-        ld      -12(ix),h
-
-        ;; ybot = y1 - 1
-        ld      l,-7(ix)
-        ld      h,-8(ix)
-        dec     hl
-        ld      -13(ix),l
-        ld      -14(ix),h
-
-        ;; if (ybot < ytop) skip sides
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        ld      e,-11(ix)
-        ld      d,-12(ix)
-        call    __rect_cmp16s_lt
-        jp      nz,.dr_done
-
-        ;; left side, solid
-        ld      l,7(ix)
-        ld      h,8(ix)
-        push    hl                      ; clip
-
-        ld      a,#0xFF
-        push    af                      ; lpatt solid
-        inc     sp
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                      ; c,m
-
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        push    hl                      ; y1
-
-        ld      l,-1(ix)
-        ld      h,-2(ix)
-        push    hl                      ; x1 = x0
-
-        ld      l,-11(ix)
-        ld      h,-12(ix)
-        push    hl                      ; y0
-
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-1(ix)
-        ld      d,-2(ix)
-        call    _gpx_draw_line
-
-        ;; A one-column rectangle has a single vertical edge, for the same
-        ;; reason the one-row case above has a single horizontal one.
-        ld      a,-1(ix)
-        cp      -3(ix)
-        jr      nz,.dr_right
-        ld      a,-2(ix)
-        cp      -4(ix)
-        jr      z,.dr_done
-
-.dr_right:
-        ;; right side, solid
-        ld      l,7(ix)
-        ld      h,8(ix)
-        push    hl                      ; clip
-
-        ld      a,#0xFF
-        push    af                      ; lpatt solid
-        inc     sp
-
-        ld      l,4(ix)
-        ld      h,5(ix)
-        push    hl                      ; c,m
-
-        ld      l,-13(ix)
-        ld      h,-14(ix)
-        push    hl                      ; y1
-
-        ld      l,-3(ix)
-        ld      h,-4(ix)
-        push    hl                      ; x1 = x1
-
-        ld      l,-11(ix)
-        ld      h,-12(ix)
-        push    hl                      ; y0
-
-        ld      l,-9(ix)
-        ld      h,-10(ix)
-        ld      e,-3(ix)
-        ld      d,-4(ix)
-        call    _gpx_draw_line
-
-.dr_done:
+        ld      e,-4(ix)
+        ld      d,-3(ix)
+        ld      l,-2(ix)
+        ld      h,-1(ix)
+        call    _gpx_draw_box
         ld      sp,ix
         pop     ix
-
-        ;; callee cleanup: c(1), m(1), lpatt(1), clip(2) = 5
-        pop     de
-        ld      hl,#5
-        add     hl,sp
-        ld      sp,hl
-        push    de
-        ret
+        pop     hl
+        pop     bc
+        pop     bc
+        inc     sp
+        jp      (hl)

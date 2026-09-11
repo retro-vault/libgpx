@@ -51,6 +51,7 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/gpx_measure_text.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_text.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_line.s \
+	$(ROOT_DIR)/src/partner/gpx_draw_box.s \
 	$(ROOT_DIR)/src/partner/gpx_draw_rectangle.s \
 	$(ROOT_DIR)/src/partner/gpx_show_sprite.s \
 	$(ROOT_DIR)/src/partner/gpx_fill_rectangle.s \
@@ -66,7 +67,8 @@ PARTNER_ASM_SRCS := \
 	$(ROOT_DIR)/src/partner/_gpx_font-unscii-8-tiny.s
 
 PARTNER_ASM_RELS := $(patsubst $(ROOT_DIR)/src/partner/%.s,$(PARTNER_BUILD_DIR)/%.rel,$(PARTNER_ASM_SRCS))
-PARTNER_COMMON_RELS := $(PARTNER_ASM_RELS)
+PARTNER_CORE_ASM_RELS := $(patsubst $(ROOT_DIR)/src/common/%.s,$(PARTNER_BUILD_DIR)/%.rel,$(CORE_ASM_SRCS))
+PARTNER_COMMON_RELS := $(PARTNER_ASM_RELS) $(PARTNER_CORE_ASM_RELS)
 
 .PHONY: build run helpers pattern-tests tiny-tests partner-visuals gdp gdp-bench gdp-tests clean
 
@@ -110,6 +112,9 @@ $(PARTNER_BUILD_DIR)/%.rel: $(ROOT_DIR)/src/partner/%.s | $(PARTNER_BUILD_DIR)/
 
 $(PARTNER_BUILD_DIR)/%.rel: $(ROOT_DIR)/src/partner/%.c | $(PARTNER_BUILD_DIR)/
 	$(IDPRUN) '$(XCC) $(XCFLAGS) -c -o "$(REL)" "$(SRC)"'
+
+$(PARTNER_BUILD_DIR)/%.rel: $(ROOT_DIR)/src/common/%.s | $(PARTNER_BUILD_DIR)/
+	$(IDPRUN) '$(XAS) -o "$(REL)" "$(SRC)"'
 
 $(PARTNER_BUILD_DIR)/test_%.rel: $(ROOT_DIR)/tests/partner/test_%.c | $(PARTNER_BUILD_DIR)/
 	$(IDPRUN) '$(XCC) $(XCFLAGS) -c -o "$(REL)" "$(SRC)"'

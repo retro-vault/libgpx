@@ -361,6 +361,11 @@ __gpx_bresenham_line::
         rr      l
 .bl_err_ok:
         exx
+        ld      a,A_M(ix)
+        or      a
+        jr      nz,.bl_mode_flag_ok
+        set     7,L_FLAGS(ix)           ; opaque COPY: also write pattern zeroes
+.bl_mode_flag_ok:
 
         ;; mask = the byte's top pixel walked right by (x0 & CPC_PIX_MASK)
         ld      a,(__cpc_pixmask)
@@ -489,6 +494,7 @@ __gpx_bresenham_line::
         .macro  BL_XLOOP lp,np,yup,xadv,rot,wrap,narrow,right
 lp:
         rrc     c                       ; carry = pattern bit, C rotated for
+        call    nc,.bl_zero
         jr      nc,np                   ; the next step in the same op
         ld      a,(hl)
         or      d
@@ -588,7 +594,10 @@ wrap:
         ;; ---- shared tail: final pixel + return pattern ----
 .bl_last:
         bit     0,c
-        jr      z,.bl_retp
+        jr      nz,.bl_last_one
+        call    .bl_zero
+        jr      .bl_retp
+.bl_last_one:
         ld      a,(hl)
         or      d
         xor     e
@@ -623,6 +632,7 @@ wrap:
         .macro  BL_YLOOP lp,np,xleft,xrwrap,xlwrap,yadv,rot,narrow,up
 lp:
         rrc     c                       ; carry = pattern bit, C rotated for
+        call    nc,.bl_zero
         jr      nc,np                   ; the next step in the same op
         ld      a,(hl)
         or      d
@@ -735,6 +745,7 @@ xlwrap:
         ;; B=steps C=patt D/E=masks HL=vram. ~105 T/pixel.
 .bv_loop:
         rrc     c                       ; carry = pattern bit, C rotated for
+        call    nc,.bl_zero
         jr      nc,.bv_np               ; the next step in the same op
         ld      a,(hl)
         or      d
@@ -749,6 +760,18 @@ xlwrap:
 .bl_step3:
         djnz    .bv_loop
         jp      .bl_last
+
+        ;; Pattern-zero pixels are written only by opaque COPY. D/E describe
+        ;; the pattern-one operation; the extra XOR D applies its inverse.
+.bl_zero:
+        bit     7,L_FLAGS(ix)
+        ret     z
+        ld      a,(hl)
+        or      d
+        xor     e
+        xor     d
+        ld      (hl),a
+        ret
 
         ;; ---- C-S edge handlers ----
         ;; stack holds pushed BC (B = c0 = which endpoint moves)

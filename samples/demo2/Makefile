@@ -1,4 +1,4 @@
-# Full-API smoke-test scene, built for both machines.
+# Drawing-API smoke-test scene, built for ZX and Partner.
 
 ROOT_DIR ?= $(abspath ../..)
 BUILD_DIR := $(ROOT_DIR)/build/demo2

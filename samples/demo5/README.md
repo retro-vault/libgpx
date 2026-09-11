@@ -45,10 +45,10 @@ The screen is three rows of four:
 
 As in Demo 4 the CPC pictures are stretched: a CPC pixel is not square, and
 the captures are doubled vertically the way CPC screenshots conventionally
-are. Nothing here is per machine — both polygon primitives are one
-portable module in `src/common` driving each backend through
-`gpx_draw_line` — so the four pictures are the same drawing at four
-geometries. `tests/conformance` checks that phase by phase.
+are. The Z80 polygon primitives are shared hand-written assembly in
+`src/common`, while Rasta has an equivalent native C implementation, so the
+four pictures are the same drawing at four geometries. `tests/conformance`
+checks that phase by phase.
 
 ### What the rows show
 
@@ -63,9 +63,9 @@ pentagram's middle is genuinely outside the shape under that rule, which is
 why it stays hollow — and why the same five points drawn as a ten-point
 star in row 1 fill solid.
 
-**Row 3, the dithered hexagon.** A `0xAA, 0x55` dither leaves the edge
-ragged, because a pattern bit that is 0 is skipped rather than drawn.
-Drawing the outline of the *same* points over it closes the edge exactly.
+**Row 3, the dithered hexagon.** A `0xAA, 0x55` dither in `BM_CPY` writes
+foreground for one bits and background for zero bits, leaving a dithered
+edge. Drawing the outline of the *same* points over it closes the edge exactly.
 That the two agree is the fiddly part of the implementation: an edge the
 path runs up has to be walked down to fill it, and this Bresenham is not
 symmetric under reversal, so a flipped edge is walked with the opposite

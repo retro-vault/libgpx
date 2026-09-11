@@ -144,5 +144,18 @@ void main(void)
         gpx_fill_polygon(gpx, p, 3, CO_FORE, BM_XOR, check, 2, 0);
         gpx_fill_polygon(gpx, p, 3, CO_FORE, BM_XOR, check, 2, 0);
     }
+    phase();
+
+    /* OR changes pattern-one pixels without replacing the pattern zeroes. */
+    gpx_clrscr();
+    {
+        static rect_t band = {0, 0, 255, 191};
+        gpx_fill_rectangle(gpx, &band, CO_FORE, BM_CPY, solid, 1, 0);
+        p[0].x = 18;  p[0].y = 16;
+        p[1].x = 232; p[1].y = 38;
+        p[2].x = 204; p[2].y = 172;
+        p[3].x = 72;  p[3].y = 154;
+        gpx_fill_polygon(gpx, p, 4, CO_BACK, BM_OR, brick, 8, 0);
+    }
     done();
 }

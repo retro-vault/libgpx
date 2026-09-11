@@ -9,19 +9,22 @@ DOCKER_IDP ?= wischner/xcc-z80-idp
 DOCKER_CPC ?= wischner/xcc-z80-cpc
 DOCKER_USER ?= $(shell id -u):$(shell id -g)
 
+# Handwritten Z80 public modules shared by ZX, Partner and CPC.
+CORE_ASM_NAMES :=
+CORE_ASM_SRCS := $(addprefix $(ROOT_DIR)/src/common/,$(CORE_ASM_NAMES))
+CORE_ASM_GLOB := $(addprefix src/common/,$(CORE_ASM_NAMES))
+
 # ADVANCED selects the optional half of the library. Set it to 0, no or
 # false (any case) and the build is exactly the core set of primitives;
-# anything else -- the default -- also assembles src/common, the portable
-# modules that are written against the public API rather than against one
-# machine's framebuffer. They cost nothing in a program that does not call
-# them, because the linker only pulls the archive members it needs.
+# anything else -- the default -- also assembles the advanced modules in
+# src/common. The small core list in src/Makefile is always assembled. All
+# remain separate archive members, so unused operations cost nothing.
 ADVANCED ?= 1
 ADVANCED_FALSE := 0 n N no No NO nO false False FALSE off Off OFF
 ifeq ($(strip $(filter $(ADVANCED),$(ADVANCED_FALSE))),)
 ADVANCED_ON := 1
-ADVANCED_SRCS := $(wildcard $(ROOT_DIR)/src/common/*.s)
-# Expanded by the shell inside the container, where the repo is /work.
-ADVANCED_GLOB := src/common/*.s
+ADVANCED_SRCS := $(filter-out $(CORE_ASM_SRCS),$(wildcard $(ROOT_DIR)/src/common/*.s))
+ADVANCED_GLOB := $(patsubst $(ROOT_DIR)/%,%,$(ADVANCED_SRCS))
 else
 ADVANCED_ON := 0
 ADVANCED_SRCS :=
