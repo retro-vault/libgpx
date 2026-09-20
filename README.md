@@ -16,12 +16,15 @@ screenshots from every supported backend.
 | Machine | Screen | Backend |
 |---|---|---|
 | ZX Spectrum 48K | 256 x 192 | `src/zx` |
+| Timex/Sinclair hi-res | 512 x 192 | `src/timex` |
 | Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` |
 | Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` |
 | Rasta (Linux) | 1920 x 1080 | `src/rasta` |
 
 The machines have almost nothing in common. The Spectrum has a packed
-framebuffer the CPU reads and writes directly; the Partner has an EF9367
+framebuffer the CPU reads and writes directly; Timex hi-res alternates its
+logical eight-pixel columns between Spectrum-layout files at `0x4000` and
+`0x6000`; the Partner has an EF9367
 drawing coprocessor and display memory the CPU cannot read at all; the CPC
 interleaves its framebuffer into eight banks and changes how many pixels
 fit in a byte depending on the display mode. libgpx hides the difference.
@@ -31,6 +34,7 @@ The panels example on several display layouts:
 | | |
 |---|---|
 | ZX Spectrum, 256 x 192 | ![panels on the ZX Spectrum](docs/images/screenshots/panels-zx.png) |
+| Timex/Sinclair hi-res, 512 x 192 | ![panels on Timex/Sinclair hi-res](docs/images/screenshots/panels-timex.png) |
 | Amstrad CPC, 640 x 200 | ![panels on the Amstrad CPC in mode 2](docs/images/screenshots/panels-cpc-640x200.png) |
 | Amstrad CPC, 320 x 200 | ![panels on the Amstrad CPC in mode 1](docs/images/screenshots/panels-cpc-320x200.png) |
 | Rasta, 1920 x 1080 | ![panels on Rasta at Full HD](docs/images/screenshots/panels-rasta.png) |
@@ -47,12 +51,14 @@ Docker and Python 3 are the only requirements — no host toolchain.
 | Machine | Image |
 |---|---|
 | ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
+| Timex/Sinclair hi-res | `wischner/xcc-z80-zx-spectrum` |
 | Iskra Delta Partner | `wischner/xcc-z80-idp` |
 | Amstrad CPC | `wischner/xcc-z80-cpc` |
 | Rasta | `libgpx-rasta:local` (built automatically from `scripts/docker/rasta.Dockerfile`) |
 
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
+make timex-lib     # bin/timex/libgpx.lib    (Timex 512x192 hi-res)
 make partner-lib   # bin/partner/libgpx.lib  (Partner)
 make cpc-lib       # bin/cpc/libgpx.lib      (CPC, both display modes)
 make rasta-lib     # bin/rasta/libgpx.a + libgpx.so + Rasta viewer
@@ -88,6 +94,11 @@ the Gate Array to match and records the geometry, and `gpx_width()` reports
 it from then on. The modes pack a different number of pixels into a byte, so
 the mode test is deliberately coarse — it sits once per run, once per row or
 once per byte, never once per pixel.
+
+The Timex library has one fixed 512x192 monochrome layout. `gpx_create()`
+selects SCLD mode `0x06` on port `0xff`, clears both pixel files and reports
+the 512x192 geometry. It uses the Spectrum toolchain and startup convention;
+link `bin/timex/libgpx.lib` in place of `bin/libgpx.lib`.
 
 ## Using it
 
@@ -174,7 +185,7 @@ The output is a Spectrum `.tap` and a Partner CP/M `.com`. The manual's
 [demo reference](docs/manuals/PROGRAMMING-LIBGPX.md#demo-directory-reference)
 connects these programs to the API concepts they exercise.
 
-## The three backends, side by side
+## The three benchmarked backends, side by side
 
 | | ![ZX Spectrum](docs/images/platforms/zxspec48.jpg) | ![Iskra Delta Partner](docs/images/platforms/partner.jpg) | ![Amstrad CPC](docs/images/platforms/cpc.jpg) |
 |---|:---:|:---:|:---:|
@@ -209,8 +220,9 @@ unchanged or faster; bitmap/font formats and byte-based drawing are retained.
 
 ### Speed
 
-`make crossbench` draws the *same picture* on every machine -- fixed
-coordinates inside a 256x192 box that fits every display -- and times it, so
+`make crossbench` draws the *same picture* on the benchmarked ZX, Partner and
+CPC backends -- fixed coordinates inside a 256x192 box that fits every display
+-- and times it, so
 the numbers can be compared directly. The per-backend suites
 (`make zx-bench`, `make cpc-bench`) size their work from `gpx_width()` and
 so cannot be.
@@ -267,11 +279,12 @@ numbers are reproducible rather than sampled.
 ```bash
 make tests           # everything below
 make zx-tests        # ZX differential suite vs an independent C oracle
+make timex-tests     # Timex 512x192 bank/layout regression
 make partner-gdp-tests   # Partner suite on the emulated EF9367
 make cpc-tests       # CPC suite, both display modes, on amstrad-cpc-mcp
 make cpc-bench       # CPC micro-benchmarks, in T-states, both modes
-make conformance     # one program on all three backends, compared pixel for pixel
-make crossbench      # the same picture timed on all three, for comparison
+make conformance     # one program on ZX, Partner and CPC, compared pixel for pixel
+make crossbench      # the same picture timed on ZX, Partner and CPC
 ```
 
 The current Partner emulator has pre-existing recorded-golden and conformance
@@ -292,7 +305,7 @@ suites work and how to add a scenario.
 | Path | Contents |
 |---|---|
 | `include/libgpx.h` | the public API and data formats |
-| `src/zx/`, `src/partner/`, `src/cpc/` | the three backends, hand-written Z80 assembly |
+| `src/zx/`, `src/timex/`, `src/partner/`, `src/cpc/` | the four backends, hand-written Z80 assembly |
 | `samples/` | dual-platform demos with illustrated README pages |
 | `tests/` | test suites, benchmarks, size and coverage tooling |
 | `docs/manuals/` | the programming manual |

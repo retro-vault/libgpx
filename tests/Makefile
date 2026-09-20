@@ -12,17 +12,19 @@ ZX_CAPTURE := $(ROOT_DIR)/tests/mcp/capture_zx.py
 PARTNER_RUNNER := $(ROOT_DIR)/tests/mcp/run_partner_tests.py
 PARTNER_BENCH := $(ROOT_DIR)/tests/mcp/bench_partner.py
 
-.PHONY: cpc-tests cpc-bench build tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance visual-inputs coverage stub-visuals lib-visuals partner-visuals lib-size clean crossbench
+.PHONY: cpc-tests cpc-bench timex-tests build tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance visual-inputs coverage stub-visuals lib-visuals partner-visuals lib-size clean crossbench
 
 build:
 	$(MAKE) -C zx build
 	$(MAKE) -C partner build
 	$(MAKE) -C cpc build
+	$(MAKE) -C timex build
 
 # ZX scenarios run on the cycle-accurate emulator behind zx-spectrum-mcp.
 # The Partner backend runs twice: against the in-repo EF9367 host harness,
 # and against the real emulated GDP behind idp-mcp.
 tests: zx-tests
+	$(MAKE) timex-tests
 	$(MAKE) -C partner run
 	$(MAKE) partner-gdp-tests
 	$(MAKE) cpc-tests
@@ -35,6 +37,9 @@ cpc-tests:
 
 cpc-bench:
 	$(MAKE) -C cpc bench ARGS="$(ARGS)" 
+
+timex-tests:
+	$(MAKE) -C timex run
 
 # One program, every backend, compared pixel for pixel against the ZX. The CPC
 # is run in both display modes and must match exactly. Anything built on top of
@@ -101,3 +106,4 @@ clean:
 	$(MAKE) -C partner clean
 	$(MAKE) -C zx/stub clean
 	$(MAKE) -C size clean
+	$(MAKE) -C timex clean

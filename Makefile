@@ -10,19 +10,22 @@ PYTHON ?= python3
 ZX_RELEASE_NAME := libgpx-zx-spectrum-$(VERSION)
 PARTNER_RELEASE_NAME := libgpx-partner-$(VERSION)
 CPC_RELEASE_NAME := libgpx-amstrad-cpc-$(VERSION)
+TIMEX_RELEASE_NAME := libgpx-timex-hires-$(VERSION)
 ZX_RELEASE_STAGE := $(RELEASE_DIR)/$(ZX_RELEASE_NAME)
 PARTNER_RELEASE_STAGE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME)
 CPC_RELEASE_STAGE := $(RELEASE_DIR)/$(CPC_RELEASE_NAME)
+TIMEX_RELEASE_STAGE := $(RELEASE_DIR)/$(TIMEX_RELEASE_NAME)
 ZX_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(ZX_RELEASE_NAME).tar.gz
 PARTNER_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME).tar.gz
 CPC_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(CPC_RELEASE_NAME).tar.gz
+TIMEX_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(TIMEX_RELEASE_NAME).tar.gz
 
 include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 export DOCKER_ZX DOCKER_IDP DOCKER_USER
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR RELEASE_DIR VERSION
 
-.PHONY: cpc-tests cpc-bench all build lib partner-lib cpc-lib package-zx package-partner package-cpc release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 demo4 demo5 clean
+.PHONY: cpc-tests cpc-bench timex-tests all build lib partner-lib cpc-lib timex-lib package-zx package-partner package-cpc package-timex release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 demo4 demo5 clean
 
 all: build
 
@@ -38,6 +41,9 @@ partner-lib:
 
 cpc-lib:
 	$(MAKE) -C src cpc-lib
+
+timex-lib:
+	$(MAKE) -C src timex-lib
 
 .PHONY: rasta rasta-lib rasta-demo rasta-run rasta-tests rasta-screenshots package-rasta
 rasta rasta-lib:
@@ -64,7 +70,9 @@ package-partner: $(PARTNER_RELEASE_ARCHIVE)
 
 package-cpc: $(CPC_RELEASE_ARCHIVE)
 
-release-packages: package-zx package-partner package-cpc package-rasta
+package-timex: $(TIMEX_RELEASE_ARCHIVE)
+
+release-packages: package-zx package-partner package-cpc package-timex package-rasta
 
 tests:
 	$(MAKE) -C tests tests
@@ -80,6 +88,9 @@ cpc-tests:
 
 cpc-bench:
 	$(MAKE) -C tests cpc-bench ARGS="$(ARGS)"
+
+timex-tests:
+	$(MAKE) -C tests timex-tests
 
 partner-gdp-tests:
 	$(MAKE) -C tests partner-gdp-tests ARGS="$(ARGS)"
@@ -146,6 +157,9 @@ $(BIN_DIR)/partner/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/s
 $(BIN_DIR)/cpc/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/cpc/*.s) $(wildcard $(ROOT_DIR)/src/cpc/*.inc) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
 	$(MAKE) -C src cpc-lib
 
+$(BIN_DIR)/timex/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/timex/*.s) $(wildcard $(ROOT_DIR)/src/timex/*.inc) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
+	$(MAKE) -C src timex-lib
+
 $(ZX_RELEASE_STAGE): $(BIN_DIR)/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)
 	rm -rf $@
 	mkdir -p $@/lib $@/include
@@ -165,6 +179,13 @@ $(CPC_RELEASE_STAGE): $(BIN_DIR)/cpc/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(R
 	mkdir -p $@/lib $@/include
 	cp $(BIN_DIR)/cpc/libgpx.lib $@/lib/libgpx.lib
 	cp $(BIN_DIR)/cpc/crt0-cpc.rel $@/lib/crt0-cpc.rel
+	cp $(ROOT_DIR)/include/libgpx.h $@/include/libgpx.h
+	cp $(ROOT_DIR)/README.md $@/README.md
+
+$(TIMEX_RELEASE_STAGE): $(BIN_DIR)/timex/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)
+	rm -rf $@
+	mkdir -p $@/lib $@/include
+	cp $(BIN_DIR)/timex/libgpx.lib $@/lib/libgpx.lib
 	cp $(ROOT_DIR)/include/libgpx.h $@/include/libgpx.h
 	cp $(ROOT_DIR)/README.md $@/README.md
 
@@ -195,6 +216,14 @@ $(CPC_RELEASE_ARCHIVE): $(BIN_DIR)/cpc/libgpx.lib $(ROOT_DIR)/include/libgpx.h $
 	cp $(ROOT_DIR)/include/libgpx.h $(CPC_RELEASE_STAGE)/include/libgpx.h
 	cp $(ROOT_DIR)/README.md $(CPC_RELEASE_STAGE)/README.md
 	tar -C $(RELEASE_DIR) -czf $@ $(CPC_RELEASE_NAME)
+
+$(TIMEX_RELEASE_ARCHIVE): $(BIN_DIR)/timex/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)
+	rm -rf $(TIMEX_RELEASE_STAGE)
+	mkdir -p $(TIMEX_RELEASE_STAGE)/lib $(TIMEX_RELEASE_STAGE)/include
+	cp $(BIN_DIR)/timex/libgpx.lib $(TIMEX_RELEASE_STAGE)/lib/libgpx.lib
+	cp $(ROOT_DIR)/include/libgpx.h $(TIMEX_RELEASE_STAGE)/include/libgpx.h
+	cp $(ROOT_DIR)/README.md $(TIMEX_RELEASE_STAGE)/README.md
+	tar -C $(RELEASE_DIR) -czf $@ $(TIMEX_RELEASE_NAME)
 
 clean:
 	$(MAKE) -C src clean

@@ -1,17 +1,20 @@
 # Tests
 
-The three Z80 backends are each tested on a real emulator
+The four Z80 backends are each tested on an emulator
 driven over MCP (JSON-RPC on stdio). Every emulator ships inside that
 backend's toolchain Docker image, so there is nothing extra to install.
 
 | Backend | Emulator | What it is checked against |
 |---|---|---|
 | ZX Spectrum | [`zx-spectrum-mcp`](https://github.com/tstih/zx-spectrum-mcp) | an independent C oracle, differentially |
+| Timex/Sinclair hi-res | `zx-spectrum-mcp` plus the Timex bank decoder | 512x192 logical raster and geometry regression |
 | Iskra Delta Partner | `idp-mcp` (a real emulated EF9367) | recorded golden rasters |
 | Amstrad CPC | `amstrad-cpc-mcp` | recorded golden rasters, once per display mode |
 
-On top of those, `make conformance` runs one program on all three and diffs
-the results, so a backend cannot drift on its own.
+On top of those, `make conformance` runs one program on the ZX, Partner and
+CPC backends and diffs the results. Timex has its own two-file video-layout
+regression because its 512-pixel raster is not a pixel-for-pixel match for the
+256-pixel ZX screen.
 
 The Partner also keeps a small in-repo Z80 + EF9367 host harness under
 `tests/partner/`, which predates `idp-mcp` and still runs as part of
@@ -25,10 +28,11 @@ The Partner also keeps a small in-repo Z80 + EF9367 host harness under
 | `tests/zx/test-src/` | ZX scenarios (`test_*.c`) and their shared header |
 | `tests/zx/bench-src/` | ZX micro-benchmarks (`bench_*.c`) plus the recorded baseline |
 | `tests/zx/stub/` | The independent C oracle and its host-side self-check |
+| `tests/timex/` | Timex 512x192 layout scenario and dual-file decoder |
 | `tests/partner/` | Partner scenarios, the in-repo EF9367 harness, and `gdp-golden/` |
 | `tests/cpc/` | CPC scenarios, benchmarks and `golden/` (one set per display mode) |
-| `tests/conformance/` | Scenarios compiled for every backend and compared |
-| `tests/crossbench/` | The same picture, at fixed coordinates, timed on every backend |
+| `tests/conformance/` | ZX/Partner/CPC scenarios compiled and compared |
+| `tests/crossbench/` | The same picture, at fixed coordinates, timed on ZX/Partner/CPC |
 | `tests/size/` | Per-module code-size measurement and its baseline |
 
 ## How a ZX test works
@@ -51,6 +55,14 @@ runner then compares, byte for byte:
 
 A scenario that differs from the oracle in any of those fails, and the runner
 reports the mismatch in screen coordinates rather than raw offsets.
+
+## How a Timex test works
+
+The Timex scenario is linked against `bin/timex/libgpx.lib` and run on the
+ZX CPU emulator. The runner reads both 6144-byte display files at `0x4000`
+and `0x6000`, interleaves their 32-byte Spectrum-layout scanlines into a
+logical 512x192 raster, and checks edge pixels, lines, fills, bitmaps and the
+reported geometry.
 
 ## How a CPC test works
 
@@ -84,10 +96,11 @@ a bug.
 ```sh
 make tests             # everything
 make zx-tests          # ZX differential suite
+make timex-tests       # Timex 512x192 layout regression
 make partner-gdp-tests # Partner suite on the emulated EF9367
 make cpc-tests         # CPC suite, both display modes
-make conformance       # one program, every backend, diffed
-make crossbench        # the same picture timed on every backend
+make conformance       # one program, ZX/Partner/CPC, diffed
+make crossbench        # the same picture timed on ZX/Partner/CPC
 make zx-bench          # T-state benchmarks
 make cpc-bench         # CPC T-state benchmarks, both modes
 make lib-size          # per-module code size

@@ -5,19 +5,9 @@ bin/
 # Downloaded Rasta emulator (normally cached under build/rasta/)
 /rasta/
 
-# Toolchain intermediates
-*.rel
-*.lst
-*.sym
-*.rst
-*.noi
-*.cdb
-*.ihx
-
-# Editor / OS
-.DS_Store
-*~
-
-# Python caches
-__pycache__/
-*.pyc
+# Dot-files
+.*
+!.vscode/
+!.github/
+!.gitignore
+!.mcp.json

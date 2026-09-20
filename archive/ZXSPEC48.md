@@ -1,1 +1,0 @@
-# ZX Spectrum 48K Internals

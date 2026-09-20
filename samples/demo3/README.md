@@ -4,7 +4,8 @@ Demo 3 contains two complete programs written to adapt to the active screen.
 Unlike the fixed-size comparison scenes in Demo 1 and Demo 2, every important
 coordinate is derived from `gpx_width()` and `gpx_height()`. The same source
 therefore fills a 256x192 ZX Spectrum display, a 1024x256 Iskra Delta Partner
-display, and either of the Amstrad CPC's two modes sensibly.
+display, the Timex/Sinclair 512x192 hi-res display, and either of the
+Amstrad CPC's two modes sensibly.
 
 ## Panels
 
@@ -15,6 +16,10 @@ stock cursor sprite.
 ### ZX Spectrum 48K
 
 ![Panels on the ZX Spectrum](../../docs/images/screenshots/panels-zx.png)
+
+### Timex/Sinclair hi-res — 512 x 192
+
+![Panels on Timex/Sinclair hi-res](../../docs/images/screenshots/panels-timex.png)
 
 ### Iskra Delta Partner
 
@@ -357,3 +362,8 @@ emulators:
 ```bash
 python3 scripts/docs/capture-manual-shots.py
 ```
+
+The Timex/Sinclair panel image is captured separately with FUSE 1.6.0 using
+its TS2068 machine profile; the checked-in result is
+`docs/images/screenshots/panels-timex.png`. The platform layout is covered
+by `make timex-tests`.

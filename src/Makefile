@@ -7,7 +7,7 @@ include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 ZX_LIB_STAMP := $(BUILD_DIR)/zx/.lib-objs.stamp
 BIN_LIBGPX_LIB := $(BIN_DIR)/libgpx.lib
-# These public modules are handwritten Z80 shared by all three Z80 targets.
+# These public modules are handwritten Z80 shared by every Z80 target.
 # Line drawing remains backend-specific. The remaining src/common assembly
 # modules are the optional ADVANCED set.
 ZX_ASM_SRCS := $(wildcard $(ROOT_DIR)/src/zx/*.s)
@@ -25,15 +25,23 @@ CPC_LIB_BUILD_DIR := $(BUILD_DIR)/cpc
 CPC_LIB_STAMP := $(CPC_LIB_BUILD_DIR)/.lib-objs.stamp
 BIN_CPC_LIB := $(BIN_DIR)/cpc/libgpx.lib
 
+# Timex hi-res uses the ZX toolchain, but has its own 512x192 backend and
+# archive because its logical bytes alternate between two display files.
+TIMEX_ASM_SRCS := $(wildcard $(ROOT_DIR)/src/timex/*.s) \
+	$(wildcard $(ROOT_DIR)/src/timex/*.inc)
+TIMEX_LIB_BUILD_DIR := $(BUILD_DIR)/timex
+TIMEX_LIB_STAMP := $(TIMEX_LIB_BUILD_DIR)/.lib-objs.stamp
+BIN_TIMEX_LIB := $(BIN_DIR)/timex/libgpx.lib
+
 PARTNER_TEST_SRC := $(ROOT_DIR)/tests/partner/test_draw.c
 BUILD_PARTNER_TEST_IHX := $(BUILD_DIR)/partner/test_draw.ihx
 BIN_PARTNER_TEST_IHX := $(BIN_DIR)/partner/test_draw.ihx
 
 .PHONY: build lib partner partner-lib zx-lib-objs partner-lib-objs \
-	cpc cpc-lib cpc-lib-objs clean
+	cpc cpc-lib cpc-lib-objs timex timex-lib timex-lib-objs clean
 .PRECIOUS: $(BUILD_DIR)/%/ $(BIN_DIR)/%/ $(BIN_DIR)/ $(BUILD_TMP)/
 
-build: lib partner cpc rasta
+build: lib partner cpc timex rasta
 
 .PHONY: rasta rasta-lib
 rasta rasta-lib:
@@ -54,6 +62,12 @@ cpc: $(BIN_CPC_LIB)
 cpc-lib: $(BIN_CPC_LIB)
 
 cpc-lib-objs: $(CPC_LIB_STAMP)
+
+timex: $(BIN_TIMEX_LIB)
+
+timex-lib: $(BIN_TIMEX_LIB)
+
+timex-lib-objs: $(TIMEX_LIB_STAMP)
 
 $(BUILD_DIR)/%/:
 	mkdir -p $@
@@ -121,6 +135,22 @@ $(BIN_CPC_LIB): $(CPC_LIB_STAMP) | $(BIN_DIR)/cpc/
 		$$(ls build/cpc/*.rel | grep -v crt0-cpc)'
 	cp $(CPC_LIB_BUILD_DIR)/crt0-cpc.rel $(BIN_DIR)/cpc/crt0-cpc.rel
 
+$(TIMEX_LIB_STAMP): $(TIMEX_ASM_SRCS) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) \
+		$(ADVANCED_WITNESS) | $(TIMEX_LIB_BUILD_DIR)/
+	rm -f $(TIMEX_LIB_BUILD_DIR)/*.rel
+	$(ZXRUN) '\
+		set -e; \
+		for src in src/timex/*.s $(CORE_ASM_GLOB) $(ADVANCED_GLOB); do \
+			[ -e "$$src" ] || continue; \
+			$(XAS) -I src/timex \
+				-o "build/timex/$$(basename "$$src" .s).rel" "$$src"; \
+		done'
+	touch $@
+
+$(BIN_TIMEX_LIB): $(TIMEX_LIB_STAMP) | $(BIN_DIR)/timex/
+	rm -f $(BIN_TIMEX_LIB)
+	$(ZXRUN) '$(XAR) rc "bin/timex/libgpx.lib" build/timex/*.rel'
+
 $(BUILD_PARTNER_TEST_IHX): $(PARTNER_TEST_SRC) $(ROOT_DIR)/tests/partner/gpx_stub.c | $(BUILD_DIR)/partner/ $(BUILD_TMP)/
 	$(IDPRUN) 'set -e; \
 		$(XCC) $(XCFLAGS) -c -o build/tmp/test_draw.rel tests/partner/test_draw.c; \
@@ -133,3 +163,4 @@ $(BIN_PARTNER_TEST_IHX): $(BUILD_PARTNER_TEST_IHX) | $(BIN_DIR)/partner/
 clean:
 	rm -f $(BUILD_DIR)/zx/.lib-objs.stamp $(BIN_LIBGPX_LIB)
 	rm -rf $(BUILD_DIR)/partner $(PARTNER_LIB_BUILD_DIR) $(BIN_DIR)/partner
+	rm -rf $(TIMEX_LIB_BUILD_DIR) $(BIN_DIR)/timex

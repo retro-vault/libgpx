@@ -5,17 +5,19 @@ framebuffer targets. Every Z80 path is hand-optimised assembly. It gives you
 pixels, lines, rectangles, pattern fills, text and sprites behind one API that
 behaves the same on every supported machine.
 
-Three Z80 backends ship today; the native Rasta backend has its own
+Four Z80 backends ship today; the native Rasta backend has its own
 [guide](RASTA.md):
 
 | Machine | Screen | Backend | Notes |
 |---|---|---|---|
 | ZX Spectrum 48K | 256 x 192 | `src/zx` | packed framebuffer at 0x4000 |
+| Timex/Sinclair hi-res | 512 x 192 | `src/timex` | alternating ZX-layout files at 0x4000 and 0x6000 |
 | Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` | EF9367 drawing processor |
 | Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` | bank-interleaved framebuffer at 0xC000 |
 
 The machines could hardly be less alike. The Spectrum has a bitmap you
-can read and write; the Partner has a graphics coprocessor and display
+can read and write; Timex combines two Spectrum-layout files into alternating
+eight-pixel columns; the Partner has a graphics coprocessor and display
 memory the CPU cannot read at all; the CPC splits its framebuffer into
 eight interleaved banks and changes how many pixels fit in a byte when
 you change display mode. libgpx hides that: the same program produces
@@ -45,12 +47,14 @@ toolchain — only Docker. The images carry the X Tools Z80 toolchain
 | Machine | Image |
 |---|---|
 | ZX Spectrum | `wischner/xcc-z80-zx-spectrum` |
+| Timex/Sinclair hi-res | `wischner/xcc-z80-zx-spectrum` |
 | Iskra Delta Partner | `wischner/xcc-z80-idp` |
 
 Build the libraries:
 
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
+make timex-lib     # bin/timex/libgpx.lib    (Timex 512x192 hi-res)
 make partner-lib   # bin/partner/libgpx.lib  (Partner)
 ```
 
@@ -219,7 +223,7 @@ Initialise the graphics hardware and return the drawing context.
 
 | Parameter | Description |
 |---|---|
-| `mode` | `GPXM_DEFAULT` (0) for the machine's normal screen. Higher numbers are platform-specific: the Partner takes `1` for its 1024x512 layout; the ZX Spectrum has one mode and ignores the argument. |
+| `mode` | `GPXM_DEFAULT` (0) for the machine's normal screen. Higher numbers are platform-specific: the Partner takes `1` for its 1024x512 layout; the ZX Spectrum and Timex backends each have one mode and ignore the argument. |
 
 **Returns** a pointer to a `gpx_t`. It is statically allocated inside the
 library, so never free it.
@@ -832,10 +836,11 @@ clamp each origin to zero after subtracting the hotspot.
 
 ### Demo directory reference
 
-Every demo is built from the same C source for all three backends. The
+Every illustrated demo is built from the same C source for the
+screenshot-covered backends. The
 illustrated pages below document their intent, expected output, build
 products, source layout, and the differences visible between the Spectrum,
-Partner and CPC captures.
+Partner, Timex and CPC captures.
 
 | Demo | Reference | Main API focus | Layout strategy |
 |---|---|---|---|
@@ -861,6 +866,10 @@ fonts, and a cursor sprite.
 ZX Spectrum:
 
 ![panels on the ZX Spectrum](../images/screenshots/panels-zx.png)
+
+Timex/Sinclair hi-res (FUSE TS2068):
+
+![panels on Timex/Sinclair hi-res](../images/screenshots/panels-timex.png)
 
 Iskra Delta Partner:
 
@@ -945,25 +954,32 @@ scripts/run/run-fuse-demo1.sh bin/demo3/panels.tap
 For the Partner, put the `.com` on a CP/M disk image and run it under
 `idp-emu` from the `wischner/xcc-z80-idp` image.
 
-All demo screenshots are generated, not hand-captured. To reproduce them,
-which also confirms that every program runs on every Z80 backend:
+The ZX Spectrum, Partner and CPC demo screenshots are generated, not
+hand-captured. To reproduce those captures and confirm that each program runs
+on those three backends:
 
 ```bash
 python3 scripts/docs/capture-manual-shots.py
 ```
 
-That builds every sample against all three backends -- the CPC twice, once
+That builds every sample against those three backends -- the CPC twice, once
 per display mode -- drives the headless Spectrum, Partner and CPC emulators
 over MCP, and writes twenty-four PNGs into
 `docs/images/screenshots/`.
+
+The Timex panel capture is verified separately with FUSE 1.6.0 in its TS2068
+profile and is checked in as
+`docs/images/screenshots/panels-timex.png`. Run `make timex-tests` for the
+headless 512x192 layout regression that validates the same two-file video
+layout.
 
 ---
 
 ## 6. Where the backends differ
 
-The backends are held to identical output by a conformance test that
-compiles one program for each backend, runs it on every emulator, and
-compares the rasters against the ZX pixel for pixel:
+The ZX, Partner and CPC backends are held to identical output by a conformance
+test that compiles one program for each backend, runs it on every emulator,
+and compares the rasters against the ZX pixel for pixel:
 
 ```bash
 make conformance

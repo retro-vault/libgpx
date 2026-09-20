@@ -5,7 +5,8 @@
  * the platform-independent drawing API: pixels, lines, rectangles,
  * text, bitmaps and sprites.  Every function declared here is
  * implemented under src/, using native C for Rasta or hand-written Z80
- * assembly -- against packed framebuffers on the ZX Spectrum and CPC, and
+ * assembly -- against packed framebuffers on the ZX Spectrum, Timex and
+ * CPC, and
  * against the EF9367 drawing processor on the Iskra Delta Partner, whose
  * display memory the CPU cannot read at all.
  *
@@ -235,7 +236,8 @@ struct gpx_s
 
 /* Graphics initialisation mode. Mode numbers beyond the default are
  * platform-specific: the Partner takes 1 for its 1024x512 layout, and
- * the ZX Spectrum has one fixed mode and ignores the argument. Read
+ * the ZX Spectrum and Timex backends have one fixed mode and ignore the
+ * argument. Read
  * the geometry back from the returned gpx_t rather than assuming it. */
 #define GPXM_DEFAULT 0
 /* Amstrad CPC display modes. One library serves both: the mode is chosen
@@ -243,6 +245,8 @@ struct gpx_s
  * Backends with a single layout accept these and ignore them. */
 #define GPXM_CPC_640X200 0
 #define GPXM_CPC_320X200 1
+/* Timex/Sinclair 512x192 monochrome high-resolution mode. */
+#define GPXM_TIMEX_HIRES 0
 /* Rasta's fixed 1920x1080, 1bpp, single-page layout. */
 #define GPXM_RASTA_1920X1080 0
 typedef uint8_t gmode;
