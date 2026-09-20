@@ -33,15 +33,22 @@ TIMEX_LIB_BUILD_DIR := $(BUILD_DIR)/timex
 TIMEX_LIB_STAMP := $(TIMEX_LIB_BUILD_DIR)/.lib-objs.stamp
 BIN_TIMEX_LIB := $(BIN_DIR)/timex/libgpx.lib
 
+# ZX Spectrum Next Layer 2, highest-resolution 640x256x4bpp mode (80 KiB).
+ZXNEXT_L2_ASM_SRCS := $(wildcard $(ROOT_DIR)/src/zxnext-l2/*.s) \
+	$(wildcard $(ROOT_DIR)/src/zxnext-l2/*.inc)
+ZXNEXT_L2_LIB_BUILD_DIR := $(BUILD_DIR)/zxnext-l2
+ZXNEXT_L2_LIB_STAMP := $(ZXNEXT_L2_LIB_BUILD_DIR)/.lib-objs.stamp
+BIN_ZXNEXT_L2_LIB := $(BIN_DIR)/zxnext-l2/libgpx.lib
+
 PARTNER_TEST_SRC := $(ROOT_DIR)/tests/partner/test_draw.c
 BUILD_PARTNER_TEST_IHX := $(BUILD_DIR)/partner/test_draw.ihx
 BIN_PARTNER_TEST_IHX := $(BIN_DIR)/partner/test_draw.ihx
 
 .PHONY: build lib partner partner-lib zx-lib-objs partner-lib-objs \
-	cpc cpc-lib cpc-lib-objs timex timex-lib timex-lib-objs clean
+	cpc cpc-lib cpc-lib-objs timex timex-lib timex-lib-objs zxnext-l2 zxnext-l2-lib zxnext-l2-lib-objs clean
 .PRECIOUS: $(BUILD_DIR)/%/ $(BIN_DIR)/%/ $(BIN_DIR)/ $(BUILD_TMP)/
 
-build: lib partner cpc timex rasta
+build: lib partner cpc timex zxnext-l2 rasta
 
 .PHONY: rasta rasta-lib
 rasta rasta-lib:
@@ -68,6 +75,12 @@ timex: $(BIN_TIMEX_LIB)
 timex-lib: $(BIN_TIMEX_LIB)
 
 timex-lib-objs: $(TIMEX_LIB_STAMP)
+
+zxnext-l2: $(BIN_ZXNEXT_L2_LIB)
+
+zxnext-l2-lib: $(BIN_ZXNEXT_L2_LIB)
+
+zxnext-l2-lib-objs: $(ZXNEXT_L2_LIB_STAMP)
 
 $(BUILD_DIR)/%/:
 	mkdir -p $@
@@ -150,6 +163,22 @@ $(TIMEX_LIB_STAMP): $(TIMEX_ASM_SRCS) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) \
 $(BIN_TIMEX_LIB): $(TIMEX_LIB_STAMP) | $(BIN_DIR)/timex/
 	rm -f $(BIN_TIMEX_LIB)
 	$(ZXRUN) '$(XAR) rc "bin/timex/libgpx.lib" build/timex/*.rel'
+
+$(ZXNEXT_L2_LIB_STAMP): $(ZXNEXT_L2_ASM_SRCS) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) \
+		$(ADVANCED_WITNESS) | $(ZXNEXT_L2_LIB_BUILD_DIR)/
+	rm -f $(ZXNEXT_L2_LIB_BUILD_DIR)/*.rel
+	$(ZXRUN) '\
+		set -e; \
+		for src in src/zxnext-l2/*.s $(CORE_ASM_GLOB) $(ADVANCED_GLOB); do \
+			[ -e "$$src" ] || continue; \
+			$(XAS) -I src/zxnext-l2 \
+				-o "build/zxnext-l2/$$(basename "$$src" .s).rel" "$$src"; \
+		done'
+	touch $@
+
+$(BIN_ZXNEXT_L2_LIB): $(ZXNEXT_L2_LIB_STAMP) | $(BIN_DIR)/zxnext-l2/
+	rm -f $(BIN_ZXNEXT_L2_LIB)
+	$(ZXRUN) '$(XAR) rc "bin/zxnext-l2/libgpx.lib" build/zxnext-l2/*.rel'
 
 $(BUILD_PARTNER_TEST_IHX): $(PARTNER_TEST_SRC) $(ROOT_DIR)/tests/partner/gpx_stub.c | $(BUILD_DIR)/partner/ $(BUILD_TMP)/
 	$(IDPRUN) 'set -e; \

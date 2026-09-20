@@ -12,6 +12,7 @@ Four Z80 backends ship today; the native Rasta backend has its own
 |---|---|---|---|
 | ZX Spectrum 48K | 256 x 192 | `src/zx` | packed framebuffer at 0x4000 |
 | Timex/Sinclair hi-res | 512 x 192 | `src/timex` | alternating ZX-layout files at 0x4000 and 0x6000 |
+| ZX Spectrum Next Layer 2 | 640 x 256, 4bpp | `src/zxnext-l2` | five paged 16 KiB banks (80 KiB total) |
 | Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` | EF9367 drawing processor |
 | Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` | bank-interleaved framebuffer at 0xC000 |
 
@@ -55,6 +56,7 @@ Build the libraries:
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
 make timex-lib     # bin/timex/libgpx.lib    (Timex 512x192 hi-res)
+make zxnext-l2-lib  # bin/zxnext-l2/libgpx.lib (Next Layer 2 640x256x4)
 make partner-lib   # bin/partner/libgpx.lib  (Partner)
 ```
 
@@ -223,7 +225,7 @@ Initialise the graphics hardware and return the drawing context.
 
 | Parameter | Description |
 |---|---|
-| `mode` | `GPXM_DEFAULT` (0) for the machine's normal screen. Higher numbers are platform-specific: the Partner takes `1` for its 1024x512 layout; the ZX Spectrum and Timex backends each have one mode and ignore the argument. |
+| `mode` | `GPXM_DEFAULT` (0) for the machine's normal screen. Higher numbers are platform-specific: the Partner takes `1` for its 1024x512 layout; the ZX Spectrum, Timex and ZX Spectrum Next Layer 2 backends each have one mode and ignore the argument. |
 
 **Returns** a pointer to a `gpx_t`. It is statically allocated inside the
 library, so never free it.
@@ -870,6 +872,13 @@ ZX Spectrum:
 Timex/Sinclair hi-res (FUSE TS2068):
 
 ![panels on Timex/Sinclair hi-res](../images/screenshots/panels-timex.png)
+
+The ZX Spectrum Next backend uses Layer 2's highest-resolution 640x256 4bpp
+mode. Its ROM overlay is switched per 16 KiB bank while drawing, so all five
+banks of the 80 KiB framebuffer are addressable. The public libgpx colors are
+kept monochrome: foreground is palette index 0 (black), background is index 15
+(white).
+
 
 Iskra Delta Partner:
 

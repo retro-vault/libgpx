@@ -12,7 +12,7 @@ ZX_CAPTURE := $(ROOT_DIR)/tests/mcp/capture_zx.py
 PARTNER_RUNNER := $(ROOT_DIR)/tests/mcp/run_partner_tests.py
 PARTNER_BENCH := $(ROOT_DIR)/tests/mcp/bench_partner.py
 
-.PHONY: cpc-tests cpc-bench timex-tests build tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance visual-inputs coverage stub-visuals lib-visuals partner-visuals lib-size clean crossbench
+.PHONY: cpc-tests cpc-bench timex-tests zxnext-l2-tests build tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance visual-inputs coverage stub-visuals lib-visuals partner-visuals lib-size clean crossbench
 
 build:
 	$(MAKE) -C zx build
@@ -40,6 +40,9 @@ cpc-bench:
 
 timex-tests:
 	$(MAKE) -C timex run
+
+zxnext-l2-tests:
+	$(MAKE) -C zxnext-l2 build
 
 # One program, every backend, compared pixel for pixel against the ZX. The CPC
 # is run in both display modes and must match exactly. Anything built on top of

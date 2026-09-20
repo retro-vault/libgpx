@@ -17,6 +17,7 @@ screenshots from every supported backend.
 |---|---|---|
 | ZX Spectrum 48K | 256 x 192 | `src/zx` |
 | Timex/Sinclair hi-res | 512 x 192 | `src/timex` |
+| ZX Spectrum Next Layer 2 | 640 x 256, 4bpp (80 KiB) | `src/zxnext-l2` |
 | Iskra Delta Partner | 1024 x 256 or 1024 x 512 | `src/partner` |
 | Amstrad CPC | 640 x 200 or 320 x 200 | `src/cpc` |
 | Rasta (Linux) | 1920 x 1080 | `src/rasta` |
@@ -59,6 +60,7 @@ Docker and Python 3 are the only requirements — no host toolchain.
 ```bash
 make lib           # bin/libgpx.lib          (ZX Spectrum)
 make timex-lib     # bin/timex/libgpx.lib    (Timex 512x192 hi-res)
+make zxnext-l2-lib  # bin/zxnext-l2/libgpx.lib (Next Layer 2 640x256x4)
 make partner-lib   # bin/partner/libgpx.lib  (Partner)
 make cpc-lib       # bin/cpc/libgpx.lib      (CPC, both display modes)
 make rasta-lib     # bin/rasta/libgpx.a + libgpx.so + Rasta viewer
@@ -99,6 +101,12 @@ The Timex library has one fixed 512x192 monochrome layout. `gpx_create()`
 selects SCLD mode `0x06` on port `0xff`, clears both pixel files and reports
 the 512x192 geometry. It uses the Spectrum toolchain and startup convention;
 link `bin/timex/libgpx.lib` in place of `bin/libgpx.lib`.
+
+The ZX Spectrum Next Layer 2 library targets the highest-resolution 640x256
+4bpp mode. It pages the complete 80 KiB framebuffer through the Next Layer 2
+ROM overlay, reports the 640x256 geometry, and maps libgpx's monochrome
+foreground/background colors to palette entries 0 (black) and 15 (white).
+Link `bin/zxnext-l2/libgpx.lib` in place of the default ZX archive.
 
 ## Using it
 

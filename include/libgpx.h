@@ -1,12 +1,13 @@
 /*
  * libgpx.h
  *
- * Low-level 1-bit-per-pixel (1bpp) graphics primitives.  Defines
+ * Low-level monochrome drawing primitives (with a 4bpp Layer 2 implementation
+ * on ZX Spectrum Next).  Defines
  * the platform-independent drawing API: pixels, lines, rectangles,
  * text, bitmaps and sprites.  Every function declared here is
  * implemented under src/, using native C for Rasta or hand-written Z80
- * assembly -- against packed framebuffers on the ZX Spectrum, Timex and
- * CPC, and
+ * assembly -- against packed framebuffers on the ZX Spectrum, Timex, ZX
+ * Spectrum Next and CPC, and
  * against the EF9367 drawing processor on the Iskra Delta Partner, whose
  * display memory the CPU cannot read at all.
  *
@@ -53,7 +54,7 @@ extern "C" {
 /* Screen coordinate (signed 16-bit). */
 typedef int16_t coord;
 
-/* Colors in a 1bpp world. */
+/* Public colors remain monochrome; backends may store them in wider pixels. */
 #define CO_FORE 0x01 /* set pixel bit */
 #define CO_BACK 0x00 /* clear pixel bit */
 typedef uint8_t color;
@@ -247,6 +248,8 @@ struct gpx_s
 #define GPXM_CPC_320X200 1
 /* Timex/Sinclair 512x192 monochrome high-resolution mode. */
 #define GPXM_TIMEX_HIRES 0
+/* ZX Spectrum Next Layer 2 highest-resolution 640x256, 4bpp mode. */
+#define GPXM_ZXNEXT_L2 0
 /* Rasta's fixed 1920x1080, 1bpp, single-page layout. */
 #define GPXM_RASTA_1920X1080 0
 typedef uint8_t gmode;

@@ -11,6 +11,7 @@ ZX_RELEASE_NAME := libgpx-zx-spectrum-$(VERSION)
 PARTNER_RELEASE_NAME := libgpx-partner-$(VERSION)
 CPC_RELEASE_NAME := libgpx-amstrad-cpc-$(VERSION)
 TIMEX_RELEASE_NAME := libgpx-timex-hires-$(VERSION)
+ZXNEXT_L2_RELEASE_NAME := libgpx-zx-next-l2-$(VERSION)
 ZX_RELEASE_STAGE := $(RELEASE_DIR)/$(ZX_RELEASE_NAME)
 PARTNER_RELEASE_STAGE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME)
 CPC_RELEASE_STAGE := $(RELEASE_DIR)/$(CPC_RELEASE_NAME)
@@ -19,13 +20,15 @@ ZX_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(ZX_RELEASE_NAME).tar.gz
 PARTNER_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(PARTNER_RELEASE_NAME).tar.gz
 CPC_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(CPC_RELEASE_NAME).tar.gz
 TIMEX_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(TIMEX_RELEASE_NAME).tar.gz
+ZXNEXT_L2_RELEASE_ARCHIVE := $(RELEASE_DIR)/$(ZXNEXT_L2_RELEASE_NAME).tar.gz
+ZXNEXT_L2_RELEASE_STAGE := $(RELEASE_DIR)/$(ZXNEXT_L2_RELEASE_NAME)
 
 include $(ROOT_DIR)/scripts/mk/toolchain.mk
 
 export DOCKER_ZX DOCKER_IDP DOCKER_USER
 export ROOT_DIR BUILD_DIR BIN_DIR BUILD_TMP TEST_BUILD_DIR RELEASE_DIR VERSION
 
-.PHONY: cpc-tests cpc-bench timex-tests all build lib partner-lib cpc-lib timex-lib package-zx package-partner package-cpc package-timex release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 demo4 demo5 clean
+.PHONY: cpc-tests cpc-bench timex-tests zxnext-l2-tests zxnext-l2-lib all build lib partner-lib cpc-lib timex-lib package-zx package-partner package-cpc package-timex package-zxnext-l2 release-packages tests zx-tests zx-bench partner-gdp-tests partner-gdp-bench conformance crossbench check-style coverage visual-inputs stub-visuals lib-visuals partner-visuals lib-size demo1 demo2 demo3 demo4 demo5 clean
 
 all: build
 
@@ -44,6 +47,9 @@ cpc-lib:
 
 timex-lib:
 	$(MAKE) -C src timex-lib
+
+zxnext-l2-lib:
+	$(MAKE) -C src zxnext-l2-lib
 
 .PHONY: rasta rasta-lib rasta-demo rasta-run rasta-tests rasta-screenshots package-rasta
 rasta rasta-lib:
@@ -72,7 +78,9 @@ package-cpc: $(CPC_RELEASE_ARCHIVE)
 
 package-timex: $(TIMEX_RELEASE_ARCHIVE)
 
-release-packages: package-zx package-partner package-cpc package-timex package-rasta
+package-zxnext-l2: $(ZXNEXT_L2_RELEASE_ARCHIVE)
+
+release-packages: package-zx package-partner package-cpc package-timex package-zxnext-l2 package-rasta
 
 tests:
 	$(MAKE) -C tests tests
@@ -91,6 +99,9 @@ cpc-bench:
 
 timex-tests:
 	$(MAKE) -C tests timex-tests
+
+zxnext-l2-tests:
+	$(MAKE) -C tests zxnext-l2-tests
 
 partner-gdp-tests:
 	$(MAKE) -C tests partner-gdp-tests ARGS="$(ARGS)"
@@ -160,6 +171,9 @@ $(BIN_DIR)/cpc/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/c
 $(BIN_DIR)/timex/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/timex/*.s) $(wildcard $(ROOT_DIR)/src/timex/*.inc) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
 	$(MAKE) -C src timex-lib
 
+$(BIN_DIR)/zxnext-l2/libgpx.lib: $(ROOT_DIR)/src/Makefile $(wildcard $(ROOT_DIR)/src/zxnext-l2/*.s) $(wildcard $(ROOT_DIR)/src/zxnext-l2/*.inc) $(CORE_ASM_SRCS) $(ADVANCED_SRCS) $(ADVANCED_WITNESS)
+	$(MAKE) -C src zxnext-l2-lib
+
 $(ZX_RELEASE_STAGE): $(BIN_DIR)/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)
 	rm -rf $@
 	mkdir -p $@/lib $@/include
@@ -224,6 +238,14 @@ $(TIMEX_RELEASE_ARCHIVE): $(BIN_DIR)/timex/libgpx.lib $(ROOT_DIR)/include/libgpx
 	cp $(ROOT_DIR)/include/libgpx.h $(TIMEX_RELEASE_STAGE)/include/libgpx.h
 	cp $(ROOT_DIR)/README.md $(TIMEX_RELEASE_STAGE)/README.md
 	tar -C $(RELEASE_DIR) -czf $@ $(TIMEX_RELEASE_NAME)
+
+$(ZXNEXT_L2_RELEASE_ARCHIVE): $(BIN_DIR)/zxnext-l2/libgpx.lib $(ROOT_DIR)/include/libgpx.h $(ROOT_DIR)/README.md | $(RELEASE_DIR)
+	rm -rf $(ZXNEXT_L2_RELEASE_STAGE)
+	mkdir -p $(ZXNEXT_L2_RELEASE_STAGE)/lib $(ZXNEXT_L2_RELEASE_STAGE)/include
+	cp $(BIN_DIR)/zxnext-l2/libgpx.lib $(ZXNEXT_L2_RELEASE_STAGE)/lib/libgpx.lib
+	cp $(ROOT_DIR)/include/libgpx.h $(ZXNEXT_L2_RELEASE_STAGE)/include/libgpx.h
+	cp $(ROOT_DIR)/README.md $(ZXNEXT_L2_RELEASE_STAGE)/README.md
+	tar -C $(RELEASE_DIR) -czf $@ $(ZXNEXT_L2_RELEASE_NAME)
 
 clean:
 	$(MAKE) -C src clean
