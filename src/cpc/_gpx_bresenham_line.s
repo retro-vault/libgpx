@@ -491,34 +491,34 @@ __gpx_bresenham_line::
         ;; djnz's reach now that the mask advance is inlined into it.
         ;;
         ;;   BL_XLOOP .lp,.np,.yup,.xadv,.rot,.wrap,narrow,right
-        .macro  BL_XLOOP .lp,.np,.yup,.xadv,.rot,.wrap,narrow,right
-.lp:
+        .macro  BL_XLOOP loop_lp,loop_np,loop_yup,loop_xadv,loop_rot,loop_wrap,narrow,right
+loop_lp:
         rrc     c                       ; carry = pattern bit, C rotated for
         call    nc,.bl_zero
-        jr      nc,.np                  ; the next step in the same op
+        jr      nc,loop_np                  ; the next step in the same op
         ld      a,(hl)
         or      d
         xor     e
         ld      (hl),a
-.np:
+loop_np:
         exx
         or      a
         sbc     hl,bc                   ; err -= dy
         exx                             ; flags survive exx
-        jp      p,.xadv                 ; err >= 0: no y step
+        jp      p,loop_xadv                 ; err >= 0: no y step
         exx
         add     hl,de                   ; err += dx
         exx
         ex      af,af'
         bit     1,a
-        jr      nz,.yup
+        jr      nz,loop_yup
         ex      af,af'
         call    __vid_nextrow
-        jr      .xadv
-.yup:
+        jr      loop_xadv
+loop_yup:
         ex      af,af'
         call    __vid_prevrow
-.xadv:
+loop_xadv:
         ld      a,d
         or      e                       ; A = live mask, before the step
         .if     narrow
@@ -527,7 +527,7 @@ __gpx_bresenham_line::
          .else
         and     #0x80                   ; first pixel of the nibble?
          .endif
-        jr      nz,.wrap
+        jr      nz,loop_wrap
          .if    right
         rrc     d
         rrc     e
@@ -545,14 +545,14 @@ __gpx_bresenham_line::
         rlc     e
         rlca
          .endif
-        jr      c,.wrap
+        jr      c,loop_wrap
         .endif
-.rot:
-        djnz    .lp
+loop_rot:
+        djnz    loop_lp
         call    .bl_chunk               ; NZ: another chunk, B=0 means 256
-        jp      nz,.lp
+        jp      nz,loop_lp
         jp      .bl_last
-.wrap:
+loop_wrap:
         .if     narrow
         ld      a,d
          .if    right
@@ -582,7 +582,7 @@ __gpx_bresenham_line::
         .else
         dec     hl
         .endif
-        jp      .rot
+        jp      loop_rot
         .endm
 
         BL_XLOOP .bxrw_loop,.bxrw_np,.bxrw_yup,.bxrw_xadv,.bxrw_rot,.bxrw_wrap,0,1
@@ -629,80 +629,80 @@ __gpx_bresenham_line::
         ;; and mode-specialised, exactly as in the x-major raster.
         ;;
         ;;   BL_YLOOP .lp,.np,.xleft,.xrwrap,.xlwrap,.yadv,.rot,narrow,up
-        .macro  BL_YLOOP .lp,.np,.xleft,.xrwrap,.xlwrap,.yadv,.rot,narrow,up
-.lp:
+        .macro  BL_YLOOP loop_lp,loop_np,loop_xleft,loop_xrwrap,loop_xlwrap,loop_yadv,loop_rot,narrow,up
+loop_lp:
         rrc     c                       ; carry = pattern bit, C rotated for
         call    nc,.bl_zero
-        jr      nc,.np                  ; the next step in the same op
+        jr      nc,loop_np                  ; the next step in the same op
         ld      a,(hl)
         or      d
         xor     e
         ld      (hl),a
-.np:
+loop_np:
         exx
         or      a
         sbc     hl,de                   ; deficit -= dx
         exx                             ; carry means the deficit went negative
-        jp      nc,.yadv                ; equality does not step x
+        jp      nc,loop_yadv                ; equality does not step x
         exx
         add     hl,bc                   ; deficit += dy, back into [0,dy)
         exx
         ex      af,af'
         bit     0,a
-        jr      nz,.xleft
+        jr      nz,loop_xleft
         ex      af,af'
         ld      a,d
         or      e                       ; A = live mask, before the step
         .if     narrow
         and     #0x10                   ; last pixel of the nibble?
-        jr      nz,.xrwrap
+        jr      nz,loop_xrwrap
         rrc     d
         rrc     e
         .else
         rrc     d
         rrc     e
         rrca                            ; carry = the bit rotated out
-        jr      c,.xrwrap
+        jr      c,loop_xrwrap
         .endif
-        jr      .yadv
-.xleft:
+        jr      loop_yadv
+loop_xleft:
         ex      af,af'
         ld      a,d
         or      e
         .if     narrow
         and     #0x80                   ; first pixel of the nibble?
-        jr      nz,.xlwrap
+        jr      nz,loop_xlwrap
         rlc     d
         rlc     e
         .else
         rlc     d
         rlc     e
         rlca
-        jr      c,.xlwrap
+        jr      c,loop_xlwrap
         .endif
-.yadv:
+loop_yadv:
         .if     up
         ld      a,h                     ; inlined __vid_prevrow fast path
         sub     #(CPC_BANK_STEP >> 8)
         ld      h,a
         cp      #(CPC_VRAM >> 8)
-        jr      nc,.rot
+        jr      nc,loop_rot
         call    __vid_prevrow_carry
         .else
         ld      a,h                     ; inlined __vid_nextrow fast path
         add     a,#(CPC_BANK_STEP >> 8)
         ld      h,a
-        jr      nc,.rot
+        jr      nc,loop_rot
         call    __vid_nextrow_carry
         .endif
-.rot:
-        djnz    .lp
+loop_rot:
+        djnz    loop_lp
         jp      .bl_last
 
         ;; The byte-crossing arms sit out here so the common path above runs
         ;; straight through. In mode 2 the rotate has already put the mask at
         ;; the far end of the byte; in mode 1 it has to be rebuilt there.
-.xrwrap:
+loop_xrwrap:
         .if     narrow
         ld      a,d
         add     a,a                     ; 0x10 -> 0x80, and 0x00 -> 0x00
@@ -716,8 +716,8 @@ __gpx_bresenham_line::
         ld      e,a
         .endif
         inc     hl
-        jp      .yadv
-.xlwrap:
+        jp      loop_yadv
+loop_xlwrap:
         .if     narrow
         ld      a,d
         rrca                            ; 0x80 -> 0x10, and 0x00 -> 0x00
@@ -731,7 +731,7 @@ __gpx_bresenham_line::
         ld      e,a
         .endif
         dec     hl
-        jp      .yadv
+        jp      loop_yadv
         .endm
 
         BL_YLOOP .bydw_loop,.bydw_np,.bydw_xl,.bydw_xrw,.bydw_xlw,.bydw_yadv,.bydw_rot,0,0

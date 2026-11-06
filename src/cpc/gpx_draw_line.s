@@ -15,8 +15,8 @@
         .optsdcc -mz80 sdcccall(1)
 
         .globl  _gpx_draw_line
-        .globl  __gpx_plot_raw
 
+        .globl  __gpx_vline
         .globl  __gpx_hline
         .globl  __gpx_bresenham_line
         .globl  __rect_cmp16s_lt
@@ -52,7 +52,6 @@
         ;; References:
         ;;   __gpx_hline
         ;;   __gpx_bresenham_line
-        ;;   __gpx_plot_raw
 _gpx_draw_line::
         ld      hl,#2
         add     hl,sp                   ; HL -> y0
@@ -70,46 +69,7 @@ _gpx_draw_line::
         cp      d
         jr      nz,.gl_not_v
 
-        ;; y0 == y1 ?
-        inc     hl                      ; HL -> y1
-        ld      a,(hl)
-        cp      c
-        jr      nz,.gl_bres             ; vertical: bres has a fast path
-        inc     hl
-        ld      a,(hl)
-        cp      b
-        jr      nz,.gl_bres
-
-        ;; single pixel: honor lpatt bit0
-        ld      hl,#10
-        add     hl,sp                   ; HL -> lpatt
-        ld      a,(hl)
-        and     #0x01
-        jr      z,.gl_bres              ; COPY zero-pixels handled by raster
-
-        ;; The point already lives in registers. Feed the raw pixel entry
-        ;; directly, keeping y while BC is loaded with the clip pointer.
-        push    bc
-        inc     hl                      ; HL -> clip
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        ld      hl,#10                  ; c,m after the saved y word
-        add     hl,sp
-        ld      a,(hl)                  ; color bit into carry
-        rrca
-        inc     hl
-        ld      a,(hl)                  ; mode bit becomes bit 1
-        rla
-        pop     hl                      ; y; DE still holds x
-        call    __gpx_plot_raw
-
-.gl_single_done:
-        ;; degenerate line: return lpatt unrotated
-        ld      hl,#10
-        add     hl,sp
-        ld      a,(hl)
-        jp      __ret_clean11           ; callee cleanup: 11 bytes
+        jp      __gpx_vline             ; includes points and patterned fallback
 
 .gl_not_v:
         ;; y0 == y1 ?

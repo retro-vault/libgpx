@@ -144,6 +144,9 @@ _gpx_draw_text::
         ld      -9(ix),a                ; advance
 
         call    .dt_gap_band_setup
+        ld      a,-11(ix)
+        or      a
+        jp      z,.dt_done             ; whole string misses the vertical band
 
         ;; BM_XOR never fills the advance gap. The gap fill is an opaque
         ;; write rather than an XOR one, so filling it would leave pixels
@@ -153,17 +156,24 @@ _gpx_draw_text::
         ;; return at its first test, so this costs nothing per character.
         ld      a,11(ix)                ; bmode
         rrca                            ; BM_XOR into carry
-        jr      nc,.dt_loop
+        jp      nc,.dt_loop
         xor     a
         ld      -11(ix),a
 
 .dt_loop:
+        ;; Advance is monotonic: once past the clip, no suffix is visible.
+        ld      l,-16(ix)
+        ld      h,-17(ix)
+        ld      e,-1(ix)
+        ld      d,-2(ix)
+        call    __rect_cmp16s_lt
+        jp      c,.dt_done
         ;; ch = *text++
         ld      l,-3(ix)
         ld      h,-4(ix)
         ld      a,(hl)
         or      a
-        jr      z,.dt_done
+        jp      z,.dt_done
         inc     hl
         ld      -3(ix),l
         ld      -4(ix),h
@@ -176,12 +186,24 @@ _gpx_draw_text::
         ld      d,9(ix)                 ; DE = font
         call    __gpx_glyph_lookup
         or      a
-        jr      z,.dt_add_empty
+        jp      z,.dt_add_empty
         ld      c,l
         ld      b,h                     ; BC = glyph bmp_t*
 
         ;; preserve width across draw_bmp call (width in A)
         push    af
+        push    bc                      ; glyph pointer while testing its end
+        ld      e,a
+        ld      d,#0
+        ld      l,-1(ix)
+        ld      h,-2(ix)
+        add     hl,de
+        dec     hl
+        ld      e,-14(ix)
+        ld      d,-15(ix)
+        call    __rect_cmp16s_lt
+        pop     bc
+        jr      c,.dt_skip_glyph_draw   ; wholly left: advance without raster setup
 
         ;; Call the shared bitmap core directly.
         ld      l,12(ix)
@@ -205,6 +227,7 @@ _gpx_draw_text::
         ld      c,10(ix)                ; color
         call    _gpx_draw_bmp_clip
 
+.dt_skip_glyph_draw:
         ;; xcur += glyph_width
         pop     af                      ; A = width
         add     a,-1(ix)
@@ -224,9 +247,9 @@ _gpx_draw_text::
         pop     af
         add     a,-1(ix)
         ld      -1(ix),a
-        jr      nc,.dt_loop
+        jp      nc,.dt_loop
         inc     -2(ix)
-        jr      .dt_loop
+        jp      .dt_loop
 
 .dt_add_empty:
         ;; Fill missing/empty glyph span with inverse color.

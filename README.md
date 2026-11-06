@@ -217,6 +217,9 @@ helpers. A program pays only for the archive members it calls. Each helper
 has its own member, so selecting one shape does not pull another shape's
 helpers into the program.
 
+The [CPC UI performance notes](docs/research/CPC-UI-PERFORMANCE.md) cover
+opaque byte spans, vertical borders, clipped text and their regression checks.
+
 The [September 2026 optimization report](docs/research/OPTIMIZATION-2026-09.md)
 records before/after sizes, raw timings, validation and known test limitations.
 Font data and formats are unchanged.

@@ -794,84 +794,125 @@ __gpx_span_row::
         ;; ------------------------------------------------------------
 __gpx_span_row_copy::
         push    hl
-        ld      c,a
-        ld      a,5(iy)
-        push    af                      ; restore start parity for the next row
+        ld      d,a
+        ld      e,a
         ld      a,(__cpc_mode1)
         or      a
-        jr      z,.src_mode2
-
-        ld      a,c
+        jr      z,.src_setup
+        ld      a,d
         and     #0xF0
-        ld      d,a                     ; even byte
-        ld      a,c
+        ld      d,a                     ; even half
+        ld      a,e
         rlca
         rlca
         rlca
         rlca
         and     #0xF0
-        ld      e,a                     ; odd byte
+        ld      e,a                     ; odd half
         ld      a,5(iy)
         or      a
-        jr      z,.src_store_halves
+        jr      z,.src_setup
         ld      a,d
         ld      d,e
         ld      e,a
-.src_store_halves:
-        ld      6(iy),d
-        ld      7(iy),e
-        jr      .src_setup
-.src_mode2:
-        ld      6(iy),c
-        ld      7(iy),c
 .src_setup:
-        xor     a
-        ld      5(iy),a                 ; current byte parity
         ld      b,2(iy)
-.src_loop:
         ld      a,(__cpc_solid)
-        ld      c,a                     ; middle-byte coverage
-        ld      a,b
-        cp      2(iy)
-        jr      nz,.src_not_first
-        ld      c,0(iy)
-.src_not_first:
-        ld      a,b
-        dec     a
-        jr      nz,.src_have_coverage
-        ld      a,c
-        and     1(iy)
-        ld      c,a                     ; last, or first & last when single
-.src_have_coverage:
-        ;; Edge masks are shifted from the high nibble in mode 1 and may
-        ;; therefore extend into its untouched second bit plane. Limit the
-        ;; replacement mask to the active plane before clearing old bits.
-        ld      a,(__cpc_solid)
-        and     c
-        ld      c,a
-        ld      a,5(iy)
+        and     0(iy)
+        dec     b
+        jr      nz,.src_first
+        and     1(iy)                   ; one byte: intersect both edges
+        call    .src_edge
+        pop     hl
+        ret
+.src_first:
+        call    .src_edge
+        dec     b                       ; fully covered middle bytes
+        jr      z,.src_last
+        ld      a,(__cpc_mode1)
         or      a
-        ld      a,6(iy)
-        jr      z,.src_have_pattern
-        ld      a,7(iy)
-.src_have_pattern:
-        ld      d,a
-        ld      a,c
-        cpl
-        and     (hl)
-        ld      e,a                     ; destination outside the span
-        ld      a,d
-        and     c
+        jr      z,.src_mode2_middle
+        ;; Mode 1 preserves the other pen plane. The pattern halves and
+        ;; mask stay in registers; no descriptor access or parity test per
+        ;; byte. Four-byte groups amortize the loop branch; the tail
+        ;; retains the alternating phase for odd-length spans.
+        ld      a,b
+        and     #3
+        ld      c,a
+        srl     b
+        srl     b
+        jr      z,.src_mode1_tail
+.src_mode1_quads:
+        inc     hl
+        ld      a,(hl)
+        and     #0x0F
         or      e
         ld      (hl),a
-        ld      a,5(iy)
-        xor     #0x01
-        ld      5(iy),a
         inc     hl
-        djnz    .src_loop
-        pop     af
-        ld      5(iy),a
+        ld      a,(hl)
+        and     #0x0F
+        or      d
+        ld      (hl),a
+        inc     hl
+        ld      a,(hl)
+        and     #0x0F
+        or      e
+        ld      (hl),a
+        inc     hl
+        ld      a,(hl)
+        and     #0x0F
+        or      d
+        ld      (hl),a
+        djnz    .src_mode1_quads
+.src_mode1_tail:
+        ld      b,c
+        ld      a,b
+        or      a
+        jr      z,.src_last
+.src_mode1_middle:
+        inc     hl
+        ld      a,(hl)
+        and     #0x0F
+        or      e
+        ld      (hl),a
+        dec     b
+        jr      z,.src_last
+        inc     hl
+        ld      a,(hl)
+        and     #0x0F
+        or      d
+        ld      (hl),a
+        djnz    .src_mode1_middle
+        jr      .src_last
+.src_mode2_middle:
+        ;; No destination bits survive an opaque mode 2 middle byte.
+        inc     hl
+        ld      (hl),d
+        djnz    .src_mode2_middle
+.src_last:
+        inc     hl
+        ld      a,2(iy)
+        rrca
+        jr      c,.src_last_even
+        ld      d,e
+.src_last_even:
+        ld      a,(__cpc_solid)
+        and     1(iy)
+        call    .src_edge
         pop     hl
+        ret
+.src_edge:
+        ;; A=coverage, D=pattern. Only the two edge bytes need masks.
+        push    bc
+        ld      c,a
+        cpl
+        and     (hl)
+        ld      b,a
+        ld      a,d
+        and     c
+        or      b
+        ld      (hl),a
+        pop     bc
         ret
 
         .area   _DATA
