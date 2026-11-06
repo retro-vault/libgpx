@@ -36,3 +36,17 @@ Only those two stale references changed.
 Alto's end-to-end measurements and comparison with Infinity's Spectrum 128
 are recorded in Alto's `docs/notes/CPC-PERFORMANCE.md`. Those results include
 Alto input and redraw changes as well as these graphics improvements.
+
+## Masked caption correctness
+
+CPC masked text now retains the font's explicit paper plane, which supplies
+black outlines around white desktop lettering. The OR plane supplies ink and
+takes precedence over overlapping AND bits. Pixels selected by neither plane
+remain unchanged. Both text colors and background policies retain this mask;
+XOR continues to toggle only ink. Public bitmap semantics are unchanged.
+
+The compositor still works on packed bytes and preserves MODE 1's second pen
+plane. `ui_regressions.py` adds 64 masked-font cases per mode, covering both
+colors, COPY/XOR, opaque/transparent text, byte alignment and clipping. The
+existing bitmap oracles now check the explicit-paper text contract too.
+All CPC golden, bitmap, sprite, span, line and text suites pass in Charlie.

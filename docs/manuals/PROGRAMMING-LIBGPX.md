@@ -680,6 +680,11 @@ Choose how subsequent text calls treat pixels outside the glyph ink.
 | `GPX_TEXT_BG_OPAQUE` | Clear the glyph box and character spacing to the inverse text color before/while copying glyph ink. This is the default. |
 | `GPX_TEXT_BG_TRANSPARENT` | Draw glyph ink only and preserve the existing glyph background and spacing. |
 
+On CPC, a masked raster glyph's explicit paper pixels are drawn in the inverse
+ink color under either background policy; its AND mask preserves pixels outside
+the glyph and its outline. Ink takes precedence where the two planes overlap.
+XOR ignores that paper plane and toggles only ink.
+
 The setting belongs to the graphics context and remains active until it is
 changed or `gpx_create()` is called again. For example, text over artwork can
 be left transparent without changing its font, color, or dimensions:

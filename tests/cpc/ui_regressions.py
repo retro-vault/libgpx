@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pixel-oracle checks for CPC UI drawing hot paths."""
 import random
+from itertools import product
 from pathlib import Path
 from optimization_regressions import Cpc, check, cpc_offset, invoke, pixel, word, write
 
@@ -72,7 +73,36 @@ def main():
                         value = bool(full[cpc_offset(px//ppb, py)] & (128 >> (px%ppb)))
                         pixel(expected, ppb, px, py, lambda old: value)
                 check(machine, expected, (mode, 'clipped text', trial))
-            print(f'{width}x200: 96 vertical, 96 opaque span, 36 text clip cases passed')
+            # Independent masked-font oracle: preserve outside the halo,
+            # draw explicit paper in the inverse ink, and let OR beat AND.
+            # Exercise the text entry, both background policies and XOR.
+            and_rows=(0x87,0x03,0x43,0x03,0x7b,0x03,0x03,0x03)
+            or_rows=(0,0x30,0x48,0x48,0x78,0x48,0x48,0)
+            glyph=bytes((0x10,6,8))+word(16)+bytes(v for pair in zip(and_rows,or_rows) for v in pair)
+            font=bytes((1,65,65,0,6,8,0,0))+word(10)+glyph
+            write(machine,0x2200,font)
+            write(machine,0x2000,b'A\0')
+            for trial,(color,op,background,x,clipped) in enumerate(product(
+                    (0,1),(0,1),(0,1),(3,7,253,width-4),(False,True))):
+                y=7
+                clip=(x+1,y+1,x+4,y+6) if clipped else (0,0,width-1,199)
+                expected=bytearray(rng.randbytes(16384))
+                write(machine,0xc000,expected)
+                write(machine,0x2100,b''.join(map(word,clip)))
+                invoke(machine,image,'_gpx_set_text_background',bytes((background,)),hl=context)
+                invoke(machine,image,'_gpx_draw_text',
+                       word(y)+word(0x2000)+word(0x2200)+bytes((color,op))+word(0x2100),hl=context,de=x)
+                for row in range(8):
+                    for col in range(6):
+                        px,py=x+col,y+row
+                        if not (0<=px<width and clip[0]<=px<=clip[2] and clip[1]<=py<=clip[3]):continue
+                        ink=bool(or_rows[row]&(0x80>>col))
+                        keep=bool(and_rows[row]&(0x80>>col))
+                        value=(lambda old,s=ink:old!=s) if op else (
+                            lambda old,s=ink,k=keep,c=color:bool(c) if s else old if k else not c)
+                        pixel(expected,ppb,px,py,value)
+                check(machine,expected,(mode,'masked text',trial,color,op,background))
+            print(f'{width}x200: 96 vertical, 96 opaque span, 36 text clip, 64 masked font cases passed')
 
 
 if __name__ == '__main__':

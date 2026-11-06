@@ -146,6 +146,8 @@ def run(root):
                                 )
                             if draw_mode == 1:
                                 return old != source
+                            if masked:
+                                return bool(color) if source else old if keep else not color
                             if draw_mode == 0x40:
                                 return bool(color) if source else old
                             return source if color else not source

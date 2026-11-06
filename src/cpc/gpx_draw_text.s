@@ -42,7 +42,8 @@
         ;; _gpx_draw_text
         ;; Draw a NUL-terminated string with its top-left corner at (x, y).
         ;; Opaque text fills glyph boxes and spacing with the opposite color.
-        ;; Transparent text preserves every pixel outside the glyph ink.
+        ;; Transparent unmasked text preserves pixels outside the glyph ink.
+        ;; Masked glyphs retain explicit paper/halo pixels in either policy.
         ;; BM_XOR ignores the background policy for the spacing: it inverts
         ;; glyph ink only, so that drawing the same string twice restores
         ;; the display exactly.

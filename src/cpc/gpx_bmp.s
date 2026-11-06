@@ -229,15 +229,26 @@ _gpx_draw_bmp_clip::
         ld      L_IS_MASKED(iy),a
 
 .gb_sig_need_and:
-        ;; Only a masked public bitmap reads the AND plane. Every text
-        ;; compositor consumes the OR plane, including custom masked fonts.
+        ;; Masked glyphs carry an explicit paper/halo plane. Both opaque
+        ;; and transparent text preserve it; only XOR ignores the AND plane.
         ld      a,L_IS_MASKED(iy)
         or      a
         jr      z,.gb_sig_mode_ready
         ld      a,L_DRAWMODE(iy)
-        and     #0x80
-        jr      z,.gb_sig_mode_ready
+        bit     7,a
+        jr      nz,.gb_mask_fore       ; public bitmap keeps native AND/OR
+        and     #1
+        jr      nz,.gb_mask_xor
+        ld      ix,#.gb_mode_masked_back
+        bit     0,c
+        jr      z,.gb_mask_active
+.gb_mask_fore:
         ld      ix,#.gb_mode_masked
+.gb_mask_active:
+        ld      a,#1
+        jr      .gb_sig_mode_ready
+.gb_mask_xor:
+        xor     a
 .gb_sig_mode_ready:
         ld      L_DRAWMODE(iy),a        ; nonzero only when AND is live
 
@@ -701,8 +712,8 @@ _gpx_draw_bmp_clip::
         ;; IY addresses the caller's workspace. BC retains the destination
         ;; count and coverage. Clobbers AF, DE and the alternate bank.
         ;;
-        ;; The AND plane is live only for a masked bitmap drawn with the
-        ;; default public semantics. Every other draw leaves HL' free, so the
+        ;; The AND plane is live for masked bitmaps and copy-mode text.
+        ;; Unmasked and XOR draws leave HL' free, so the
         ;; two-byte source window can shift there with add hl,hl and the
         ;; previous source byte can stay in C' instead of the workspace.
         ;; ------------------------------------------------------------
@@ -817,6 +828,20 @@ _gpx_draw_bmp_clip::
         ld      a,c
         and     e
         ld      e,a
+        jr      .gb_store_byte
+
+.gb_mode_masked_back:
+        ;; Inverse ink: clear OR strokes, set only explicit paper pixels.
+        ;; OR wins where both source planes are set; untouched pixels survive.
+        ld      a,d
+        cpl
+        or      e
+        and     c
+        ld      d,a                    ; coverage of ink or explicit paper
+        ld      a,e
+        and     c
+        xor     d
+        ld      e,a                    ; paper only, excluding ink
         jr      .gb_store_byte
 
 .gb_mode_trans_back:

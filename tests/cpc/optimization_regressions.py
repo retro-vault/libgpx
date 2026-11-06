@@ -115,6 +115,8 @@ def main():
                             op = lambda old, s=source, k=keep: (old and k or s) if masked else old or s
                         elif draw_mode == 1:
                             op = lambda old, s=source: old != s
+                        elif masked:
+                            op = lambda old, s=source, k=keep, c=color: bool(c) if s else old if k else not c
                         elif draw_mode == 0x40:
                             op = lambda old, s=source, c=color: bool(c) if s else old
                         else:
